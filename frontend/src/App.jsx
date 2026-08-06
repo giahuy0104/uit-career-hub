@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -32,7 +32,9 @@ import {
   X,
   Warning,
 } from "@phosphor-icons/react";
-import { AdminPortal, CompanyPortal, PrototypeRoleSwitcher, StudentExtraScreen } from "./RolePortals";
+import { AdminPortal, CompanyPortal, StudentExtraScreen } from "./RolePortals";
+import { useAuth } from "./auth/AuthContext.jsx";
+import { LoginScreen, SessionLoadingScreen } from "./auth/LoginScreen.jsx";
 
 const jobs = [
   {
@@ -108,17 +110,23 @@ function AppLogo({ compact = false }) {
   );
 }
 
-function StudentIdentity({ inverse = false }) {
+function getInitials(name = "") {
+  return name.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join("").toUpperCase() || "UIT";
+}
+
+function StudentIdentity({ inverse = false, user }) {
+  const name = user?.displayName || "Sinh viên UIT";
+  const meta = user?.organization ? `MSSV ${user.organization}` : user?.email;
   return (
     <button className={`student-identity ${inverse ? "inverse" : ""}`}>
-      <span className="avatar">NK</span>
-      <span><strong>Nguyễn Minh Khoa</strong><small>MSSV 20521067 · K24</small></span>
+      <span className="avatar">{getInitials(name)}</span>
+      <span><strong>{name}</strong><small>{meta}</small></span>
       <CaretDown size={16} />
     </button>
   );
 }
 
-function TopHeader({ route, navigate }) {
+function TopHeader({ route, navigate, user, onLogout }) {
   return (
     <header className="top-header">
       <AppLogo />
@@ -128,7 +136,7 @@ function TopHeader({ route, navigate }) {
         <button className={route === "applications" ? "active" : ""} onClick={() => navigate("applications")}><FileText size={19} />Đơn ứng tuyển</button>
         <button className={route === "notifications" ? "active" : ""} onClick={() => navigate("notifications")}><Bell size={19} />Thông báo<span className="notification-dot">3</span></button>
       </nav>
-      <StudentIdentity />
+      <div className="top-session"><StudentIdentity user={user} /><button className="top-signout" title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div>
     </header>
   );
 }
@@ -137,7 +145,7 @@ function CompanyMark({ job, size = "md" }) {
   return <span className={`company-mark ${job.markClass} ${size}`}>{job.mark}</span>;
 }
 
-function JobsScreen({ navigate }) {
+function JobsScreen({ navigate, user, onLogout }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("vng-backend");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -150,7 +158,7 @@ function JobsScreen({ navigate }) {
 
   return (
     <div className="screen jobs-screen">
-      <TopHeader route="jobs" navigate={navigate} />
+      <TopHeader route="jobs" navigate={navigate} user={user} onLogout={onLogout} />
       <div className="jobs-layout">
         <main className="jobs-list-pane">
           <div className="page-heading-row">
@@ -198,21 +206,21 @@ function JobsScreen({ navigate }) {
   );
 }
 
-function Sidebar({ navigate }) {
+function Sidebar({ navigate, user, onLogout }) {
   const items = [
     ["Tổng quan", House, "dashboard"], ["Việc làm", Briefcase, "jobs"], ["Đơn ứng tuyển", FileText, "applications"], ["Hồ sơ & CV", User, "profile"], ["Lịch phỏng vấn", CalendarBlank, "interviews"], ["Thông báo", Bell, "notifications"],
   ];
-  return <aside className="sidebar"><AppLogo compact /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && <span className="side-count">2</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse /><button title="Đăng xuất"><SignOut size={20} /></button></div></aside>;
+  return <aside className="sidebar"><AppLogo compact /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && <span className="side-count">2</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse user={user} /><button title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div></aside>;
 }
 
-function ApplicationsScreen({ navigate }) {
+function ApplicationsScreen({ navigate, user, onLogout }) {
   const [statusFilter, setStatusFilter] = useState("Tất cả trạng thái");
   const [modal, setModal] = useState(null);
   const [withdrawn, setWithdrawn] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState("");
   return (
     <div className="screen applications-screen">
-      <Sidebar navigate={navigate} />
+      <Sidebar navigate={navigate} user={user} onLogout={onLogout} />
       <main className="applications-content">
         <header className="applications-header"><div><h1>Đơn ứng tuyển của tôi</h1><p>Theo dõi người đang xử lý và bước tiếp theo của từng đơn.</p></div><div className="applications-tools"><label className="search-field compact"><MagnifyingGlass size={20} /><input placeholder="Tìm vị trí, công ty..." /></label><label className="select-control"><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option>Tất cả trạng thái</option><option>UIT kiểm duyệt</option><option>Đã chuyển doanh nghiệp</option><option>Mời phỏng vấn</option></select><CaretDown size={15} /></label></div></header>
         <section className="active-application">
@@ -233,7 +241,7 @@ function ApplicationsScreen({ navigate }) {
   );
 }
 
-function ApplyScreen({ navigate }) {
+function ApplyScreen({ navigate, user, onLogout }) {
   const [step, setStep] = useState(1);
   const [cv, setCv] = useState("backend");
   const [transcript, setTranscript] = useState(false);
@@ -243,7 +251,7 @@ function ApplyScreen({ navigate }) {
   const next = () => { if (step === 1 && ready) setStep(2); else if (step === 2) navigate("applications"); };
   return (
     <div className="screen apply-screen">
-      <TopHeader route="jobs" navigate={navigate} />
+      <TopHeader route="jobs" navigate={navigate} user={user} onLogout={onLogout} />
       <div className="apply-breadcrumb"><button onClick={() => navigate("jobs")}><ArrowLeft size={17} />Việc làm</button><CaretRight size={14} /><span>VNG</span><CaretRight size={14} /><span>Ứng tuyển</span></div>
       <div className="apply-layout">
         <main className="apply-main">
@@ -268,20 +276,25 @@ function ApplyScreen({ navigate }) {
 }
 
 export function App() {
+  const { user, loading, login, logout } = useAuth();
   const [route, setRoute] = useState("jobs");
-  const [role, setRole] = useState("student");
+  const role = user?.role === "UIT_ADMIN" ? "admin" : user?.role === "COMPANY" ? "company" : "student";
   const navigate = (destination) => { setRoute(destination); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const changeRole = (nextRole) => {
-    setRole(nextRole);
-    setRoute(nextRole === "admin" ? "admin-dashboard" : nextRole === "company" ? "company-dashboard" : "dashboard");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+
+  useEffect(() => {
+    if (!user) return;
+    setRoute(role === "admin" ? "admin-dashboard" : role === "company" ? "company-dashboard" : "jobs");
+  }, [user?.id, role]);
+
+  if (loading) return <SessionLoadingScreen />;
+  if (!user) return <LoginScreen onLogin={login} />;
+
   let content;
-  if (role === "admin") content = <AdminPortal route={route} navigate={navigate} />;
-  else if (role === "company") content = <CompanyPortal route={route} navigate={navigate} />;
-  else if (route === "applications") content = <ApplicationsScreen navigate={navigate} />;
-  else if (route === "apply") content = <ApplyScreen navigate={navigate} />;
-  else if (["dashboard", "companies", "profile", "interviews", "notifications"].includes(route)) content = <StudentExtraScreen route={route} navigate={navigate} />;
-  else content = <JobsScreen navigate={navigate} />;
-  return <>{content}<PrototypeRoleSwitcher role={role} onChange={changeRole} /></>;
+  if (role === "admin") content = <AdminPortal route={route} navigate={navigate} user={user} onLogout={logout} />;
+  else if (role === "company") content = <CompanyPortal route={route} navigate={navigate} user={user} onLogout={logout} />;
+  else if (route === "applications") content = <ApplicationsScreen navigate={navigate} user={user} onLogout={logout} />;
+  else if (route === "apply") content = <ApplyScreen navigate={navigate} user={user} onLogout={logout} />;
+  else if (["dashboard", "companies", "profile", "interviews", "notifications"].includes(route)) content = <StudentExtraScreen route={route} navigate={navigate} user={user} onLogout={logout} />;
+  else content = <JobsScreen navigate={navigate} user={user} onLogout={logout} />;
+  return content;
 }

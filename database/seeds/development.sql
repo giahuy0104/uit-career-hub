@@ -1,5 +1,5 @@
 -- Dữ liệu demo phục vụ thiết kế và kịch bản bảo vệ.
--- Tài khoản chưa có mật khẩu cho đến lát cắt Authentication + RBAC.
+-- Mật khẩu chỉ dùng trong development; không sao chép sang production.
 
 INSERT INTO users (id, email, role, status, email_verified_at) VALUES
     ('00000000-0000-4000-8000-000000000001', 'admin.career@uit.edu.vn', 'UIT_ADMIN', 'ACTIVE', now()),
@@ -10,6 +10,24 @@ INSERT INTO users (id, email, role, status, email_verified_at) VALUES
     ('00000000-0000-4000-8000-000000000102', 'talent@vng.example', 'COMPANY', 'ACTIVE', now()),
     ('00000000-0000-4000-8000-000000000103', 'recruiter@fpt.example', 'COMPANY', 'ACTIVE', now())
 ON CONFLICT DO NOTHING;
+
+UPDATE users
+SET password_hash = CASE
+        WHEN role = 'UIT_ADMIN' THEN '$2b$12$dZ579xZ3bzIdl09zS81zBuKVptkltdNcd91SMl8Pf73WyXOOCZ//W'
+        WHEN role = 'STUDENT' THEN '$2b$12$YZNYL5mmr3wfgZVUWL8xV.eTjKfFT2SGeB3CJV/AoL0ejezDJNVHO'
+        WHEN role = 'COMPANY' THEN '$2b$12$bpeb3YUbDmyTJzxS1is7/u43JFCSLjXIMmj2FNT0OwXcqoJDdOFcy'
+    END,
+    password_changed_at = COALESCE(password_changed_at, now())
+WHERE id IN (
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000011',
+    '00000000-0000-4000-8000-000000000012',
+    '00000000-0000-4000-8000-000000000013',
+    '00000000-0000-4000-8000-000000000101',
+    '00000000-0000-4000-8000-000000000102',
+    '00000000-0000-4000-8000-000000000103'
+)
+AND password_hash IS NULL;
 
 INSERT INTO uit_staff (id, user_id, full_name, department) VALUES
     ('00000000-0000-4000-8000-000000003001', '00000000-0000-4000-8000-000000000001', 'Trần Hoàng Anh', 'Phòng Quan hệ Doanh nghiệp')

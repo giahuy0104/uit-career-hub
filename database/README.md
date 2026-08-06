@@ -7,7 +7,8 @@ PostgreSQL schema được quản lý bằng SQL migration; không sửa trực 
 ```text
 database/
 ├── migrations/
-│   └── 0001_initial_mvp_schema.sql
+│   ├── 0001_initial_mvp_schema.sql
+│   └── 0002_authentication_rbac.sql
 └── seeds/
     └── development.sql
 ```
@@ -28,17 +29,17 @@ pnpm db:setup
 
 ## Tài khoản/định danh demo
 
-| Vai trò | Email | Ghi chú |
-|---|---|---|
-| UIT Admin | `admin.career@uit.edu.vn` | Phòng Quan hệ Doanh nghiệp |
-| Sinh viên chính | `20521067@student.uit.edu.vn` | Có ba đơn ở ba công việc |
-| Sinh viên | `21520881@student.uit.edu.vn` | Dữ liệu bổ sung |
-| Sinh viên | `21520943@student.uit.edu.vn` | Dữ liệu bổ sung |
-| VNG recruiter | `recruiter@vng.example` | Tài khoản chính |
-| VNG recruiter | `talent@vng.example` | Tài khoản phụ |
-| FPT recruiter | `recruiter@fpt.example` | Tài khoản chính |
+| Vai trò | Email | Mật khẩu development | Ghi chú |
+|---|---|---|---|
+| UIT Admin | `admin.career@uit.edu.vn` | `Admin@12345` | Phòng Quan hệ Doanh nghiệp |
+| Sinh viên chính | `20521067@student.uit.edu.vn` | `Student@12345` | Có ba đơn ở ba công việc |
+| Sinh viên | `21520881@student.uit.edu.vn` | `Student@12345` | Dữ liệu bổ sung |
+| Sinh viên | `21520943@student.uit.edu.vn` | `Student@12345` | Dữ liệu bổ sung |
+| VNG recruiter | `recruiter@vng.example` | `Company@12345` | Tài khoản chính |
+| VNG recruiter | `talent@vng.example` | `Company@12345` | Tài khoản phụ |
+| FPT recruiter | `recruiter@fpt.example` | `Company@12345` | Tài khoản chính |
 
-Seed hiện chưa đặt password vì Authentication + RBAC là lát cắt kế tiếp. Không dùng các email/mật khẩu demo cho môi trường thật.
+Các mật khẩu trên chỉ phục vụ seed development, được lưu trong database dưới dạng bcrypt hash. Không chạy seed và không dùng các thông tin này ở production.
 
 ## Kịch bản ba đơn
 

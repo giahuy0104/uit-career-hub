@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.1.0
+  version: 0.2.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -33,30 +33,47 @@ paths:
       responses:
         '200':
           description: Đăng nhập thành công
+          headers:
+            Set-Cookie:
+              description: Refresh token xoay vòng trong cookie HttpOnly.
+              schema: { type: string }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /auth/refresh:
     post:
       tags: [Auth]
       operationId: refreshSession
-      security: []
+      security:
+        - refreshCookie: []
       responses:
         '200':
           description: Làm mới phiên thành công
+          headers:
+            Set-Cookie:
+              description: Refresh token mới thay thế token vừa sử dụng.
+              schema: { type: string }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /auth/logout:
     post:
       tags: [Auth]
       operationId: logout
+      security:
+        - refreshCookie: []
       responses:
         '204':
           description: Đã thu hồi phiên
@@ -76,6 +93,8 @@ paths:
           description: Kích hoạt thành công
         '400':
           $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /auth/me:
     get:
       tags: [Auth]
@@ -848,6 +867,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: uit_refresh_token
 
   parameters:
     Page:
@@ -907,6 +930,16 @@ components:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     Conflict:
       description: Trùng lặp, idempotency conflict hoặc transition không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Locked:
+      description: Tài khoản đang bị khóa tạm thời
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: Quá nhiều yêu cầu xác thực
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -972,6 +1005,10 @@ components:
         email: { type: string, format: email }
         role: { $ref: '#/components/schemas/UserRole' }
         status: { $ref: '#/components/schemas/UserStatus' }
+        displayName: { type: [string, 'null'] }
+        organization: { type: [string, 'null'] }
+        studentProfileId: { type: [string, 'null'], format: uuid }
+        companyId: { type: [string, 'null'], format: uuid }
     LoginRequest:
       type: object
       required: [email, password]

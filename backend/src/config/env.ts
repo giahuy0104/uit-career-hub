@@ -11,6 +11,12 @@ const optionalDatabaseUrl = z.preprocess(
   z.string().min(1).optional(),
 );
 
+const optionalBoolean = z.preprocess((value) => {
+  if (value === undefined || value === "") return undefined;
+  if (typeof value === "boolean") return value;
+  return value === "true";
+}, z.boolean().optional());
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   BACKEND_PORT: z.coerce.number().int().positive().default(3000),
@@ -21,6 +27,15 @@ const environmentSchema = z.object({
     .default("postgresql://uit_user:uit_local_password@localhost:5432/uit_career_hub"),
   DATABASE_URL_DIRECT: optionalDatabaseUrl,
   DATABASE_URL_TEST: optionalDatabaseUrl,
+  JWT_ACCESS_SECRET: z.string().min(32).optional(),
+  JWT_ISSUER: z.string().min(1).default("uit-career-hub-api"),
+  JWT_AUDIENCE: z.string().min(1).default("uit-career-hub-web"),
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+  AUTH_COOKIE_NAME: z.string().min(1).default("uit_refresh_token"),
+  AUTH_COOKIE_SECURE: optionalBoolean,
+  AUTH_COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
+  UIT_EMAIL_DOMAINS: z.string().min(1).default("student.uit.edu.vn,uit.edu.vn"),
 });
 
 function assertPostgresUrl(value: string, key: string) {
@@ -47,6 +62,26 @@ function assertPostgresUrl(value: string, key: string) {
 export function parseEnvironment(source: NodeJS.ProcessEnv) {
   const parsed = environmentSchema.parse(source);
 
+  if (parsed.NODE_ENV === "production" && !parsed.JWT_ACCESS_SECRET) {
+    throw new Error("JWT_ACCESS_SECRET là bắt buộc trong môi trường production.");
+  }
+
+  const jwtAccessSecret =
+    parsed.JWT_ACCESS_SECRET ?? "development-only-change-me-32-characters";
+  const authCookieSecure = parsed.AUTH_COOKIE_SECURE ?? parsed.NODE_ENV === "production";
+
+  if (parsed.AUTH_COOKIE_SAME_SITE === "none" && !authCookieSecure) {
+    throw new Error("AUTH_COOKIE_SAME_SITE=none yêu cầu AUTH_COOKIE_SECURE=true.");
+  }
+
+  const uitEmailDomains = parsed.UIT_EMAIL_DOMAINS.split(",")
+    .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean);
+
+  if (uitEmailDomains.length === 0) {
+    throw new Error("UIT_EMAIL_DOMAINS phải có ít nhất một tên miền.");
+  }
+
   assertPostgresUrl(parsed.DATABASE_URL, "DATABASE_URL");
   if (parsed.DATABASE_URL_DIRECT) {
     assertPostgresUrl(parsed.DATABASE_URL_DIRECT, "DATABASE_URL_DIRECT");
@@ -62,6 +97,15 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     databaseUrl: parsed.DATABASE_URL,
     databaseUrlDirect: parsed.DATABASE_URL_DIRECT,
     databaseUrlTest: parsed.DATABASE_URL_TEST,
+    jwtAccessSecret,
+    jwtIssuer: parsed.JWT_ISSUER,
+    jwtAudience: parsed.JWT_AUDIENCE,
+    accessTokenTtlSeconds: parsed.ACCESS_TOKEN_TTL_SECONDS,
+    refreshTokenTtlDays: parsed.REFRESH_TOKEN_TTL_DAYS,
+    authCookieName: parsed.AUTH_COOKIE_NAME,
+    authCookieSecure,
+    authCookieSameSite: parsed.AUTH_COOKIE_SAME_SITE,
+    uitEmailDomains,
   } as const;
 }
 

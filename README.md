@@ -40,6 +40,8 @@ Copy-Item frontend/.env.example frontend/.env.local
 
 Điền URL thật vào `.env`. Không đặt URL database trong `frontend/.env.local` và không commit `.env`.
 
+Trong production, phải đặt `JWT_ACCESS_SECRET` bằng chuỗi ngẫu nhiên tối thiểu 32 ký tự. `UIT_EMAIL_DOMAINS` quy định miền email được chấp nhận cho tài khoản sinh viên. Local development dùng cookie `SameSite=Lax`; nếu frontend/backend production khác site, dùng HTTPS và cấu hình `AUTH_COOKIE_SECURE=true`, `AUTH_COOKIE_SAME_SITE=none`.
+
 ## Cài đặt và dựng database
 
 ```powershell
@@ -72,6 +74,7 @@ pnpm dev:frontend
 
 - Frontend: http://localhost:5173
 - Backend: http://localhost:3000/api
+- Auth API: http://localhost:3000/api/v1/auth
 - Health check: http://localhost:3000/api/health
 - Database health: http://localhost:3000/api/health/database
 
@@ -116,6 +119,7 @@ pnpm db:down
 - `docs/domain/application-state-machine.md`
 - `docs/api/openapi.yaml`
 - `docs/decisions/001-modular-monolith-neon.md`
+- `docs/decisions/002-jwt-refresh-rbac.md`
 - `database/README.md`
 
 ## Quy ước nhánh
@@ -130,6 +134,6 @@ Không đẩy trực tiếp vào `main`. Mỗi chức năng mở pull request qu
 
 ## Phạm vi hiện tại
 
-Lát cắt nền tảng đã chốt ERD, state machine, OpenAPI skeleton, migration, seed và test setup. API nghiệp vụ, authentication/RBAC và kết nối prototype sẽ được làm theo từng happy-flow slice tiếp theo.
+Lát cắt nền tảng và Authentication/RBAC đã hoàn thành: đăng nhập ba vai trò, access JWT, refresh token xoay vòng bằng cookie HttpOnly, khóa đăng nhập tạm thời, company activation, audit và middleware ownership. Lát cắt tiếp theo là Doanh nghiệp tạo tin → UIT duyệt.
 
 Thông báo trong hệ thống thuộc MVP. Email/FCM, Cron Job, Scheduler, retry/log nâng cao, Kafka, Redis, chat, AI và đa trường thuộc Phase 2.

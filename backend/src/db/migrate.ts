@@ -21,6 +21,7 @@ export async function runMigrations(options: MigrationOptions = {}) {
   await client.connect();
 
   try {
+    await client.query("SELECT pg_advisory_lock(hashtext('uit-career-hub-migrations'))");
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version text PRIMARY KEY,
@@ -63,6 +64,7 @@ export async function runMigrations(options: MigrationOptions = {}) {
       }
     }
   } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext('uit-career-hub-migrations'))").catch(() => undefined);
     await client.end();
   }
 }

@@ -112,6 +112,10 @@ function Brand({ inverse = false }) {
   return <div className={`portal-brand ${inverse ? "inverse" : ""}`}><span><SealCheck size={27} weight="duotone" /></span><div><strong>UIT Career Hub</strong><small>Kết nối tri thức · Dẫn lối sự nghiệp</small></div></div>;
 }
 
+function userInitials(name = "") {
+  return name.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join("").toUpperCase() || "UIT";
+}
+
 export function PrototypeRoleSwitcher({ role, onChange }) {
   return (
     <div className="prototype-switcher" aria-label="Chuyển vai trò trong prototype">
@@ -125,8 +129,14 @@ export function PrototypeRoleSwitcher({ role, onChange }) {
   );
 }
 
-function WorkspaceShell({ role, route, navigate, children, title, description, actions }) {
-  const identity = portalCopy[role];
+function WorkspaceShell({ role, route, navigate, children, title, description, actions, user, onLogout }) {
+  const fallbackIdentity = portalCopy[role];
+  const identity = {
+    ...fallbackIdentity,
+    name: user?.displayName || fallbackIdentity.name,
+    meta: user?.organization || user?.email || fallbackIdentity.meta,
+    initials: userInitials(user?.displayName || fallbackIdentity.name),
+  };
   const navigation = role === "admin" ? adminNavigation : role === "company" ? companyNavigation : studentNavigation;
   return (
     <div className={`workspace-shell role-${role}`}>
@@ -134,7 +144,7 @@ function WorkspaceShell({ role, route, navigate, children, title, description, a
         <Brand inverse />
         <div className="workspace-role"><small>KHÔNG GIAN LÀM VIỆC</small><strong>{identity.label}</strong></div>
         <nav>{navigation.map(([key, label, Icon, count]) => <button key={key} className={route === key ? "active" : ""} onClick={() => navigate(key)}><Icon size={20} /><span>{label}</span>{count ? <i>{count}</i> : null}</button>)}</nav>
-        <div className="workspace-identity"><span>{identity.initials}</span><div><strong>{identity.name}</strong><small>{identity.meta}</small></div><button aria-label="Đăng xuất"><SignOut size={19} /></button></div>
+        <div className="workspace-identity"><span>{identity.initials}</span><div><strong>{identity.name}</strong><small>{identity.meta}</small></div><button aria-label="Đăng xuất" onClick={onLogout}><SignOut size={19} /></button></div>
       </aside>
       <main className="workspace-main">
         <header className="workspace-topbar">
@@ -164,7 +174,7 @@ function EmptyHint({ icon: Icon = Info, title, text }) {
   return <div className="empty-hint"><Icon size={30} /><strong>{title}</strong><p>{text}</p></div>;
 }
 
-export function StudentExtraScreen({ route, navigate }) {
+export function StudentExtraScreen({ route, navigate, user, onLogout }) {
   const [profilePercent, setProfilePercent] = useState(85);
   const titles = {
     dashboard: ["Tổng quan", "Thông tin quan trọng và bước tiếp theo trong hành trình nghề nghiệp của bạn."],
@@ -175,7 +185,7 @@ export function StudentExtraScreen({ route, navigate }) {
   };
   const [title, description] = titles[route] || titles.dashboard;
   return (
-    <WorkspaceShell role="student" route={route} navigate={navigate} title={title} description={description} actions={route === "dashboard" ? <button className="primary-button" onClick={() => navigate("jobs")}><MagnifyingGlass size={18} />Tìm việc ngay</button> : null}>
+    <WorkspaceShell role="student" route={route} navigate={navigate} title={title} description={description} user={user} onLogout={onLogout} actions={route === "dashboard" ? <button className="primary-button" onClick={() => navigate("jobs")}><MagnifyingGlass size={18} />Tìm việc ngay</button> : null}>
       {route === "dashboard" && <StudentDashboard navigate={navigate} />}
       {route === "companies" && <CompaniesScreen />}
       {route === "profile" && <ProfileScreen percent={profilePercent} setPercent={setProfilePercent} />}
@@ -231,7 +241,7 @@ function StudentNotifications() {
   return <Panel title="Tất cả thông báo" action={<button className="link-button" onClick={() => setRead(notes.map(n => n[0]))}>Đánh dấu tất cả đã đọc</button>}><div className="notification-list">{notes.map(([id,title,text,time,type]) => <button key={id} className={read.includes(id) ? "read" : ""} onClick={() => setRead([...new Set([...read,id])])}><span className={`notice-symbol ${type}`}>{type === "calendar" ? <CalendarCheck /> : type === "success" ? <CheckCircle /> : type === "warning" ? <Warning /> : <ShieldCheck />}</span><div><strong>{title}</strong><p>{text}</p><small>{time}</small></div>{!read.includes(id) && <i />}</button>)}</div></Panel>;
 }
 
-export function AdminPortal({ route, navigate }) {
+export function AdminPortal({ route, navigate, user, onLogout }) {
   const [modal, setModal] = useState(null);
   const [selectedJob, setSelectedJob] = useState(reviewJobs[0]);
   const [selectedApplication, setSelectedApplication] = useState(reviewApplications[0]);
@@ -249,7 +259,7 @@ export function AdminPortal({ route, navigate }) {
   };
   const [title, description] = titles[route] || titles["admin-dashboard"];
   const action = route === "admin-companies" ? <button className="primary-button" onClick={() => setModal("company")}><UserPlus size={18} />Thêm doanh nghiệp</button> : route === "admin-reports" ? <button className="secondary-button"><DownloadSimple size={18} />Xuất báo cáo</button> : null;
-  return <WorkspaceShell role="admin" route={route} navigate={navigate} title={title} description={description} actions={action}>
+  return <WorkspaceShell role="admin" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
     {route === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
     {route === "admin-companies" && <AdminCompanies onCreate={() => setModal("company")} />}
     {route === "admin-jobs" && <AdminJobReview selected={selectedJob} setSelected={setSelectedJob} states={jobStates} setStates={setJobStates} />}
@@ -308,7 +318,7 @@ function AdminAccess() {
   return <><div className="portal-tabs"><button className={tab==='accounts'?'active':''} onClick={()=>setTab('accounts')}>Tài khoản & phân quyền</button><button className={tab==='audit'?'active':''} onClick={()=>setTab('audit')}>Nhật ký thao tác</button></div>{tab==='accounts'?<Panel title="Tài khoản quản trị" action={<button className="primary-button small"><UserPlus/>Thêm tài khoản</button>}><div className="simple-table account-table"><div className="table-head"><span>Người dùng</span><span>Vai trò</span><span>Phạm vi</span><span>Đăng nhập gần nhất</span><span>Trạng thái</span><span/></div>{[["Trần Hoàng Anh","Quản trị viên","Toàn hệ thống","05/08 · 14:28"],["Nguyễn Thu Trang","Chuyên viên kiểm duyệt","Tin & hồ sơ","05/08 · 13:55"],["Lê Minh Đức","Chuyên viên báo cáo","Chỉ xem báo cáo","04/08 · 16:40"]].map(row=><button key={row[0]}><strong>{row[0]}</strong><span>{row[1]}</span><span>{row[2]}</span><span>{row[3]}</span><Status tone="success">Hoạt động</Status><DotsThree/></button>)}</div></Panel>:<Panel title="Nhật ký thao tác" action={<button className="secondary-button small"><DownloadSimple/>Xuất nhật ký</button>}><div className="audit-list">{[["14:28","Trần Hoàng Anh","Phê duyệt tin Backend Developer Intern","VNG Corporation","success"],["14:12","Nguyễn Thu Trang","Chuyển hồ sơ 20521067 đến doanh nghiệp","VNG Corporation","info"],["13:48","Trần Hoàng Anh","Cập nhật tài khoản doanh nghiệp","FPT Software","neutral"],["11:20","Hệ thống","Gửi tổng hợp hồ sơ chưa xử lý","8 doanh nghiệp","purple"]].map(row=><div key={row[0]+row[2]}><span className={`audit-dot ${row[4]}`}/><time>{row[0]}<small>05/08/2026</small></time><div><strong>{row[2]}</strong><p>{row[1]} · {row[3]}</p></div><button><Eye/></button></div>)}</div></Panel>}</>;
 }
 
-export function CompanyPortal({ route, navigate }) {
+export function CompanyPortal({ route, navigate, user, onLogout }) {
   const [modal,setModal] = useState(null);
   const titles = {
     "company-dashboard": ["Tổng quan tuyển dụng", "Theo dõi tin tuyển dụng, ứng viên UIT chuyển đến và việc cần xử lý."],
@@ -320,7 +330,7 @@ export function CompanyPortal({ route, navigate }) {
   };
   const [title,description]=titles[route]||titles['company-dashboard'];
   const action=route==='company-jobs'?<button className="primary-button" onClick={()=>setModal('job')}><Plus/>Tạo tin tuyển dụng</button>:route==='company-interviews'?<button className="primary-button" onClick={()=>setModal('interview')}><Plus/>Tạo lịch phỏng vấn</button>:null;
-  return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action}>
+  return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
     {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfile/>} {route==='company-jobs'&&<CompanyJobs onCreate={()=>setModal('job')}/>} {route==='company-candidates'&&<CompanyCandidates/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications/>}
     {modal==='job'&&<SimpleCreateModal type="job" close={()=>setModal(null)}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>} 
   </WorkspaceShell>;
