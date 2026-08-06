@@ -12,6 +12,10 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm --dir backend typecheck",
     "test": "pnpm -r --if-present test",
+    "openapi:validate": "pnpm --dir backend openapi:validate",
+    "db:migrate": "pnpm --dir backend db:migrate",
+    "db:seed": "pnpm --dir backend db:seed",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres"

@@ -1,0 +1,1279 @@
+openapi: 3.1.0
+info:
+  title: UIT Career Hub API
+  version: 0.1.0
+  description: Contract skeleton cho happy flow MVP của một trường UIT.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Students
+  - name: Jobs
+  - name: Applications
+  - name: Companies
+  - name: UIT
+  - name: Interviews
+  - name: Notifications
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      security: []
+      responses:
+        '200':
+          description: Làm mới phiên thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      responses:
+        '204':
+          description: Đã thu hồi phiên
+  /auth/company-activation:
+    post:
+      tags: [Auth]
+      operationId: activateCompanyAccount
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyActivationRequest'
+      responses:
+        '204':
+          description: Kích hoạt thành công
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Người dùng hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+
+  /students/me:
+    get:
+      tags: [Students]
+      operationId: getMyStudentProfile
+      responses:
+        '200':
+          description: Hồ sơ sinh viên
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentProfileEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    patch:
+      tags: [Students]
+      operationId: updateMyStudentProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentProfileUpdateRequest'
+      responses:
+        '200':
+          description: Hồ sơ đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentProfileEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /students/me/documents:
+    get:
+      tags: [Students]
+      operationId: listMyDocuments
+      responses:
+        '200':
+          description: Danh sách tài liệu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentDocument'
+    post:
+      tags: [Students]
+      operationId: createDocumentMetadata
+      description: Tạo metadata sau khi luồng upload object storage hoàn tất.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentDocumentCreateRequest'
+      responses:
+        '201':
+          description: Metadata tài liệu đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDocumentEnvelope'
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      operationId: listRecruitingJobs
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: companyId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: workMode
+          in: query
+          schema:
+            $ref: '#/components/schemas/WorkMode'
+      responses:
+        '200':
+          description: Chỉ gồm tin RECRUITING chưa hết hạn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListEnvelope'
+  /jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Jobs]
+      operationId: getRecruitingJob
+      responses:
+        '200':
+          description: Chi tiết tin tuyển dụng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /applications:
+    get:
+      tags: [Applications]
+      operationId: listMyApplications
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ApplicationStatus'
+      responses:
+        '200':
+          description: Đơn của sinh viên hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListEnvelope'
+    post:
+      tags: [Applications]
+      operationId: submitApplication
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationSubmitRequest'
+      responses:
+        '201':
+          description: Đơn được tạo ở UIT_REVIEWING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /applications/{applicationId}:
+    parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+    get:
+      tags: [Applications]
+      operationId: getMyApplication
+      responses:
+        '200':
+          description: Chi tiết, timeline và hành động hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /applications/{applicationId}/resubmit:
+    post:
+      tags: [Applications]
+      operationId: resubmitApplication
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationResubmitRequest'
+      responses:
+        '200':
+          description: NEEDS_SUPPLEMENT sang UIT_REVIEWING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /applications/{applicationId}/withdraw:
+    post:
+      tags: [Applications]
+      operationId: withdrawApplication
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Generic withdraw trước giai đoạn phỏng vấn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /applications/{applicationId}/cancel-interview:
+    post:
+      tags: [Applications, Interviews]
+      operationId: cancelInterviewParticipation
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Hủy tham gia từ INTERVIEW_INVITED và ghi history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /applications/{applicationId}/offer/accept:
+    post:
+      tags: [Applications]
+      operationId: acceptOffer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OFFER_PENDING_STUDENT sang ACCEPTED_PENDING_UIT_CONFIRMATION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /applications/{applicationId}/offer/decline:
+    post:
+      tags: [Applications]
+      operationId: declineOffer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: OFFER_PENDING_STUDENT sang OFFER_DECLINED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /companies/me:
+    get:
+      tags: [Companies]
+      operationId: getMyCompany
+      responses:
+        '200':
+          description: Doanh nghiệp của tài khoản hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyEnvelope'
+    patch:
+      tags: [Companies]
+      operationId: updateMyCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyUpdateRequest'
+      responses:
+        '200':
+          description: Hồ sơ đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyEnvelope'
+  /companies/me/jobs:
+    get:
+      tags: [Companies]
+      operationId: listMyCompanyJobs
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/JobStatus'
+      responses:
+        '200':
+          description: Tin thuộc doanh nghiệp hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListEnvelope'
+    post:
+      tags: [Companies]
+      operationId: createJobDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobDraftRequest'
+      responses:
+        '201':
+          description: Tạo DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+  /companies/me/jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Companies]
+      operationId: getMyCompanyJob
+      responses:
+        '200':
+          description: Chi tiết tin thuộc doanh nghiệp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Companies]
+      operationId: updateJobDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobDraftRequest'
+      responses:
+        '200':
+          description: Chỉ sửa DRAFT hoặc REVISION_REQUIRED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /companies/me/jobs/{jobId}/submit:
+    post:
+      tags: [Companies]
+      operationId: submitJobForReview
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: DRAFT/REVISION_REQUIRED sang PENDING_UIT_REVIEW
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /companies/me/candidates:
+    get:
+      tags: [Companies]
+      operationId: listCompanyCandidates
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: jobId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ApplicationStatus'
+      responses:
+        '200':
+          description: Chỉ hồ sơ UIT đã chuyển đến company hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListEnvelope'
+  /companies/me/applications/{applicationId}/start-review:
+    post:
+      tags: [Companies, Applications]
+      operationId: startCompanyReview
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: FORWARDED_TO_COMPANY sang COMPANY_REVIEWING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+  /companies/me/applications/{applicationId}/reject:
+    post:
+      tags: [Companies, Applications]
+      operationId: markCandidateNotSuitable
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Thao tác Không phù hợp riêng, lý do bắt buộc
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /companies/me/applications/{applicationId}/interviews:
+    post:
+      tags: [Companies, Interviews]
+      operationId: scheduleInterview
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterviewRequest'
+      responses:
+        '201':
+          description: Tạo lịch và chuyển application sang INTERVIEW_INVITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewEnvelope'
+  /companies/me/applications/{applicationId}/results:
+    post:
+      tags: [Companies, Applications]
+      operationId: recordInterviewResult
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecruitmentResultRequest'
+      responses:
+        '200':
+          description: PASS sang OFFER_PENDING_STUDENT; FAIL sang INTERVIEW_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+
+  /uit/companies:
+    get:
+      tags: [UIT]
+      operationId: listPartnerCompanies
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Danh sách doanh nghiệp đối tác
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Company'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+    post:
+      tags: [UIT]
+      operationId: createPartnerCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyCreateRequest'
+      responses:
+        '201':
+          description: Doanh nghiệp đối tác đã tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyEnvelope'
+  /uit/companies/{companyId}/accounts:
+    post:
+      tags: [UIT]
+      operationId: createCompanyAccount
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyAccountRequest'
+      responses:
+        '201':
+          description: Tài khoản chờ kích hoạt; token chỉ trả/gửi một lần
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+  /uit/jobs/review-queue:
+    get:
+      tags: [UIT]
+      operationId: listJobReviewQueue
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Tin PENDING_UIT_REVIEW theo thời gian chờ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListEnvelope'
+  /uit/jobs/{jobId}/approve:
+    post:
+      tags: [UIT]
+      operationId: approveJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: PENDING_UIT_REVIEW sang RECRUITING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+  /uit/jobs/{jobId}/request-revision:
+    post:
+      tags: [UIT]
+      operationId: requestJobRevision
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Chuyển REVISION_REQUIRED và thông báo company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+  /uit/jobs/{jobId}/reject:
+    post:
+      tags: [UIT]
+      operationId: rejectJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Chuyển REJECTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnvelope'
+  /uit/applications/review-queue:
+    get:
+      tags: [UIT]
+      operationId: listApplicationReviewQueue
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Hồ sơ UIT_REVIEWING theo thời gian chờ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListEnvelope'
+  /uit/applications/{applicationId}/request-supplement:
+    post:
+      tags: [UIT]
+      operationId: requestApplicationSupplement
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplementRequest'
+      responses:
+        '200':
+          description: Chuyển NEEDS_SUPPLEMENT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+  /uit/applications/{applicationId}/reject:
+    post:
+      tags: [UIT]
+      operationId: rejectApplicationByUit
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: Chuyển UIT_REJECTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+  /uit/applications/{applicationId}/forward:
+    post:
+      tags: [UIT]
+      operationId: forwardApplicationToCompany
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Chuyển FORWARDED_TO_COMPANY và thông báo đúng company
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+  /uit/applications/{applicationId}/confirm-placement:
+    post:
+      tags: [UIT]
+      operationId: confirmPlacement
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlacementConfirmationRequest'
+      responses:
+        '200':
+          description: Xác nhận HIRED và đóng các đơn active khác trong một transaction
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [selectedApplication, autoWithdrawnApplicationIds]
+                    properties:
+                      selectedApplication:
+                        $ref: '#/components/schemas/Application'
+                      autoWithdrawnApplicationIds:
+                        type: array
+                        items: { type: string, format: uuid }
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      operationId: listMyNotifications
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Hộp thông báo của người dùng hiện tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListEnvelope'
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      operationId: getUnreadNotificationCount
+      responses:
+        '200':
+          description: Số thông báo chưa đọc
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [count]
+                    properties:
+                      count: { type: integer, minimum: 0 }
+  /notifications/{notificationId}/read:
+    post:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '204':
+          description: Đã đánh dấu đọc
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      responses:
+        '204':
+          description: Đã đánh dấu tất cả là đã đọc
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CompanyId:
+      name: companyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Request không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: Chưa xác thực hoặc phiên hết hạn
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: Không có quyền thực hiện
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Không tìm thấy hoặc không được phép biết tài nguyên tồn tại
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Trùng lặp, idempotency conflict hoặc transition không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    UserRole:
+      type: string
+      enum: [STUDENT, UIT_ADMIN, COMPANY]
+    UserStatus:
+      type: string
+      enum: [PENDING_ACTIVATION, ACTIVE, SUSPENDED, LOCKED]
+    JobStatus:
+      type: string
+      enum: [DRAFT, PENDING_UIT_REVIEW, REVISION_REQUIRED, RECRUITING, PAUSED, EXPIRED, REJECTED, CLOSED]
+    ApplicationStatus:
+      type: string
+      enum:
+        - UIT_REVIEWING
+        - NEEDS_SUPPLEMENT
+        - FORWARDED_TO_COMPANY
+        - COMPANY_REVIEWING
+        - INTERVIEW_INVITED
+        - NOT_SUITABLE
+        - INTERVIEW_FAILED
+        - OFFER_PENDING_STUDENT
+        - ACCEPTED_PENDING_UIT_CONFIRMATION
+        - HIRED
+        - OFFER_DECLINED
+        - UIT_REJECTED
+        - WITHDRAWN
+    WorkMode:
+      type: string
+      enum: [ONSITE, REMOTE, HYBRID]
+    PageMeta:
+      type: object
+      required: [page, pageSize, totalItems, totalPages]
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+        totalItems: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, traceId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            traceId: { type: string }
+    User:
+      type: object
+      required: [id, email, role, status]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/UserRole' }
+        status: { $ref: '#/components/schemas/UserStatus' }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 128 }
+    CompanyActivationRequest:
+      type: object
+      required: [token, password, acceptedTerms]
+      properties:
+        token: { type: string, minLength: 32 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        acceptedTerms: { type: boolean, const: true }
+    SessionEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accessToken, expiresIn, user]
+          properties:
+            accessToken: { type: string }
+            expiresIn: { type: integer, minimum: 1 }
+            user: { $ref: '#/components/schemas/User' }
+    UserEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+    StudentProfile:
+      type: object
+      required: [id, studentCode, fullName, faculty, major, cohort, academicStatus]
+      properties:
+        id: { type: string, format: uuid }
+        studentCode: { type: string }
+        fullName: { type: string }
+        faculty: { type: string }
+        major: { type: string }
+        cohort: { type: string }
+        gpa: { type: [number, 'null'], minimum: 0, maximum: 4 }
+        phone: { type: [string, 'null'] }
+        academicStatus: { type: string, enum: [ACTIVE, SUSPENDED, GRADUATED, INACTIVE] }
+    StudentProfileUpdateRequest:
+      type: object
+      properties:
+        phone: { type: string, maxLength: 30 }
+    StudentProfileEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/StudentProfile' }
+    StudentDocument:
+      type: object
+      required: [id, documentType, fileName, mimeType, fileSizeBytes, version, verificationStatus]
+      properties:
+        id: { type: string, format: uuid }
+        documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
+        fileName: { type: string }
+        mimeType: { type: string }
+        fileSizeBytes: { type: integer, minimum: 1 }
+        version: { type: integer, minimum: 1 }
+        isDefault: { type: boolean }
+        verificationStatus: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
+    StudentDocumentCreateRequest:
+      type: object
+      required: [documentType, fileName, mimeType, fileSizeBytes, storageKey]
+      properties:
+        documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
+        fileName: { type: string, maxLength: 255 }
+        mimeType: { type: string }
+        fileSizeBytes: { type: integer, minimum: 1 }
+        storageKey: { type: string }
+        checksum: { type: string }
+        isDefault: { type: boolean, default: false }
+    StudentDocumentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/StudentDocument' }
+    Company:
+      type: object
+      required: [id, code, name, partnerStatus]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        industry: { type: [string, 'null'] }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'] }
+        partnerStatus: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, ENDED] }
+    CompanyCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9_-]+$' }
+        name: { type: string, maxLength: 200 }
+        legalName: { type: string, maxLength: 250 }
+        industry: { type: string, maxLength: 150 }
+        website: { type: string, format: uri }
+        address: { type: string, maxLength: 500 }
+    CompanyUpdateRequest:
+      type: object
+      properties:
+        description: { type: string, maxLength: 3000 }
+        website: { type: string, format: uri }
+        address: { type: string, maxLength: 500 }
+        industry: { type: string, maxLength: 150 }
+        companySize: { type: string, maxLength: 100 }
+    CompanyAccountRequest:
+      type: object
+      required: [email, fullName, isPrimary]
+      properties:
+        email: { type: string, format: email }
+        fullName: { type: string, maxLength: 150 }
+        title: { type: string, maxLength: 150 }
+        isPrimary: { type: boolean }
+    CompanyEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Company' }
+    Job:
+      type: object
+      required: [id, company, title, opportunityType, workMode, location, deadline, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        company: { $ref: '#/components/schemas/Company' }
+        title: { type: string }
+        opportunityType: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] }
+        workMode: { $ref: '#/components/schemas/WorkMode' }
+        location: { type: string }
+        description: { type: string }
+        requirements: { type: string }
+        benefits: { type: [string, 'null'] }
+        positions: { type: integer, minimum: 1 }
+        deadline: { type: string, format: date }
+        status: { $ref: '#/components/schemas/JobStatus' }
+        version: { type: integer, minimum: 1 }
+    JobDraftRequest:
+      type: object
+      required: [title, opportunityType, workMode, location, description, requirements, positions, deadline]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 200 }
+        opportunityType: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] }
+        workMode: { $ref: '#/components/schemas/WorkMode' }
+        location: { type: string, maxLength: 300 }
+        description: { type: string, maxLength: 10000 }
+        requirements: { type: string, maxLength: 10000 }
+        benefits: { type: string, maxLength: 5000 }
+        positions: { type: integer, minimum: 1, maximum: 1000 }
+        deadline: { type: string, format: date }
+        categoryIds:
+          type: array
+          items: { type: string, format: uuid }
+        skillIds:
+          type: array
+          items: { type: string, format: uuid }
+    JobEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Job' }
+    JobListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Job' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    ApplicationDocumentInput:
+      type: object
+      required: [documentId]
+      properties:
+        documentId: { type: string, format: uuid }
+    ApplicationSubmitRequest:
+      type: object
+      required: [jobId, documents, consentToShare]
+      properties:
+        jobId: { type: string, format: uuid }
+        documents:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ApplicationDocumentInput' }
+        consentToShare: { type: boolean, const: true }
+    ApplicationResubmitRequest:
+      type: object
+      required: [documents, consentToShare]
+      properties:
+        documents:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ApplicationDocumentInput' }
+        consentToShare: { type: boolean, const: true }
+    Application:
+      type: object
+      required: [id, jobId, studentProfileId, status, version, submittedAt, availableActions]
+      properties:
+        id: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        studentProfileId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        version: { type: integer, minimum: 1 }
+        submittedAt: { type: string, format: date-time }
+        lastTransitionAt: { type: string, format: date-time }
+        availableActions:
+          type: array
+          items:
+            type: string
+            enum: [RESUBMIT, WITHDRAW, CANCEL_INTERVIEW, ACCEPT_OFFER, DECLINE_OFFER]
+    ApplicationEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Application' }
+    ApplicationListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Application' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    ReasonRequest:
+      type: object
+      required: [reasonCode, note]
+      properties:
+        reasonCode: { type: string, minLength: 2, maxLength: 100 }
+        note: { type: string, minLength: 3, maxLength: 500 }
+    SupplementRequest:
+      allOf:
+        - $ref: '#/components/schemas/ReasonRequest'
+        - type: object
+          required: [requiredDocumentTypes, dueAt]
+          properties:
+            requiredDocumentTypes:
+              type: array
+              minItems: 1
+              items: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
+            dueAt: { type: string, format: date-time }
+    InterviewRequest:
+      type: object
+      required: [scheduledAt, timeZone, mode, interviewerName]
+      properties:
+        scheduledAt: { type: string, format: date-time }
+        timeZone: { type: string, default: Asia/Ho_Chi_Minh }
+        mode: { type: string, enum: [ONSITE, ONLINE, PHONE] }
+        location: { type: string, maxLength: 500 }
+        meetingUrl: { type: string, format: uri }
+        interviewerName: { type: string, maxLength: 150 }
+    Interview:
+      type: object
+      required: [id, applicationId, scheduledAt, timeZone, mode, status, version]
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        scheduledAt: { type: string, format: date-time }
+        timeZone: { type: string }
+        mode: { type: string, enum: [ONSITE, ONLINE, PHONE] }
+        location: { type: [string, 'null'] }
+        meetingUrl: { type: [string, 'null'], format: uri }
+        status:
+          type: string
+          enum: [PENDING_STUDENT_CONFIRMATION, CONFIRMED, RESCHEDULE_REQUESTED, CANCELLED, COMPLETED, NO_SHOW]
+        version: { type: integer, minimum: 1 }
+    InterviewEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Interview' }
+    RecruitmentResultRequest:
+      type: object
+      required: [outcome]
+      properties:
+        outcome: { type: string, enum: [PASS, FAIL] }
+        startDate: { type: string, format: date }
+        offerStorageKey: { type: string }
+        internalNote: { type: string, maxLength: 2000 }
+    PlacementConfirmationRequest:
+      type: object
+      required: [startDate]
+      properties:
+        startDate: { type: string, format: date }
+        note: { type: string, maxLength: 500 }
+    Notification:
+      type: object
+      required: [id, type, title, body, resourceType, deepLink, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: [string, 'null'], format: uuid }
+        deepLink: { type: string }
+        readAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    NotificationListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Notification' }
+        meta: { $ref: '#/components/schemas/PageMeta' }

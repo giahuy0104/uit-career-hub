@@ -6,9 +6,10 @@ coverage/
 !.env.example
 .vercel/
 .openai/
+!frontend/.openai/
+!frontend/.openai/hosting.json
 *.log
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
-

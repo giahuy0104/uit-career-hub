@@ -1,11 +1,17 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import type { Pool } from "pg";
 
 import { env } from "./config/env.js";
-import { healthRouter } from "./modules/health/health.routes.js";
+import { databasePool } from "./db/pool.js";
+import { createHealthRouter } from "./modules/health/health.routes.js";
 
-export function createApp() {
+type AppDependencies = {
+  database?: Pick<Pool, "query">;
+};
+
+export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
 
   app.disable("x-powered-by");
@@ -16,7 +22,7 @@ export function createApp() {
   app.get("/api", (_request, response) => {
     response.json({ name: "UIT Career Hub API", version: "0.1.0" });
   });
-  app.use("/api/health", healthRouter);
+  app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
 
   app.use((_request, response) => {
     response.status(404).json({ message: "Không tìm thấy tài nguyên." });
@@ -24,4 +30,3 @@ export function createApp() {
 
   return app;
 }
-
