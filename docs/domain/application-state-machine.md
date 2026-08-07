@@ -55,6 +55,8 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 - Generic withdraw chỉ hợp lệ ở `UIT_REVIEWING`, `NEEDS_SUPPLEMENT`, `FORWARDED_TO_COMPANY`, `COMPANY_REVIEWING`.
 - Tại `INTERVIEW_INVITED`, sinh viên dùng hành động hủy tham gia/rút khỏi quy trình; lý do bắt buộc và kết quả là `WITHDRAWN`.
 - Tại `OFFER_PENDING_STUDENT`, không có generic withdraw; sinh viên dùng accept hoặc decline offer.
+- API trả `availableActions` để client chỉ hiện `WITHDRAW` hoặc `CANCEL_INTERVIEW` ở đúng bước; backend vẫn kiểm tra state trong transaction.
+- Cả hai hành động đều bắt buộc `reasonCode` và `note`, ghi history/audit, chống gửi lặp và thông báo cho UIT; doanh nghiệp chỉ nhận thông báo sau khi hồ sơ đã được chuyển đến họ.
 - `NOT_SUITABLE` là hành động riêng của doanh nghiệp trước/sàng lọc; `INTERVIEW_FAILED` dùng sau phỏng vấn.
 - Yêu cầu bổ sung, UIT từ chối, Không phù hợp, không đạt, rút đơn, hủy tham gia và từ chối offer luôn ghi reason/note và history.
 

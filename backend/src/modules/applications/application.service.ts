@@ -580,6 +580,157 @@ export class ApplicationService {
     });
   }
 
+  async withdraw(
+    actor: { userId: string; studentProfileId: string | null },
+    applicationId: string,
+    commandId: string,
+    action: "withdraw" | "cancel-interview",
+    payload: { reasonCode: string; note: string },
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application || application.studentProfileId !== studentProfileId) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        return (await this.repository.findById(applicationId, studentProfileId, client))!;
+      }
+
+      const genericWithdrawStatuses = new Set<ApplicationStatus>([
+        "UIT_REVIEWING",
+        "NEEDS_SUPPLEMENT",
+        "FORWARDED_TO_COMPANY",
+        "COMPANY_REVIEWING",
+      ]);
+      const validState = action === "cancel-interview"
+        ? application.status === "INTERVIEW_INVITED"
+        : genericWithdrawStatuses.has(application.status);
+      if (!validState) {
+        throw new AppError(
+          409,
+          "APPLICATION_WITHDRAWAL_NOT_ALLOWED",
+          action === "cancel-interview"
+            ? "Chỉ có thể hủy tham gia khi đơn đang ở bước phỏng vấn."
+            : "Bạn không thể rút đơn ở bước hiện tại. Hãy dùng hành động dành riêng cho bước này.",
+        );
+      }
+
+      const fromStatus = application.status;
+      await client.query(
+        `UPDATE applications
+         SET status = 'WITHDRAWN', withdrawn_at = now(), version = version + 1,
+             last_transition_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [applicationId],
+      );
+
+      if (action === "cancel-interview") {
+        const cancelled = await client.query(
+          `UPDATE interviews
+           SET status = 'CANCELLED', cancellation_reason = $2,
+               version = version + 1, updated_at = now()
+           WHERE application_id = $1
+             AND status IN ('PENDING_STUDENT_CONFIRMATION', 'CONFIRMED', 'RESCHEDULE_REQUESTED')`,
+          [applicationId, payload.note],
+        );
+        if ((cancelled.rowCount ?? 0) === 0) {
+          throw new AppError(409, "INTERVIEW_STATE_CONFLICT", "Không còn lịch phỏng vấn đang hoạt động để hủy.");
+        }
+      }
+
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id,
+          reason_code, note, metadata)
+         VALUES ($1, $2, $3, 'WITHDRAWN', 'STUDENT', $4, $5, $6,
+                 jsonb_build_object('action', $7::text))`,
+        [applicationId, commandId, fromStatus, actor.userId, payload.reasonCode, payload.note, action],
+      );
+
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, 'APPLICATION_WITHDRAWN_RECORDED', 'Sinh viên đã rút đơn ứng tuyển',
+                $3 || ' đã rút đơn vị trí “' || $4 || '” tại ' || $5 || '. Lý do: ' || $6,
+                'APPLICATION', $1::uuid, '/uit/applications/' || $1::text,
+                'application:' || $1::text || ':' || $2::text || ':withdraw:uit:' || u.id::text,
+                jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                   'fromStatus', $7::text, 'status', 'WITHDRAWN',
+                                   'reasonCode', $8::text, 'action', $9::text)
+         FROM users u WHERE u.role = 'UIT_ADMIN' AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          applicationId,
+          commandId,
+          application.studentFullName,
+          application.jobTitle,
+          application.companyName,
+          payload.note,
+          fromStatus,
+          payload.reasonCode,
+          action,
+        ],
+      );
+
+      if (["FORWARDED_TO_COMPANY", "COMPANY_REVIEWING", "INTERVIEW_INVITED"].includes(fromStatus)) {
+        const companyNotification = action === "cancel-interview"
+          ? {
+              type: "INTERVIEW_CANCELLED_BY_STUDENT",
+              title: "Sinh viên đã hủy tham gia phỏng vấn",
+              body: `${application.studentFullName} đã hủy tham gia phỏng vấn vị trí “${application.jobTitle}”. Lý do: ${payload.note}`,
+            }
+          : {
+              type: "APPLICATION_WITHDRAWN_BY_STUDENT",
+              title: "Sinh viên đã rút đơn ứng tuyển",
+              body: `${application.studentFullName} đã rút hồ sơ vị trí “${application.jobTitle}”. Lý do: ${payload.note}`,
+            };
+        await client.query(
+          `INSERT INTO notifications
+           (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+           SELECT u.id, $3, $4, $5,
+                  'APPLICATION', $1::uuid, '/company/candidates/' || $1::text,
+                  'application:' || $1::text || ':' || $2::text || ':withdraw:company:' || u.id::text,
+                  jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                     'fromStatus', $6::text, 'status', 'WITHDRAWN',
+                                     'reasonCode', $7::text, 'action', $8::text)
+           FROM company_users cu JOIN users u ON u.id = cu.user_id
+           WHERE cu.company_id = $9 AND u.status = 'ACTIVE'
+           ON CONFLICT (dedupe_key) DO NOTHING`,
+          [
+            applicationId,
+            commandId,
+            companyNotification.type,
+            companyNotification.title,
+            companyNotification.body,
+            fromStatus,
+            payload.reasonCode,
+            action,
+            application.companyId,
+          ],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, $2, 'APPLICATION', $3, $4::jsonb, $5, $6)`,
+        [
+          actor.userId,
+          action === "cancel-interview" ? "INTERVIEW_CANCELLED_BY_STUDENT" : "APPLICATION_WITHDRAWN_BY_STUDENT",
+          applicationId,
+          JSON.stringify({ commandId, fromStatus, toStatus: "WITHDRAWN", reasonCode: payload.reasonCode, action }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+
+      return (await this.repository.findById(applicationId, studentProfileId, client))!;
+    });
+  }
+
   async respondToOffer(
     actor: { userId: string; studentProfileId: string | null },
     applicationId: string,

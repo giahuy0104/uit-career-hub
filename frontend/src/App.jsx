@@ -419,6 +419,11 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
   const [offerNote, setOfferNote] = useState("");
   const [offerBusy, setOfferBusy] = useState(false);
   const [offerError, setOfferError] = useState("");
+  const [withdrawalAction, setWithdrawalAction] = useState("");
+  const [withdrawalReasonCode, setWithdrawalReasonCode] = useState("STUDENT_CHANGED_PLAN");
+  const [withdrawalNote, setWithdrawalNote] = useState("");
+  const [withdrawalBusy, setWithdrawalBusy] = useState(false);
+  const [withdrawalError, setWithdrawalError] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -446,6 +451,35 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
     setOfferDecision(decision);
     setOfferNote("");
     setOfferError("");
+  };
+  const openWithdrawal = (action) => {
+    setWithdrawalAction(action);
+    setWithdrawalReasonCode(action === "CANCEL_INTERVIEW" ? "STUDENT_SCHEDULE_CONFLICT" : "STUDENT_CHANGED_PLAN");
+    setWithdrawalNote("");
+    setWithdrawalError("");
+  };
+  const submitWithdrawal = async () => {
+    if (!selected || !withdrawalAction) return;
+    setWithdrawalBusy(true);
+    setWithdrawalError("");
+    try {
+      const endpoint = withdrawalAction === "CANCEL_INTERVIEW" ? "cancel-interview" : "withdraw";
+      const response = await authorizedRequest(`/applications/${selected.id}/${endpoint}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ reasonCode: withdrawalReasonCode, note: withdrawalNote.trim() }),
+      });
+      setItems(current => current.map(application => application.id === response.data.id ? response.data : application));
+      setMessage(withdrawalAction === "CANCEL_INTERVIEW"
+        ? "Đã hủy tham gia phỏng vấn, lưu lý do và thông báo cho UIT cùng doanh nghiệp."
+        : "Đã rút đơn, lưu lý do và thông báo cho đơn vị đang xử lý.");
+      setWithdrawalAction("");
+      setWithdrawalNote("");
+    } catch (error) {
+      setWithdrawalError(error.message);
+    } finally {
+      setWithdrawalBusy(false);
+    }
   };
   const respondToOffer = async () => {
     if (!selected || !offerDecision) return;
@@ -478,14 +512,16 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
           <section className="active-application">
             <div className="application-title"><LiveCompanyMark company={selected.job.company} size="lg" /><span><h2>{selected.job.title}</h2><p>{selected.job.company.name}</p><small><CalendarBlank size={15} />Đã nộp: {formatDate(selected.submittedAt)}</small></span><span className={`status-pill ${terminal ? "neutral" : "pending"}`}>{applicationStatusLabels[selected.status]}</span></div>
             <div className="journey">{journeyLabels.map((label, index) => <div className={`journey-step ${index < stage ? "done" : index === stage && !terminal ? "current" : ""}`} key={label}><span>{index < stage ? <Check size={18} /> : index + 1}</span><strong>{label}</strong><small>{index === 0 ? formatDate(selected.submittedAt) : index === stage && !terminal ? "Đang thực hiện" : index < stage ? "Đã hoàn tất" : "Chưa bắt đầu"}</small></div>)}</div>
-            <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : selected.status === "OFFER_PENDING_STUDENT" ? "Doanh nghiệp đang chờ quyết định của bạn. Hãy kiểm tra ngày bắt đầu trước khi phản hồi." : selected.status === "ACCEPTED_PENDING_UIT_CONFIRMATION" ? "Bạn đã nhận offer. UIT đang đối chiếu thông tin trước khi xác nhận nơi thực tập." : selected.status === "HIRED" ? "UIT đã xác nhận nơi thực tập. Các đơn khác còn hoạt động đã được hệ thống đóng và lưu lịch sử." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="secondary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ</button>{selected.status === "OFFER_PENDING_STUDENT" && <><button className="secondary-button danger" onClick={() => openOfferDecision("decline")}><X size={18} />Từ chối</button><button className="primary-button" onClick={() => openOfferDecision("accept")}><CheckCircle size={19} />Nhận offer</button></>}</div></div>
+            <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : selected.status === "OFFER_PENDING_STUDENT" ? "Doanh nghiệp đang chờ quyết định của bạn. Hãy kiểm tra ngày bắt đầu trước khi phản hồi." : selected.status === "ACCEPTED_PENDING_UIT_CONFIRMATION" ? "Bạn đã nhận offer. UIT đang đối chiếu thông tin trước khi xác nhận nơi thực tập." : selected.status === "HIRED" ? "UIT đã xác nhận nơi thực tập. Các đơn khác còn hoạt động đã được hệ thống đóng và lưu lịch sử." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="secondary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ</button>{selected.availableActions.includes("WITHDRAW") && <button className="secondary-button danger" onClick={() => openWithdrawal("WITHDRAW")}><Trash size={18} />Rút đơn</button>}{selected.availableActions.includes("CANCEL_INTERVIEW") && <button className="secondary-button danger" onClick={() => openWithdrawal("CANCEL_INTERVIEW")}><X size={18} />Hủy tham gia PV</button>}{selected.status === "OFFER_PENDING_STUDENT" && <><button className="secondary-button danger" onClick={() => openOfferDecision("decline")}><X size={18} />Từ chối</button><button className="primary-button" onClick={() => openOfferDecision("accept")}><CheckCircle size={19} />Nhận offer</button></>}</div></div>
             {selected.status === "OFFER_PENDING_STUDENT" && selected.recruitmentResult && <div className="offer-summary"><span className="offer-summary-icon"><Briefcase size={25} /></span><span><small>LỜI MỜI NHẬN VIỆC</small><strong>Ngày bắt đầu dự kiến: {formatDate(selected.recruitmentResult.startDate)}</strong><p>{selected.recruitmentResult.offerStorageKey ? "Doanh nghiệp đã đính kèm tài liệu offer." : "Offer được xác nhận trực tiếp trên hệ thống."}</p></span><i className="status-tag pending">Chờ bạn phản hồi</i></div>}
             {selected.status === "UIT_REVIEWING" && <p className="info-banner"><Info size={22} />Doanh nghiệp chưa thể xem CV cho đến khi UIT phê duyệt và chuyển hồ sơ.</p>}
+            <section className="student-application-history"><h3>Lịch sử xử lý</h3><div>{selected.timeline.slice().reverse().slice(0, 6).map((event, index) => <article key={`${event.createdAt}-${index}`}><span className="history-dot"><Check size={12} /></span><div><strong>{applicationStatusLabels[event.toStatus] || event.toStatus}</strong><small>{formatDate(event.createdAt)} · {event.actorType}</small>{event.note && <p>{event.note}</p>}</div></article>)}</div></section>
           </section>
           <section className="application-table-section live-applications-table"><h3>Tất cả đơn ứng tuyển ({filtered.length})</h3><div className="application-table"><div className="application-table-head"><span>Vị trí ứng tuyển</span><span>Công ty</span><span>Ngày nộp</span><span>Trạng thái hiện tại</span><span>Bước tiếp theo</span></div>{filtered.map((application) => <button className={`application-row ${application.id === selected.id ? "selected" : ""}`} key={application.id} onClick={() => setSelectedId(application.id)}><strong>{application.job.title}</strong><span>{application.job.company.name}</span><span>{formatDate(application.submittedAt)}</span><span><i className="status-tag pending">{applicationStatusLabels[application.status]}</i></span><span>Xem chi tiết <CaretRight size={15} /></span></button>)}</div></section>
         </>}
       </main>
       {documentsOpen && selected && <div className="modal-backdrop" onMouseDown={() => setDocumentsOpen(false)}><div className="modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setDocumentsOpen(false)}><X size={20} /></button><span className="modal-icon"><FileText size={26} /></span><h2>Hồ sơ đã nộp</h2><p>Đây là bản chụp tài liệu tại thời điểm gửi đơn.</p><div className="modal-list">{selected.documents.map((document) => <span key={document.id}><CheckCircle size={18} />{document.fileName} · {formatBytes(document.fileSizeBytes)}</span>)}</div><button className="primary-button full" onClick={() => setDocumentsOpen(false)}>Đóng</button></div></div>}
+      {withdrawalAction && selected && <div className="modal-backdrop" onMouseDown={() => !withdrawalBusy && setWithdrawalAction("")}><div className="modal withdrawal-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={withdrawalBusy} onClick={() => setWithdrawalAction("")}><X size={20} /></button><span className="modal-icon danger"><Warning size={26} /></span><h2>{withdrawalAction === "CANCEL_INTERVIEW" ? "Hủy tham gia phỏng vấn?" : "Rút đơn ứng tuyển?"}</h2><p>{withdrawalAction === "CANCEL_INTERVIEW" ? <>Lịch phỏng vấn với <strong>{selected.job.company.name}</strong> sẽ được hủy và đơn chuyển sang Đã rút.</> : <>UIT và doanh nghiệp sẽ dừng xử lý đơn vị trí <strong>{selected.job.title}</strong>.</>} Lý do và thao tác được lưu trong lịch sử.</p><div className="withdrawal-form"><label><span>Nhóm lý do *</span><select value={withdrawalReasonCode} onChange={(event) => setWithdrawalReasonCode(event.target.value)}>{withdrawalAction === "CANCEL_INTERVIEW" && <option value="STUDENT_SCHEDULE_CONFLICT">Trùng lịch học hoặc lịch cá nhân</option>}<option value="STUDENT_CHANGED_PLAN">Thay đổi kế hoạch cá nhân</option><option value="STUDENT_ACCEPTED_OTHER_OPPORTUNITY">Đã chọn cơ hội khác</option><option value="STUDENT_OTHER_REASON">Lý do khác</option></select></label><label><span>Lý do chi tiết *</span><textarea value={withdrawalNote} onChange={(event) => setWithdrawalNote(event.target.value)} placeholder="Mô tả ngắn gọn để UIT và doanh nghiệp nắm được lý do..." maxLength={2000} /></label></div>{withdrawalError && <p className="form-error"><Warning size={18} />{withdrawalError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={withdrawalBusy} onClick={() => setWithdrawalAction("")}>Giữ lại đơn</button><button className="primary-button danger-fill" disabled={withdrawalBusy || withdrawalNote.trim().length < 5} onClick={() => void submitWithdrawal()}>{withdrawalBusy ? <CircleNotch className="spin" size={18} /> : <Trash size={18} />}{withdrawalAction === "CANCEL_INTERVIEW" ? "Xác nhận hủy tham gia" : "Xác nhận rút đơn"}</button></div></div></div>}
       {offerDecision && selected && <div className="modal-backdrop" onMouseDown={() => !offerBusy && setOfferDecision("")}><div className="modal offer-decision-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={offerBusy} onClick={() => setOfferDecision("")}><X size={20} /></button><span className={`modal-icon ${offerDecision === "decline" ? "danger" : ""}`}>{offerDecision === "accept" ? <CheckCircle size={26} /> : <Warning size={26} />}</span><h2>{offerDecision === "accept" ? "Xác nhận nhận offer" : "Từ chối offer"}</h2><p>{offerDecision === "accept" ? <>Bạn chọn <strong>{selected.job.company.name}</strong> cho vị trí <strong>{selected.job.title}</strong>. UIT sẽ xác nhận trước khi đóng các đơn còn lại.</> : <>Lý do từ chối sẽ được lưu trong lịch sử và gửi đến doanh nghiệp.</>}</p>{offerDecision === "decline" && <label className="offer-decline-note"><span>Lý do *</span><textarea value={offerNote} onChange={(event) => setOfferNote(event.target.value)} placeholder="Ví dụ: Tôi đã chọn một cơ hội phù hợp hơn..." maxLength={2000} /></label>}{offerError && <p className="form-error"><Warning size={18} />{offerError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={offerBusy} onClick={() => setOfferDecision("")}>Hủy</button><button className={offerDecision === "accept" ? "primary-button" : "secondary-button danger"} disabled={offerBusy || (offerDecision === "decline" && offerNote.trim().length < 5)} onClick={() => void respondToOffer()}>{offerBusy ? <CircleNotch className="spin" size={18} /> : offerDecision === "accept" ? <CheckCircle size={18} /> : <X size={18} />}{offerDecision === "accept" ? "Xác nhận nhận offer" : "Xác nhận từ chối"}</button></div></div></div>}
     </div>
   );

@@ -243,6 +243,32 @@ describeWithDatabase("student job application flow", () => {
       });
   }
 
+  function withdrawApplication(
+    token: string,
+    applicationId: string,
+    body: Record<string, unknown>,
+    commandId = randomUUID(),
+  ) {
+    return request(app)
+      .post(`/api/v1/applications/${applicationId}/withdraw`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+  }
+
+  function cancelInterviewParticipation(
+    token: string,
+    applicationId: string,
+    body: Record<string, unknown>,
+    commandId = randomUUID(),
+  ) {
+    return request(app)
+      .post(`/api/v1/applications/${applicationId}/cancel-interview`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+  }
+
   function recordResult(
     token: string,
     applicationId: string,
@@ -371,6 +397,125 @@ describeWithDatabase("student job application flow", () => {
       [student.studentProfileId, jobId],
     );
     expect(Number(applications.rows[0]?.count)).toBe(1);
+  });
+
+  it("lets the student withdraw a forwarded application idempotently with history and notifications", async () => {
+    const { admin, recruiter, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+    await forward(admin.token, applicationId);
+    const commandId = randomUUID();
+    const reason = {
+      reasonCode: "STUDENT_CHANGED_PLAN",
+      note: "Tôi thay đổi kế hoạch học tập nên chưa thể tham gia đợt thực tập này.",
+    };
+
+    const withdrawn = await withdrawApplication(student.token, applicationId, reason, commandId);
+    expect(withdrawn.status).toBe(200);
+    expect(withdrawn.body.data).toMatchObject({ status: "WITHDRAWN", version: 3, availableActions: [] });
+    expect(withdrawn.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "FORWARDED_TO_COMPANY",
+      toStatus: "WITHDRAWN",
+      actorType: "STUDENT",
+      reasonCode: reason.reasonCode,
+      note: reason.note,
+      metadata: { action: "withdraw" },
+    });
+
+    const repeated = await withdrawApplication(student.token, applicationId, reason, commandId);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data).toMatchObject({ status: "WITHDRAWN", version: 3 });
+
+    const notifications = await client.query<{ recipient_user_id: string; type: string }>(
+      `SELECT recipient_user_id, type FROM notifications
+       WHERE resource_id = $1
+         AND recipient_user_id = ANY($2::uuid[])
+         AND type IN ('APPLICATION_WITHDRAWN_RECORDED', 'APPLICATION_WITHDRAWN_BY_STUDENT')`,
+      [applicationId, [admin.id, recruiter.id]],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      { recipient_user_id: admin.id, type: "APPLICATION_WITHDRAWN_RECORDED" },
+      { recipient_user_id: recruiter.id, type: "APPLICATION_WITHDRAWN_BY_STUDENT" },
+    ]));
+    expect(notifications.rows).toHaveLength(2);
+
+    const audit = await client.query<{ action: string }>(
+      "SELECT action FROM audit_logs WHERE target_id = $1 AND action = 'APPLICATION_WITHDRAWN_BY_STUDENT'",
+      [applicationId],
+    );
+    expect(audit.rows).toHaveLength(1);
+  });
+
+  it("requires the interview cancellation action and cancels the active interview", async () => {
+    const scenario = await prepareInterview();
+    const reason = {
+      reasonCode: "STUDENT_CANNOT_ATTEND",
+      note: "Tôi không thể tiếp tục tham gia lịch phỏng vấn vì trùng lịch học bắt buộc.",
+    };
+
+    const genericWithdraw = await withdrawApplication(scenario.student.token, scenario.applicationId, reason);
+    expect(genericWithdraw.status).toBe(409);
+    expect(genericWithdraw.body.error.code).toBe("APPLICATION_WITHDRAWAL_NOT_ALLOWED");
+
+    const commandId = randomUUID();
+    const cancelled = await cancelInterviewParticipation(
+      scenario.student.token,
+      scenario.applicationId,
+      reason,
+      commandId,
+    );
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.data).toMatchObject({ status: "WITHDRAWN", version: 5, availableActions: [] });
+    expect(cancelled.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "INTERVIEW_INVITED",
+      toStatus: "WITHDRAWN",
+      actorType: "STUDENT",
+      reasonCode: reason.reasonCode,
+      metadata: { action: "cancel-interview" },
+    });
+
+    const interview = await client.query<{ status: string; cancellation_reason: string; version: number }>(
+      "SELECT status, cancellation_reason, version FROM interviews WHERE application_id = $1",
+      [scenario.applicationId],
+    );
+    expect(interview.rows[0]).toEqual({ status: "CANCELLED", cancellation_reason: reason.note, version: 2 });
+
+    const repeated = await cancelInterviewParticipation(
+      scenario.student.token,
+      scenario.applicationId,
+      reason,
+      commandId,
+    );
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data).toMatchObject({ status: "WITHDRAWN", version: 5 });
+
+    const companyNotification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2 AND type = 'INTERVIEW_CANCELLED_BY_STUDENT'`,
+      [scenario.recruiter.id, scenario.applicationId],
+    );
+    expect(Number(companyNotification.rows[0]?.count)).toBe(1);
+  });
+
+  it("blocks withdrawal in protected stages and hides applications owned by another student", async () => {
+    const { jobId, student } = await createScenario();
+    const otherStudent = await createStudent();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+    const reason = { reasonCode: "STUDENT_CHANGED_PLAN", note: "Tôi muốn dừng quy trình ứng tuyển này." };
+
+    const foreign = await withdrawApplication(otherStudent.token, applicationId, reason);
+    expect(foreign.status).toBe(404);
+
+    const wrongAction = await cancelInterviewParticipation(student.token, applicationId, reason);
+    expect(wrongAction.status).toBe(409);
+    expect(wrongAction.body.error.code).toBe("APPLICATION_WITHDRAWAL_NOT_ALLOWED");
+
+    const invalidReason = await withdrawApplication(student.token, applicationId, {
+      reasonCode: "X",
+      note: "Ngắn",
+    });
+    expect(invalidReason.status).toBe(400);
   });
 
   it("lists UIT_REVIEWING applications for UIT admins only", async () => {

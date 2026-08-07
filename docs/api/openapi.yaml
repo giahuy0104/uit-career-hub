@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.8.0
+  version: 0.9.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -315,11 +315,17 @@ paths:
               $ref: '#/components/schemas/ReasonRequest'
       responses:
         '200':
-          description: Generic withdraw trước giai đoạn phỏng vấn
+          description: Rút đơn tại UIT_REVIEWING, NEEDS_SUPPLEMENT, FORWARDED_TO_COMPANY hoặc COMPANY_REVIEWING
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /applications/{applicationId}/cancel-interview:
@@ -337,11 +343,17 @@ paths:
               $ref: '#/components/schemas/ReasonRequest'
       responses:
         '200':
-          description: Hủy tham gia từ INTERVIEW_INVITED và ghi history
+          description: Hủy lịch đang hoạt động từ INTERVIEW_INVITED, chuyển đơn WITHDRAWN và ghi history
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /applications/{applicationId}/offer/accept:

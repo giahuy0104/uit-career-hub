@@ -74,6 +74,34 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     });
   });
 
+  router.post("/applications/:applicationId/withdraw", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.withdraw(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "withdraw",
+        applicationReviewReasonSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/applications/:applicationId/cancel-interview", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.withdraw(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "cancel-interview",
+        applicationReviewReasonSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
   router.post("/applications/:applicationId/offer/accept", studentOnly, async (request, response) => {
     const auth = principal(request);
     response.json({
