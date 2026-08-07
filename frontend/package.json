@@ -9,7 +9,7 @@
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "build:vercel": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/sites-worker.test.mjs",
+    "test": "pnpm build && node --test tests/sites-worker.test.mjs",
     "test:sites": "pnpm test"
   },
   "dependencies": {
