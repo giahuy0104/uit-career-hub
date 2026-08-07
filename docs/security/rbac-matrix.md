@@ -27,12 +27,15 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Dùng chung | `GET /jobs`, `GET /jobs/{jobId}` | ✓ | ✓ | ✓ |
 | Dùng chung | `/notifications`, unread count, read, read-all | ✓ | ✓ | ✓ |
 | Sinh viên | `GET /students/me`, `/students/me/documents` | ✓ | — | — |
+| Sinh viên | `GET /students/me/dashboard` | ✓ | — | — |
 | Sinh viên | `GET/POST /applications` và `GET /applications/{id}` | ✓ | — | — |
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |
 | UIT | hàng đợi và quyết định duyệt tin `/uit/jobs/**` | — | ✓ | — |
+| UIT | `GET /uit/dashboard` | — | ✓ | — |
 | UIT | hàng đợi và quyết định hồ sơ `/uit/applications/**` | — | ✓ | — |
 | UIT | quản lý đối tác và tài khoản tuyển dụng `/uit/companies/**` | — | ✓ | — |
 | Doanh nghiệp | quản lý tin `/companies/me/jobs/**` | — | — | ✓ |
+| Doanh nghiệp | `GET /companies/me/dashboard` | — | — | ✓ |
 | Doanh nghiệp | xem/cập nhật hồ sơ `/companies/me/profile` | — | — | ✓ |
 | Doanh nghiệp | danh sách và xử lý ứng viên `/companies/me/**` | — | — | ✓ |
 
@@ -40,7 +43,8 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 
 ## Kiểm thử bảo vệ
 
-- `backend/src/security/rbac-routes.test.ts`: kiểm tra HTTP thực tế cho toàn bộ 30 endpoint giới hạn vai trò, token thiếu/sai, context thiếu, endpoint dùng chung và security headers.
+- `backend/src/security/rbac-routes.test.ts`: kiểm tra HTTP thực tế cho toàn bộ endpoint giới hạn vai trò, token thiếu/sai, context thiếu, endpoint dùng chung và security headers.
+- `backend/src/modules/dashboard/dashboard.integration.test.ts`: xác nhận số liệu thật được giới hạn đúng theo UIT, doanh nghiệp và sinh viên đăng nhập.
 - `backend/src/middleware/auth.test.ts`: kiểm tra độc lập middleware role/context/ownership.
 - `backend/src/modules/jobs/job.integration.test.ts`: xác nhận doanh nghiệp không đọc hoặc sửa tin của doanh nghiệp khác.
 - `backend/src/modules/applications/application.integration.test.ts`: xác nhận sinh viên và doanh nghiệp không truy cập chéo hồ sơ, tài liệu hoặc đơn ứng tuyển.

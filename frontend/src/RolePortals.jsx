@@ -53,6 +53,11 @@ import {
 } from "./companies/CompanyManagement.jsx";
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
 import { useNotifications } from "./notifications/NotificationContext.jsx";
+import {
+  LiveAdminDashboard,
+  LiveCompanyDashboard,
+  LiveStudentDashboard,
+} from "./dashboard/LiveDashboards.jsx";
 
 const jobStatusCopy = {
   DRAFT: ["Bản nháp", "neutral"],
@@ -93,9 +98,9 @@ const studentNavigation = [
   ["dashboard", "Tổng quan", House],
   ["jobs", "Việc làm", Briefcase],
   ["companies", "Doanh nghiệp", Buildings],
-  ["applications", "Đơn ứng tuyển", FileText, 3],
+  ["applications", "Đơn ứng tuyển", FileText],
   ["profile", "Hồ sơ & CV", User],
-  ["interviews", "Lịch phỏng vấn", CalendarBlank, 1],
+  ["interviews", "Lịch phỏng vấn", CalendarBlank],
   ["notifications", "Thông báo", Bell],
 ];
 
@@ -103,9 +108,9 @@ const adminNavigation = [
   ["admin-dashboard", "Tổng quan", House],
   ["admin-companies", "Doanh nghiệp đối tác", Buildings],
   ["admin-jobs", "Duyệt tin tuyển dụng", Briefcase],
-  ["admin-applications", "Duyệt hồ sơ sinh viên", UserCheck, 12],
+  ["admin-applications", "Duyệt hồ sơ sinh viên", UserCheck],
   ["admin-placements", "Theo dõi kết quả", GraduationCap],
-  ["admin-scheduler", "Nhắc việc & tác vụ", ClockCountdown, 2],
+  ["admin-scheduler", "Nhắc việc & tác vụ", ClockCountdown],
   ["admin-notifications", "Thông báo", Bell],
   ["admin-reports", "Báo cáo", ChartBar],
   ["admin-access", "Tài khoản & nhật ký", ShieldCheck],
@@ -116,7 +121,7 @@ const companyNavigation = [
   ["company-profile", "Hồ sơ doanh nghiệp", Buildings],
   ["company-jobs", "Tin tuyển dụng", Briefcase],
   ["company-candidates", "Ứng viên", Users],
-  ["company-interviews", "Lịch phỏng vấn", CalendarCheck, 3],
+  ["company-interviews", "Lịch phỏng vấn", CalendarCheck],
   ["company-notifications", "Thông báo", Bell],
 ];
 
@@ -233,7 +238,7 @@ export function StudentExtraScreen({ route, navigate, user, onLogout }) {
   const [title, description] = titles[route] || titles.dashboard;
   return (
     <WorkspaceShell role="student" route={route} navigate={navigate} title={title} description={description} user={user} onLogout={onLogout} actions={route === "dashboard" ? <button className="primary-button" onClick={() => navigate("jobs")}><MagnifyingGlass size={18} />Tìm việc ngay</button> : null}>
-      {route === "dashboard" && <StudentDashboard navigate={navigate} />}
+      {route === "dashboard" && <LiveStudentDashboard navigate={navigate} />}
       {route === "companies" && <CompaniesScreen />}
       {route === "profile" && <ProfileScreen percent={profilePercent} setPercent={setProfilePercent} />}
       {route === "interviews" && <InterviewsScreen />}
@@ -303,7 +308,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
   const [title, description] = titles[route] || titles["admin-dashboard"];
   const action = route === "admin-companies" ? <button className="primary-button" onClick={() => setModal("company")}><UserPlus size={18} />Thêm doanh nghiệp</button> : route === "admin-reports" ? <button className="secondary-button"><DownloadSimple size={18} />Xuất báo cáo</button> : null;
   return <WorkspaceShell role="admin" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
-    {route === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
+    {route === "admin-dashboard" && <LiveAdminDashboard navigate={navigate} />}
     {route === "admin-companies" && <AdminCompanyManagement refreshKey={companiesVersion} onCreate={() => setModal("company")} />}
     {route === "admin-jobs" && <LiveAdminJobReview targetJobId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
@@ -586,7 +591,7 @@ export function CompanyPortal({ route, navigate, navigationPayload, user, onLogo
   const [title,description]=titles[route]||titles['company-dashboard'];
   const action=route==='company-jobs'?<button className="primary-button" onClick={()=>setModal('job')}><Plus/>Tạo tin tuyển dụng</button>:route==='company-interviews'?<button className="primary-button" onClick={()=>setModal('interview')}><Plus/>Tạo lịch phỏng vấn</button>:null;
   return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
-    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfileManagement/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
+    {route==='company-dashboard'&&<LiveCompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfileManagement/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
     {modal?.type==='job'&&<JobPostModal job={modal.job} close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='job'&&<JobPostModal close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>}
   </WorkspaceShell>;
 }
