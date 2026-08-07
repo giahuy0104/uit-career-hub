@@ -61,6 +61,14 @@ INSERT INTO companies (
     )
 ON CONFLICT DO NOTHING;
 
+UPDATE companies
+SET tax_code = CASE code
+    WHEN 'VNG' THEN 'DEMO-VNG-001'
+    WHEN 'FPTSOFT' THEN 'DEMO-FPT-001'
+    ELSE tax_code
+END
+WHERE code IN ('VNG', 'FPTSOFT') AND tax_code IS NULL;
+
 INSERT INTO company_users (id, user_id, company_id, full_name, title, is_primary) VALUES
     ('00000000-0000-4000-8000-000000004001', '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000001001', 'Lê Thu Hà', 'Quản trị viên tuyển dụng', true),
     ('00000000-0000-4000-8000-000000004002', '00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000001001', 'Nguyễn Hoàng Nam', 'Nhà tuyển dụng', false),

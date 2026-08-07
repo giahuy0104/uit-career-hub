@@ -46,6 +46,11 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useAuth } from "./auth/AuthContext.jsx";
+import {
+  AdminCompanyManagement,
+  CompanyCreatePartnerModal,
+  CompanyProfileManagement,
+} from "./companies/CompanyManagement.jsx";
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
 import { useNotifications } from "./notifications/NotificationContext.jsx";
 
@@ -283,6 +288,7 @@ function StudentNotifications({ navigate }) {
 
 export function AdminPortal({ route, navigate, navigationPayload, user, onLogout }) {
   const [modal, setModal] = useState(null);
+  const [companiesVersion, setCompaniesVersion] = useState(0);
   const titles = {
     "admin-dashboard": ["Tổng quan vận hành", "Theo dõi khối lượng xử lý, hạn cam kết và hoạt động tuyển dụng toàn trường."],
     "admin-companies": ["Doanh nghiệp đối tác", "Tạo hồ sơ, cấp tài khoản và quản lý trạng thái hợp tác với UIT."],
@@ -298,7 +304,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
   const action = route === "admin-companies" ? <button className="primary-button" onClick={() => setModal("company")}><UserPlus size={18} />Thêm doanh nghiệp</button> : route === "admin-reports" ? <button className="secondary-button"><DownloadSimple size={18} />Xuất báo cáo</button> : null;
   return <WorkspaceShell role="admin" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
     {route === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
-    {route === "admin-companies" && <AdminCompanies onCreate={() => setModal("company")} />}
+    {route === "admin-companies" && <AdminCompanyManagement refreshKey={companiesVersion} onCreate={() => setModal("company")} />}
     {route === "admin-jobs" && <LiveAdminJobReview targetJobId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-placements" && <AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} />}
@@ -306,7 +312,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     {route === "admin-notifications" && <NotificationInbox role="admin" onOpen={(notification, destination) => navigate(destination, { notification })} />}
     {route === "admin-reports" && <AdminReports />}
     {route === "admin-access" && <AdminAccess />}
-    {modal === "company" && <CompanyCreateModal close={() => setModal(null)} />}
+    {modal === "company" && <CompanyCreatePartnerModal close={() => setModal(null)} onComplete={() => setCompaniesVersion(value => value + 1)} />}
   </WorkspaceShell>;
 }
 
@@ -580,7 +586,7 @@ export function CompanyPortal({ route, navigate, navigationPayload, user, onLogo
   const [title,description]=titles[route]||titles['company-dashboard'];
   const action=route==='company-jobs'?<button className="primary-button" onClick={()=>setModal('job')}><Plus/>Tạo tin tuyển dụng</button>:route==='company-interviews'?<button className="primary-button" onClick={()=>setModal('interview')}><Plus/>Tạo lịch phỏng vấn</button>:null;
   return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
-    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfile/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
+    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfileManagement/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
     {modal?.type==='job'&&<JobPostModal job={modal.job} close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='job'&&<JobPostModal close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>}
   </WorkspaceShell>;
 }

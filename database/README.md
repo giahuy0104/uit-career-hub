@@ -9,7 +9,8 @@ database/
 ├── migrations/
 │   ├── 0001_initial_mvp_schema.sql
 │   ├── ...
-│   └── 0010_email_delivery_outbox.sql
+│   ├── 0010_email_delivery_outbox.sql
+│   └── 0011_company_partner_management.sql
 └── seeds/
     ├── development.sql
     └── demo-reset.sql
@@ -20,6 +21,10 @@ Migration runner lưu version, checksum và thời gian áp dụng trong `schema
 Migration `0010` tạo transactional outbox `email_deliveries`. Chỉ các notification thuộc phạm vi
 email hiện tại được trigger enqueue; dữ liệu notification cũ không được backfill để tránh gửi email
 lịch sử ngoài ý muốn khi bật provider lần đầu.
+
+Migration `0011` bổ sung mã số thuế duy nhất, optimistic version cho doanh nghiệp và nguyên nhân tạm
+ngưng tài khoản. Đây là nền tảng cho UIT quản lý đối tác, tạo link kích hoạt một lần và khôi phục đúng
+các tài khoản bị tạm ngưng theo doanh nghiệp mà không mở nhầm tài khoản đã bị UIT khóa riêng.
 
 ## Lệnh
 
