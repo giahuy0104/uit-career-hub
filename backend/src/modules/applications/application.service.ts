@@ -13,6 +13,10 @@ function applicationNotFound() {
   return new AppError(404, "APPLICATION_NOT_FOUND", "Không tìm thấy đơn ứng tuyển.");
 }
 
+function interviewNotFound() {
+  return new AppError(404, "INTERVIEW_NOT_FOUND", "Không tìm thấy lịch phỏng vấn.");
+}
+
 export class ApplicationService {
   constructor(
     private readonly repository: ApplicationRepository,
@@ -29,6 +33,79 @@ export class ApplicationService {
   async listStudentDocuments(studentProfileId: string | null) {
     if (!studentProfileId) throw studentNotFound();
     return this.repository.listStudentDocuments(studentProfileId);
+  }
+
+  async listStudentInterviews(
+    studentProfileId: string | null,
+    input: { page: number; pageSize: number; scope: "upcoming" | "history" | "all" },
+  ) {
+    if (!studentProfileId) throw studentNotFound();
+    return this.repository.listStudentInterviews(studentProfileId, input);
+  }
+
+  async listCompanyInterviews(
+    companyId: string | null,
+    input: { page: number; pageSize: number; scope: "upcoming" | "history" | "all" },
+  ) {
+    if (!companyId) throw applicationNotFound();
+    return this.repository.listCompanyInterviews(companyId, input);
+  }
+
+  async confirmInterview(
+    actor: { userId: string; studentProfileId: string | null },
+    interviewId: string,
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+    return this.repository.withTransaction(async (client) => {
+      const interview = await this.repository.lockStudentInterview(client, interviewId, studentProfileId);
+      if (!interview) throw interviewNotFound();
+
+      if (interview.status === "CONFIRMED") {
+        return (await this.repository.findStudentInterview(client, interviewId, studentProfileId))!;
+      }
+      if (interview.status !== "PENDING_STUDENT_CONFIRMATION") {
+        throw new AppError(
+          409,
+          "INTERVIEW_STATE_CONFLICT",
+          "Lịch phỏng vấn này không còn chờ sinh viên xác nhận.",
+        );
+      }
+
+      await client.query(
+        `UPDATE interviews
+         SET status = 'CONFIRMED', version = version + 1, updated_at = now()
+         WHERE id = $1`,
+        [interviewId],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, 'INTERVIEW_CONFIRMED_BY_STUDENT', 'Sinh viên đã xác nhận lịch phỏng vấn',
+                $2 || ' đã xác nhận tham gia phỏng vấn vị trí “' || $3 || '”.',
+                'INTERVIEW', $1::uuid, '/company/interviews',
+                'interview:' || $1::text || ':confirmed:company:' || u.id::text,
+                jsonb_build_object('interviewId', $1::text, 'applicationId', $4::text)
+         FROM company_users cu JOIN users u ON u.id = cu.user_id
+         WHERE cu.company_id = $5 AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [interviewId, interview.studentFullName, interview.jobTitle, interview.applicationId, interview.companyId],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'INTERVIEW_CONFIRMED_BY_STUDENT', 'INTERVIEW', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          interviewId,
+          JSON.stringify({ applicationId: interview.applicationId, fromStatus: interview.status, toStatus: "CONFIRMED" }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findStudentInterview(client, interviewId, studentProfileId))!;
+    });
   }
 
   async listApplications(

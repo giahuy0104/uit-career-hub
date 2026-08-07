@@ -169,3 +169,7 @@ Thông báo trong hệ thống thuộc MVP. Email Phase 2 hiện gửi cho bốn
 UIT Admin hiện có màn hình và API thật để tìm kiếm, tạo, chỉnh sửa, tạm ngưng/kích hoạt lại doanh nghiệp đối tác; thêm, khóa hoặc mở lại từng tài khoản tuyển dụng. Tài khoản mới nhận link kích hoạt một lần (72 giờ), token thô chỉ trả trong response và database chỉ lưu SHA-256 hash. Khi chưa bật email, UIT sao chép link và gửi thủ công; luồng này không phụ thuộc Resend. Doanh nghiệp có thể xem/cập nhật hồ sơ công khai của mình nhưng không được sửa mã đối tác, tên pháp lý, mã số thuế hay trạng thái hợp tác.
 
 Dashboard của cả ba vai trò đã dùng số liệu PostgreSQL thật. UIT theo dõi hàng đợi, SLA, phễu và doanh nghiệp hoạt động; doanh nghiệp theo dõi tin, ứng viên, phỏng vấn và hiệu quả từng tin; sinh viên thấy độ hoàn thiện hồ sơ, đơn đang xử lý, offer, lịch phỏng vấn và các việc cần làm. Mỗi API dashboard có RBAC và phạm vi dữ liệu riêng theo người đăng nhập.
+
+### Lịch phỏng vấn dùng dữ liệu thật
+
+Hai màn lịch của sinh viên và doanh nghiệp đọc trực tiếp từ PostgreSQL. Sinh viên có thể xác nhận lời mời hoặc hủy tham gia kèm lý do; xác nhận được khóa theo bản ghi và gọi lặp không tạo thông báo trùng. Doanh nghiệp chỉ thấy lịch thuộc các tin của chính mình, theo dõi trạng thái xác nhận và mở đúng hồ sơ ứng viên để cập nhật kết quả. Tạo lịch vẫn bắt đầu từ hồ sơ đang ở bước `COMPANY_REVIEWING`, không cho tạo lịch rời khỏi pipeline.

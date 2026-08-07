@@ -5,6 +5,7 @@ import type {
   ApplicationStatus,
   AvailableAction,
   InterviewDto,
+  InterviewListItemDto,
   StudentDocumentDto,
   StudentProfileDto,
 } from "./application.types.js";
@@ -193,6 +194,96 @@ function mapInterview(row: {
     interviewerName: row.interviewer_name,
     status: row.status,
     version: row.version,
+  };
+}
+
+type InterviewListRow = QueryResultRow & {
+  id: string;
+  application_id: string;
+  scheduled_at: Date;
+  time_zone: string;
+  mode: "ONSITE" | "ONLINE" | "PHONE";
+  location: string | null;
+  meeting_url: string | null;
+  interviewer_name: string | null;
+  interview_status: string;
+  interview_version: number;
+  application_status: ApplicationStatus;
+  student_profile_id: string;
+  student_code: string;
+  student_full_name: string;
+  student_major: string;
+  student_gpa: string | null;
+  job_id: string;
+  job_title: string;
+  company_id: string;
+  company_code: string;
+  company_name: string;
+  recruitment_outcome: "PASS" | "FAIL" | null;
+  student_decision: "ACCEPTED" | "DECLINED" | null;
+};
+
+const interviewListSelect = `
+  SELECT
+    i.id,
+    i.application_id,
+    i.scheduled_at,
+    i.time_zone,
+    i.mode,
+    i.location,
+    i.meeting_url,
+    i.interviewer_name,
+    i.status AS interview_status,
+    i.version AS interview_version,
+    a.status AS application_status,
+    sp.id AS student_profile_id,
+    sp.student_code,
+    sp.full_name AS student_full_name,
+    sp.major AS student_major,
+    sp.gpa AS student_gpa,
+    j.id AS job_id,
+    j.title AS job_title,
+    c.id AS company_id,
+    c.code AS company_code,
+    c.name AS company_name,
+    rr.outcome AS recruitment_outcome,
+    rr.student_decision
+  FROM interviews i
+  JOIN applications a ON a.id = i.application_id
+  JOIN student_profiles sp ON sp.id = a.student_profile_id
+  JOIN job_posts j ON j.id = a.job_post_id
+  JOIN companies c ON c.id = j.company_id
+  LEFT JOIN recruitment_results rr ON rr.application_id = a.id
+`;
+
+function mapInterviewListItem(row: InterviewListRow): InterviewListItemDto {
+  return {
+    id: row.id,
+    applicationId: row.application_id,
+    scheduledAt: row.scheduled_at.toISOString(),
+    timeZone: row.time_zone,
+    mode: row.mode,
+    location: row.location,
+    meetingUrl: row.meeting_url,
+    interviewerName: row.interviewer_name,
+    status: row.interview_status,
+    version: row.interview_version,
+    applicationStatus: row.application_status,
+    student: {
+      id: row.student_profile_id,
+      studentCode: row.student_code,
+      fullName: row.student_full_name,
+      major: row.student_major,
+      gpa: row.student_gpa === null ? null : Number(row.student_gpa),
+    },
+    job: {
+      id: row.job_id,
+      title: row.job_title,
+      company: { id: row.company_id, code: row.company_code, name: row.company_name },
+    },
+    recruitmentResult: row.recruitment_outcome
+      ? { outcome: row.recruitment_outcome, studentDecision: row.student_decision }
+      : null,
   };
 }
 
@@ -434,6 +525,115 @@ export class ApplicationRepository {
       values,
     );
     return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  private interviewScopeFilter(scope: "upcoming" | "history" | "all") {
+    if (scope === "upcoming") {
+      return "i.scheduled_at >= now() AND i.status IN ('PENDING_STUDENT_CONFIRMATION', 'CONFIRMED', 'RESCHEDULE_REQUESTED')";
+    }
+    if (scope === "history") {
+      return "(i.scheduled_at < now() OR i.status IN ('CANCELLED', 'COMPLETED', 'NO_SHOW'))";
+    }
+    return null;
+  }
+
+  async listStudentInterviews(
+    studentProfileId: string,
+    input: { page: number; pageSize: number; scope: "upcoming" | "history" | "all" },
+  ) {
+    const filters = ["a.student_profile_id = $1"];
+    const scopeFilter = this.interviewScopeFilter(input.scope);
+    if (scopeFilter) filters.push(scopeFilter);
+    const where = filters.join(" AND ");
+    const count = await this.database.query<{ total: string }>(
+      `SELECT count(*)::text AS total
+       FROM interviews i JOIN applications a ON a.id = i.application_id
+       WHERE ${where}`,
+      [studentProfileId],
+    );
+    const result = await this.database.query<InterviewListRow>(
+      `${interviewListSelect} WHERE ${where}
+       ORDER BY CASE
+         WHEN i.scheduled_at >= now() AND i.status IN ('PENDING_STUDENT_CONFIRMATION', 'CONFIRMED', 'RESCHEDULE_REQUESTED') THEN 0
+         ELSE 1
+       END, i.scheduled_at ASC, i.id ASC
+       LIMIT $2 OFFSET $3`,
+      [studentProfileId, input.pageSize, (input.page - 1) * input.pageSize],
+    );
+    return { items: result.rows.map(mapInterviewListItem), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  async listCompanyInterviews(
+    companyId: string,
+    input: { page: number; pageSize: number; scope: "upcoming" | "history" | "all" },
+  ) {
+    const filters = ["j.company_id = $1"];
+    const scopeFilter = this.interviewScopeFilter(input.scope);
+    if (scopeFilter) filters.push(scopeFilter);
+    const where = filters.join(" AND ");
+    const count = await this.database.query<{ total: string }>(
+      `SELECT count(*)::text AS total
+       FROM interviews i
+       JOIN applications a ON a.id = i.application_id
+       JOIN job_posts j ON j.id = a.job_post_id
+       WHERE ${where}`,
+      [companyId],
+    );
+    const result = await this.database.query<InterviewListRow>(
+      `${interviewListSelect} WHERE ${where}
+       ORDER BY CASE
+         WHEN i.scheduled_at >= now() AND i.status IN ('PENDING_STUDENT_CONFIRMATION', 'CONFIRMED', 'RESCHEDULE_REQUESTED') THEN 0
+         ELSE 1
+       END, i.scheduled_at ASC, i.id ASC
+       LIMIT $2 OFFSET $3`,
+      [companyId, input.pageSize, (input.page - 1) * input.pageSize],
+    );
+    return { items: result.rows.map(mapInterviewListItem), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  async lockStudentInterview(client: PoolClient, interviewId: string, studentProfileId: string) {
+    const result = await client.query<{
+      id: string;
+      application_id: string;
+      status: string;
+      student_full_name: string;
+      job_title: string;
+      company_id: string;
+    }>(
+      `SELECT i.id, i.application_id, i.status, sp.full_name AS student_full_name,
+              j.title AS job_title, c.id AS company_id
+       FROM interviews i
+       JOIN applications a ON a.id = i.application_id
+       JOIN student_profiles sp ON sp.id = a.student_profile_id
+       JOIN job_posts j ON j.id = a.job_post_id
+       JOIN companies c ON c.id = j.company_id
+       WHERE i.id = $1 AND a.student_profile_id = $2
+       FOR UPDATE OF i`,
+      [interviewId, studentProfileId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          id: row.id,
+          applicationId: row.application_id,
+          status: row.status,
+          studentFullName: row.student_full_name,
+          jobTitle: row.job_title,
+          companyId: row.company_id,
+        }
+      : null;
+  }
+
+  async findStudentInterview(
+    client: Pick<PoolClient, "query">,
+    interviewId: string,
+    studentProfileId: string,
+  ) {
+    const result = await client.query<InterviewListRow>(
+      `${interviewListSelect} WHERE i.id = $1 AND a.student_profile_id = $2`,
+      [interviewId, studentProfileId],
+    );
+    return result.rows[0] ? mapInterviewListItem(result.rows[0]) : null;
   }
 
   async lockApplication(client: PoolClient, applicationId: string) {
