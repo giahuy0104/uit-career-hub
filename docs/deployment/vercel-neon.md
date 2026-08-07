@@ -64,6 +64,24 @@ pnpm dlx vercel@58.7.1 deploy --prod --yes --cwd frontend
 
 Deploy backend trước frontend nếu thay đổi URL hoặc hợp đồng API. Hai thư mục `.vercel` chỉ lưu liên kết project trên máy và không được commit.
 
+## Bật tự động deploy từ GitHub
+
+Production hiện được deploy bằng CLI. Để Vercel tự tạo Preview khi push nhánh và deploy Production khi merge `main`:
+
+1. Trong **Vercel → Account Settings → Authentication/Login Connections**, kết nối tài khoản GitHub có quyền với repository `kgiahuy0412/uit-career-hub`.
+2. Khi hai project vẫn để Root Directory là `Auto`, chạy:
+
+```powershell
+pnpm dlx vercel@58.7.1 git connect https://github.com/kgiahuy0412/uit-career-hub.git --cwd backend
+pnpm dlx vercel@58.7.1 git connect https://github.com/kgiahuy0412/uit-career-hub.git --cwd frontend
+```
+
+3. Sau khi kết nối thành công, cấu hình Root Directory trong Vercel Dashboard:
+   - Backend project: `backend`.
+   - Frontend project: `frontend`.
+
+Không đặt Root Directory này trước khi dùng lệnh CLI `--cwd backend/frontend`, vì CLI sẽ ghép đường dẫn thành `backend/backend` hoặc `frontend/frontend`.
+
 ## Kiểm tra sau deploy
 
 ```powershell
