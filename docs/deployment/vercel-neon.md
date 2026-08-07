@@ -58,29 +58,36 @@ Runtime backend dùng pooled URL để tránh vượt giới hạn kết nối. 
 ## Lệnh deploy thủ công
 
 ```powershell
-pnpm dlx vercel@58.7.1 deploy --prod --yes --cwd backend
-pnpm dlx vercel@58.7.1 deploy --prod --yes --cwd frontend
+pnpm dlx vercel@58.7.1 deploy . --prod --yes --project uit-career-hub-api-041204
+pnpm dlx vercel@58.7.1 deploy . --prod --yes --project uit-career-hub-web-041204
 ```
 
-Deploy backend trước frontend nếu thay đổi URL hoặc hợp đồng API. Hai thư mục `.vercel` chỉ lưu liên kết project trên máy và không được commit.
+Chạy các lệnh này tại thư mục gốc repository. Deploy backend trước frontend nếu thay đổi URL hoặc hợp đồng API. Hai thư mục `.vercel` chỉ lưu liên kết project trên máy và không được commit.
 
 ## Bật tự động deploy từ GitHub
 
-Production hiện được deploy bằng CLI. Để Vercel tự tạo Preview khi push nhánh và deploy Production khi merge `main`:
+Hai project đã kết nối repository `kgiahuy0412/uit-career-hub`:
 
-1. Trong **Vercel → Account Settings → Authentication/Login Connections**, kết nối tài khoản GitHub có quyền với repository `kgiahuy0412/uit-career-hub`.
-2. Khi hai project vẫn để Root Directory là `Auto`, chạy:
+- Backend Root Directory: `backend`.
+- Frontend Root Directory: `frontend`.
+- Push nhánh hoặc pull request tạo Preview Deployment.
+- Merge/push `main` tạo Production Deployment.
+
+Nếu cần kết nối lại từ đầu:
+
+1. Đưa Root Directory của hai project về `Auto`.
+2. Chạy:
 
 ```powershell
 pnpm dlx vercel@58.7.1 git connect https://github.com/kgiahuy0412/uit-career-hub.git --cwd backend
 pnpm dlx vercel@58.7.1 git connect https://github.com/kgiahuy0412/uit-career-hub.git --cwd frontend
 ```
 
-3. Sau khi kết nối thành công, cấu hình Root Directory trong Vercel Dashboard:
+3. Sau khi kết nối thành công, cấu hình lại Root Directory:
    - Backend project: `backend`.
    - Frontend project: `frontend`.
 
-Không đặt Root Directory này trước khi dùng lệnh CLI `--cwd backend/frontend`, vì CLI sẽ ghép đường dẫn thành `backend/backend` hoặc `frontend/frontend`.
+Không đặt Root Directory trước khi chạy hai lệnh `git connect --cwd`, vì CLI sẽ ghép đường dẫn thành `backend/backend` hoặc `frontend/frontend`.
 
 ## Kiểm tra sau deploy
 
