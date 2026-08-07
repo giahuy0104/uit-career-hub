@@ -7,9 +7,10 @@ const { Pool } = pg;
 export function createDatabasePool(databaseUrl = env.databaseUrl) {
   return new Pool({
     connectionString: databaseUrl,
-    max: 10,
-    idleTimeoutMillis: 30_000,
+    max: env.databasePoolMax,
+    idleTimeoutMillis: env.nodeEnv === "production" ? 10_000 : 30_000,
     connectionTimeoutMillis: 5_000,
+    allowExitOnIdle: env.nodeEnv === "production",
     application_name: "uit-career-hub-backend",
   });
 }

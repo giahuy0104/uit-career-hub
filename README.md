@@ -14,6 +14,7 @@ uit-career-hub/
 ├── docs/domain/     ERD và state machine
 ├── docs/api/        OpenAPI 3.1
 ├── docs/demo/       Checkpoint dữ liệu và kịch bản bảo vệ E2E
+├── docs/deployment/ Cấu hình Vercel và Neon production
 ├── docs/security/   Ma trận phân quyền và ghi chú hardening
 └── docker-compose.yml (PostgreSQL local tùy chọn)
 ```
@@ -80,6 +81,12 @@ pnpm dev:frontend
 - Health check: http://localhost:3000/api/health
 - Database health: http://localhost:3000/api/health/database
 
+Production hiện tại:
+
+- Frontend: https://uit-career-hub-web-041204.vercel.app
+- Backend: https://uit-career-hub-api-041204.vercel.app
+- Hướng dẫn triển khai: `docs/deployment/vercel-neon.md`
+
 ## Kiểm tra
 
 ```powershell
@@ -122,6 +129,7 @@ pnpm db:down
 - `docs/api/openapi.yaml`
 - `docs/security/rbac-matrix.md`
 - `docs/demo/e2e-defense-script.md`
+- `docs/deployment/vercel-neon.md`
 - `docs/decisions/001-modular-monolith-neon.md`
 - `docs/decisions/002-jwt-refresh-rbac.md`
 - `database/README.md`

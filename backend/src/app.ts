@@ -41,6 +41,9 @@ export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
 
   app.disable("x-powered-by");
+  if (env.nodeEnv === "production") {
+    app.set("trust proxy", 1);
+  }
   app.use(helmet());
   app.use(cors({ origin: env.corsOrigin, credentials: true }));
   app.use(requestContext);

@@ -10,7 +10,18 @@ describe("parseEnvironment", () => {
     expect(result.corsOrigin).toBe("http://localhost:5173");
     expect(result.databaseUrl).toContain("localhost");
     expect(result.databaseUrlDirect).toBeUndefined();
+    expect(result.databasePoolMax).toBe(10);
     expect(result.allowDemoReset).toBe(false);
+  });
+
+  it("should_accept_a_small_serverless_database_pool", () => {
+    const result = parseEnvironment({
+      NODE_ENV: "production",
+      JWT_ACCESS_SECRET: "a-production-secret-with-at-least-32-characters",
+      DATABASE_POOL_MAX: "2",
+    });
+
+    expect(result.databasePoolMax).toBe(2);
   });
 
   it("should_only_enable_demo_reset_when_explicitly_requested", () => {
