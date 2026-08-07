@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      CI: true
+      NODE_ENV: test
+      DATABASE_URL: postgresql://uit_user:uit_ci_password@127.0.0.1:5432/uit_career_hub_ci
+      DATABASE_URL_DIRECT: postgresql://uit_user:uit_ci_password@127.0.0.1:5432/uit_career_hub_ci
+      DATABASE_URL_TEST: postgresql://uit_user:uit_ci_password@127.0.0.1:5432/uit_career_hub_ci
+      DATABASE_POOL_MAX: 5
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uit_user
+          POSTGRES_PASSWORD: uit_ci_password
+          POSTGRES_DB: uit_career_hub_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uit_user -d uit_career_hub_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@v2
+        with:
+          version: 11.16.0
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck backend
+        run: pnpm typecheck
+
+      - name: Validate OpenAPI specification
+        run: pnpm openapi:validate
+
+      - name: Run unit and integration tests
+        run: pnpm test
+
+      - name: Build frontend and backend
+        run: pnpm build
