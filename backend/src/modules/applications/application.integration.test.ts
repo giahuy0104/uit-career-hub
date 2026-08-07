@@ -46,6 +46,14 @@ describeWithDatabase("student job application flow", () => {
       [userIds, studentProfileIds],
     );
     await client.query(
+      "DELETE FROM recruitment_results WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
+      [studentProfileIds],
+    );
+    await client.query(
+      "DELETE FROM interviews WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
+      [studentProfileIds],
+    );
+    await client.query(
       "DELETE FROM application_documents WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
       [studentProfileIds],
     );
@@ -81,6 +89,7 @@ describeWithDatabase("student job application flow", () => {
     role: UserRole,
     studentProfileId: string | null = null,
     companyId: string | null = null,
+    isPrimaryCompanyUser = true,
   ) {
     const id = randomUUID();
     const user: AuthUser = {
@@ -110,8 +119,8 @@ describeWithDatabase("student job application flow", () => {
     }
     if (role === "COMPANY" && companyId) {
       await client.query(
-        "INSERT INTO company_users (user_id, company_id, full_name, is_primary) VALUES ($1, $2, 'Recruiter test', true)",
-        [id, companyId],
+        "INSERT INTO company_users (user_id, company_id, full_name, is_primary) VALUES ($1, $2, 'Recruiter test', $3)",
+        [id, companyId, isPrimaryCompanyUser],
       );
     }
     const signed = await tokenService.signAccessToken(user);
@@ -204,6 +213,20 @@ describeWithDatabase("student job application flow", () => {
         documents: documentIds.map((documentId) => ({ documentId })),
         consentToShare: true,
       });
+  }
+
+  function forward(token: string, applicationId: string, commandId = randomUUID()) {
+    return request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/forward`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId);
+  }
+
+  function startCompanyReview(token: string, applicationId: string, commandId = randomUUID()) {
+    return request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/start-review`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId);
   }
 
   it("lists only active recruiting jobs and returns their details", async () => {
@@ -412,5 +435,189 @@ describeWithDatabase("student job application flow", () => {
     expect([forwarded.status, rejected.status].sort()).toEqual([200, 409]);
     const finalState = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [applicationId]);
     expect(["FORWARDED_TO_COMPANY", "UIT_REJECTED"]).toContain(finalState.rows[0]?.status);
+  });
+
+  it("lists only applications forwarded to the authenticated company", async () => {
+    const first = await createScenario();
+    const second = await createScenario();
+    const firstApplication = await submit(first.student.token, first.jobId, [first.student.cvId]);
+    const secondApplication = await submit(second.student.token, second.jobId, [second.student.cvId]);
+    await forward(first.admin.token, firstApplication.body.data.id);
+    await forward(second.admin.token, secondApplication.body.data.id);
+
+    const list = await request(app)
+      .get("/api/v1/companies/me/candidates?page=1&pageSize=100")
+      .set("Authorization", `Bearer ${first.recruiter.token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.map((item: { id: string }) => item.id)).toContain(firstApplication.body.data.id);
+    expect(list.body.data.map((item: { id: string }) => item.id)).not.toContain(secondApplication.body.data.id);
+
+    const forbidden = await request(app)
+      .get("/api/v1/companies/me/candidates")
+      .set("Authorization", `Bearer ${first.student.token}`);
+    expect(forbidden.status).toBe(403);
+  });
+
+  it("starts company review idempotently and hides applications owned by another company", async () => {
+    const scenario = await createScenario();
+    const otherCompany = await createScenario();
+    const created = await submit(scenario.student.token, scenario.jobId, [scenario.student.cvId]);
+    const applicationId = created.body.data.id as string;
+    await forward(scenario.admin.token, applicationId);
+
+    const hidden = await startCompanyReview(otherCompany.recruiter.token, applicationId);
+    expect(hidden.status).toBe(404);
+
+    const commandId = randomUUID();
+    const started = await startCompanyReview(scenario.recruiter.token, applicationId, commandId);
+    expect(started.status).toBe(200);
+    expect(started.body.data).toMatchObject({ status: "COMPANY_REVIEWING", version: 3 });
+    const repeated = await startCompanyReview(scenario.recruiter.token, applicationId, commandId);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.version).toBe(3);
+
+    const notification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2
+         AND type = 'APPLICATION_COMPANY_REVIEWING'`,
+      [scenario.student.id, applicationId],
+    );
+    expect(Number(notification.rows[0]?.count)).toBe(1);
+  });
+
+  it("requires screening before marking a candidate not suitable and records the reason", async () => {
+    const { admin, recruiter, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+    await forward(admin.token, applicationId);
+
+    const premature = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/reject`)
+      .set("Authorization", `Bearer ${recruiter.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ reasonCode: "COMPANY_NOT_SUITABLE", note: "Kinh nghiá»‡m chÆ°a phÃ¹ há»£p vá»›i vá»‹ trÃ­ Ä‘ang tuyá»ƒn." });
+    expect(premature.status).toBe(409);
+
+    await startCompanyReview(recruiter.token, applicationId);
+    const commandId = randomUUID();
+    const rejected = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/reject`)
+      .set("Authorization", `Bearer ${recruiter.token}`)
+      .set("Idempotency-Key", commandId)
+      .send({ reasonCode: "COMPANY_NOT_SUITABLE", note: "Kinh nghiá»‡m chÆ°a phÃ¹ há»£p vá»›i vá»‹ trÃ­ Ä‘ang tuyá»ƒn." });
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.data).toMatchObject({ status: "NOT_SUITABLE", version: 4 });
+    expect(rejected.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "COMPANY_REVIEWING",
+      toStatus: "NOT_SUITABLE",
+      reasonCode: "COMPANY_NOT_SUITABLE",
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/reject`)
+      .set("Authorization", `Bearer ${recruiter.token}`)
+      .set("Idempotency-Key", commandId)
+      .send({ reasonCode: "COMPANY_NOT_SUITABLE", note: "Kinh nghiá»‡m chÆ°a phÃ¹ há»£p vá»›i vá»‹ trÃ­ Ä‘ang tuyá»ƒn." });
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.version).toBe(4);
+
+    const notifications = await client.query<{ type: string; role: string }>(
+      `SELECT n.type, u.role FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+       WHERE n.resource_id = $1
+       AND type IN ('APPLICATION_NOT_SUITABLE', 'APPLICATION_NOT_SUITABLE_RECORDED')`,
+      [applicationId],
+    );
+    expect(notifications.rows.filter((item) => item.type === "APPLICATION_NOT_SUITABLE" && item.role === "STUDENT")).toHaveLength(1);
+    expect(notifications.rows.some((item) => item.type === "APPLICATION_NOT_SUITABLE_RECORDED" && item.role === "UIT_ADMIN")).toBe(true);
+  });
+
+  it("schedules an interview idempotently and notifies the student", async () => {
+    const { admin, recruiter, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
+    const applicationId = created.body.data.id as string;
+    await forward(admin.token, applicationId);
+    await startCompanyReview(recruiter.token, applicationId);
+
+    const invalid = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/interviews`)
+      .set("Authorization", `Bearer ${recruiter.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({
+        scheduledAt: "2099-12-20T09:30:00+07:00",
+        timeZone: "Asia/Ho_Chi_Minh",
+        mode: "ONLINE",
+        interviewerName: "Tráº§n Minh Anh",
+      });
+    expect(invalid.status).toBe(400);
+
+    const commandId = randomUUID();
+    const body = {
+      scheduledAt: "2099-12-20T09:30:00+07:00",
+      timeZone: "Asia/Ho_Chi_Minh",
+      mode: "ONLINE",
+      meetingUrl: "https://meet.example/interview-test",
+      interviewerName: "Tráº§n Minh Anh",
+    };
+    const scheduled = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/interviews`)
+      .set("Authorization", `Bearer ${recruiter.token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+    expect(scheduled.status).toBe(201);
+    expect(scheduled.body.data).toMatchObject({
+      applicationId,
+      mode: "ONLINE",
+      meetingUrl: body.meetingUrl,
+      status: "PENDING_STUDENT_CONFIRMATION",
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/interviews`)
+      .set("Authorization", `Bearer ${recruiter.token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+    expect(repeated.status).toBe(201);
+    expect(repeated.body.data.id).toBe(scheduled.body.data.id);
+
+    const state = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [applicationId]);
+    expect(state.rows[0]?.status).toBe("INTERVIEW_INVITED");
+    const notification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2 AND type = 'INTERVIEW_INVITED'`,
+      [student.id, applicationId],
+    );
+    expect(Number(notification.rows[0]?.count)).toBe(1);
+  });
+
+  it("allows only one company decision while an application is being screened", async () => {
+    const { admin, recruiter, jobId, student } = await createScenario();
+    const secondRecruiter = await createUser("COMPANY", null, recruiter.companyId, false);
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+    await forward(admin.token, applicationId);
+    await startCompanyReview(recruiter.token, applicationId);
+
+    const [rejected, interviewed] = await Promise.all([
+      request(app)
+        .post(`/api/v1/companies/me/applications/${applicationId}/reject`)
+        .set("Authorization", `Bearer ${recruiter.token}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ reasonCode: "COMPANY_NOT_SUITABLE", note: "KhÃ´ng phÃ¹ há»£p vá»›i yÃªu cáº§u hiá»‡n táº¡i cá»§a doanh nghiá»‡p." }),
+      request(app)
+        .post(`/api/v1/companies/me/applications/${applicationId}/interviews`)
+        .set("Authorization", `Bearer ${secondRecruiter.token}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({
+          scheduledAt: "2099-12-21T09:30:00+07:00",
+          timeZone: "Asia/Ho_Chi_Minh",
+          mode: "PHONE",
+          interviewerName: "LÃª Minh Anh",
+        }),
+    ]);
+
+    expect([rejected.status, interviewed.status].filter((status) => [200, 201].includes(status))).toHaveLength(1);
+    expect([rejected.status, interviewed.status]).toContain(409);
+    const finalState = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [applicationId]);
+    expect(["NOT_SUITABLE", "INTERVIEW_INVITED"]).toContain(finalState.rows[0]?.status);
   });
 });

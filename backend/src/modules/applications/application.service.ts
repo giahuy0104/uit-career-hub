@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { AppError } from "../../shared/app-error.js";
 import { ApplicationRepository } from "./application.repository.js";
 import type { ApplicationReviewDecision, ApplicationStatus, RequestMetadata } from "./application.types.js";
@@ -61,7 +63,7 @@ export class ApplicationService {
       const application = await this.repository.lockApplication(client, applicationId);
       if (!application) throw applicationNotFound();
 
-      if (await this.repository.reviewCommandExists(client, applicationId, commandId)) {
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
         return (await this.repository.findByIdForUit(applicationId, client))!;
       }
       if (application.status !== "UIT_REVIEWING") {
@@ -175,6 +177,249 @@ export class ApplicationService {
         ],
       );
       return (await this.repository.findByIdForUit(applicationId, client))!;
+    });
+  }
+
+  async listCompanyCandidates(
+    companyId: string | null,
+    input: { page: number; pageSize: number; jobId?: string; status?: ApplicationStatus },
+  ) {
+    if (!companyId) throw applicationNotFound();
+    return this.repository.listCompanyCandidates(companyId, input);
+  }
+
+  async startCompanyReview(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    commandId: string,
+    request: RequestMetadata,
+  ) {
+    return this.companyDecision(actor, applicationId, commandId, "start-review", {}, request);
+  }
+
+  async rejectCompanyApplication(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    commandId: string,
+    payload: { reasonCode: string; note: string },
+    request: RequestMetadata,
+  ) {
+    return this.companyDecision(actor, applicationId, commandId, "reject", payload, request);
+  }
+
+  private async companyDecision(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    commandId: string,
+    decision: "start-review" | "reject",
+    payload: { reasonCode?: string; note?: string },
+    request: RequestMetadata,
+  ) {
+    if (!actor.companyId) throw applicationNotFound();
+    const companyId = actor.companyId;
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application || application.companyId !== companyId) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        return (await this.repository.findByIdForCompany(applicationId, companyId, client))!;
+      }
+
+      const expectedStatus: ApplicationStatus = decision === "start-review"
+        ? "FORWARDED_TO_COMPANY"
+        : "COMPANY_REVIEWING";
+      if (application.status !== expectedStatus) {
+        throw new AppError(
+          409,
+          "APPLICATION_STATE_CONFLICT",
+          decision === "start-review"
+            ? "Há»“ sÆ¡ khÃ´ng cÃ²n á»Ÿ tráº¡ng thÃ¡i má»›i tá»« UIT."
+            : "Chá»‰ cÃ³ thá»ƒ chá»n KhÃ´ng phÃ¹ há»£p khi há»“ sÆ¡ Ä‘ang Ä‘Æ°á»£c sÃ ng lá»c.",
+        );
+      }
+
+      const toStatus: ApplicationStatus = decision === "start-review" ? "COMPANY_REVIEWING" : "NOT_SUITABLE";
+      await client.query(
+        `UPDATE applications
+         SET status = $2, version = version + 1, last_transition_at = now()
+         WHERE id = $1`,
+        [applicationId, toStatus],
+      );
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id,
+          reason_code, note)
+         VALUES ($1, $2, $3, $4, 'COMPANY', $5, $6, $7)`,
+        [
+          applicationId,
+          commandId,
+          expectedStatus,
+          toStatus,
+          actor.userId,
+          decision === "reject" ? payload.reasonCode : null,
+          decision === "reject" ? payload.note : null,
+        ],
+      );
+
+      const notification = decision === "start-review"
+        ? {
+            type: "APPLICATION_COMPANY_REVIEWING",
+            title: "Doanh nghiá»‡p Ä‘ang xem há»“ sÆ¡",
+            body: `${application.companyName} Ä‘Ã£ báº¯t Ä‘áº§u xem há»“ sÆ¡ vá»‹ trÃ­ â€œ${application.jobTitle}â€ cá»§a báº¡n.`,
+          }
+        : {
+            type: "APPLICATION_NOT_SUITABLE",
+            title: "Doanh nghiá»‡p Ä‘Ã£ pháº£n há»“i há»“ sÆ¡",
+            body: `Há»“ sÆ¡ vá»‹ trÃ­ â€œ${application.jobTitle}â€ táº¡i ${application.companyName} chÆ°a phÃ¹ há»£p.`,
+          };
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         VALUES ($1, $2, $3, $4, 'APPLICATION', $5::uuid, '/applications/' || $5::text,
+                 'application:' || $5::text || ':' || $6::text || ':student',
+                 jsonb_build_object('applicationId', $5::text, 'commandId', $6::text, 'status', $7::text))
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [application.studentUserId, notification.type, notification.title, notification.body, applicationId, commandId, toStatus],
+      );
+
+      if (decision === "reject") {
+        await client.query(
+          `INSERT INTO notifications
+           (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+           SELECT u.id, 'APPLICATION_NOT_SUITABLE_RECORDED', 'Doanh nghiá»‡p Ä‘Ã£ cáº­p nháº­t káº¿t quáº£',
+                  $3 || ' Ä‘Ã£ chá»n KhÃ´ng phÃ¹ há»£p cho há»“ sÆ¡ vá»‹ trÃ­ â€œ' || $4 || 'â€.',
+                  'APPLICATION', $1::uuid, '/uit/applications/' || $1::text,
+                  'application:' || $1::text || ':' || $2::text || ':uit:' || u.id::text,
+                  jsonb_build_object('applicationId', $1::text, 'commandId', $2::text, 'status', 'NOT_SUITABLE')
+           FROM users u WHERE u.role = 'UIT_ADMIN' AND u.status = 'ACTIVE'
+           ON CONFLICT (dedupe_key) DO NOTHING`,
+          [applicationId, commandId, application.companyName, application.jobTitle],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, $2, 'APPLICATION', $3, $4::jsonb, $5, $6)`,
+        [
+          actor.userId,
+          decision === "start-review" ? "APPLICATION_COMPANY_REVIEW_STARTED" : "APPLICATION_NOT_SUITABLE",
+          applicationId,
+          JSON.stringify({ commandId, fromStatus: expectedStatus, toStatus, reasonCode: payload.reasonCode ?? null }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findByIdForCompany(applicationId, companyId, client))!;
+    });
+  }
+
+  async scheduleInterview(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    commandId: string,
+    input: {
+      scheduledAt: string;
+      timeZone: string;
+      mode: "ONSITE" | "ONLINE" | "PHONE";
+      location?: string;
+      meetingUrl?: string;
+      interviewerName: string;
+    },
+    request: RequestMetadata,
+  ) {
+    if (!actor.companyId) throw applicationNotFound();
+    if (new Date(input.scheduledAt).getTime() <= Date.now() + 15 * 60 * 1_000) {
+      throw new AppError(400, "INTERVIEW_TIME_INVALID", "Lá»‹ch phá»ng váº¥n pháº£i cÃ¡ch thá»i Ä‘iá»ƒm hiá»‡n táº¡i Ã­t nháº¥t 15 phÃºt.");
+    }
+    const companyId = actor.companyId;
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application || application.companyId !== companyId) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        const repeated = await this.repository.findInterviewByCommand(client, applicationId, commandId);
+        if (!repeated) throw new AppError(409, "APPLICATION_STATE_CONFLICT", "YÃªu cáº§u Ä‘Ã£ Ä‘Æ°á»£c xá»­ lÃ½.");
+        return repeated;
+      }
+      if (application.status !== "COMPANY_REVIEWING") {
+        throw new AppError(
+          409,
+          "APPLICATION_STATE_CONFLICT",
+          "Chá»‰ cÃ³ thá»ƒ má»i phá»ng váº¥n khi há»“ sÆ¡ Ä‘ang Ä‘Æ°á»£c sÃ ng lá»c.",
+        );
+      }
+
+      const interviewId = randomUUID();
+      await client.query(
+        `INSERT INTO interviews
+         (id, application_id, command_id, created_by_user_id, scheduled_at, time_zone, mode,
+          location, meeting_url, interviewer_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          interviewId,
+          applicationId,
+          commandId,
+          actor.userId,
+          input.scheduledAt,
+          input.timeZone,
+          input.mode,
+          input.location ?? null,
+          input.meetingUrl ?? null,
+          input.interviewerName,
+        ],
+      );
+      await client.query(
+        `UPDATE applications
+         SET status = 'INTERVIEW_INVITED', version = version + 1, last_transition_at = now()
+         WHERE id = $1`,
+        [applicationId],
+      );
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id, metadata)
+         VALUES ($1, $2, 'COMPANY_REVIEWING', 'INTERVIEW_INVITED', 'COMPANY', $3, $4::jsonb)`,
+        [
+          applicationId,
+          commandId,
+          actor.userId,
+          JSON.stringify({ interviewId, scheduledAt: input.scheduledAt, mode: input.mode, interviewerName: input.interviewerName }),
+        ],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         VALUES ($1, 'INTERVIEW_INVITED', 'Báº¡n cÃ³ lá»‹ch phá»ng váº¥n má»›i',
+                 $2 || ' Ä‘Ã£ má»i báº¡n phá»ng váº¥n cho vá»‹ trÃ­ â€œ' || $3 || 'â€.',
+                 'APPLICATION', $4::uuid, '/applications/' || $4::text,
+                 'application:' || $4::text || ':' || $5::text || ':interview',
+                 jsonb_build_object('applicationId', $4::text, 'interviewId', $6::text,
+                                    'scheduledAt', $7::text, 'mode', $8::text))
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          application.studentUserId,
+          application.companyName,
+          application.jobTitle,
+          applicationId,
+          commandId,
+          interviewId,
+          input.scheduledAt,
+          input.mode,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'INTERVIEW_SCHEDULED', 'APPLICATION', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          applicationId,
+          JSON.stringify({ commandId, interviewId, scheduledAt: input.scheduledAt, mode: input.mode }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findInterviewByCommand(client, applicationId, commandId))!;
     });
   }
 

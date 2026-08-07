@@ -75,6 +75,8 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 - Partial unique index ngăn một student có hơn một application ở `ACCEPTED_PENDING_UIT_CONFIRMATION` hoặc `HIRED`.
 - `version` hỗ trợ optimistic concurrency cho transition thông thường.
 - Ba quyết định UIT tại `UIT_REVIEWING` khóa application bằng `SELECT ... FOR UPDATE`; chỉ quyết định đầu tiên được ghi nhận khi hai quản trị viên xử lý đồng thời.
+- Các quyết định của doanh nghiệp tại `FORWARDED_TO_COMPANY` và `COMPANY_REVIEWING` cũng khóa application bằng `SELECT ... FOR UPDATE`; recruiter của doanh nghiệp khác luôn nhận 404 để không lộ hồ sơ.
+- “Không phù hợp” và “Mời phỏng vấn” chỉ hợp lệ sau khi hồ sơ đã sang `COMPANY_REVIEWING`. Tạo lịch phỏng vấn dùng `command_id` duy nhất để retry không tạo trùng lịch.
 - Khi chuyển `FORWARDED_TO_COMPANY`, thông báo doanh nghiệp được chọn theo `company_id` của chính tin tuyển dụng, không lấy doanh nghiệp từ dữ liệu phía client.
 - Transition xác nhận nơi nhận việc dùng transaction và `SELECT ... FOR UPDATE` khi được hiện thực ở service.
 - Mỗi command có idempotency key; history có `command_id` để retry không ghi trùng.

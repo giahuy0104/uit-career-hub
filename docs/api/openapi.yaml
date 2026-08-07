@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.5.0
+  version: 0.6.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -514,6 +514,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /companies/me/applications/{applicationId}/start-review:
     post:
       tags: [Companies, Applications]
@@ -528,6 +530,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /companies/me/applications/{applicationId}/reject:
     post:
       tags: [Companies, Applications]
@@ -548,6 +556,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /companies/me/applications/{applicationId}/interviews:
@@ -570,6 +584,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InterviewEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /companies/me/applications/{applicationId}/results:
     post:
       tags: [Companies, Applications]
@@ -1397,7 +1419,7 @@ components:
         interviewerName: { type: string, maxLength: 150 }
     Interview:
       type: object
-      required: [id, applicationId, scheduledAt, timeZone, mode, status, version]
+      required: [id, applicationId, scheduledAt, timeZone, mode, interviewerName, status, version]
       properties:
         id: { type: string, format: uuid }
         applicationId: { type: string, format: uuid }
@@ -1406,6 +1428,7 @@ components:
         mode: { type: string, enum: [ONSITE, ONLINE, PHONE] }
         location: { type: [string, 'null'] }
         meetingUrl: { type: [string, 'null'], format: uri }
+        interviewerName: { type: [string, 'null'] }
         status:
           type: string
           enum: [PENDING_STUDENT_CONFIRMATION, CONFIRMED, RESCHEDULE_REQUESTED, CANCELLED, COMPLETED, NO_SHOW]

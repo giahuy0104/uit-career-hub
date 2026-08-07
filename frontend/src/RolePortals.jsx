@@ -107,7 +107,7 @@ const companyNavigation = [
   ["company-dashboard", "Tổng quan", House],
   ["company-profile", "Hồ sơ doanh nghiệp", Buildings],
   ["company-jobs", "Tin tuyển dụng", Briefcase],
-  ["company-candidates", "Ứng viên", Users, 14],
+  ["company-candidates", "Ứng viên", Users],
   ["company-interviews", "Lịch phỏng vấn", CalendarCheck, 3],
   ["company-notifications", "Thông báo", Bell, 4],
 ];
@@ -138,11 +138,11 @@ const companyJobs = [
 ];
 
 const candidates = [
-  { id: 1, name: "Nguyễn Minh Khoa", major: "Kỹ thuật phần mềm", gpa: "3.42", role: "Backend Intern", stage: "new", score: 86 },
-  { id: 2, name: "Lê Thành Đạt", major: "Mạng máy tính", gpa: "3.36", role: "Backend Intern", stage: "new", score: 81 },
-  { id: 3, name: "Trần Khánh Linh", major: "Hệ thống thông tin", gpa: "3.67", role: "Product Intern", stage: "screening", score: 90 },
-  { id: 4, name: "Võ Minh Anh", major: "Khoa học máy tính", gpa: "3.51", role: "Backend Intern", stage: "interview", score: 88 },
-  { id: 5, name: "Phạm Gia Huy", major: "Khoa học dữ liệu", gpa: "3.18", role: "Product Intern", stage: "result", score: 79 },
+  { id: 1, name: "Nguyễn Minh Khoa", major: "Kỹ thuật phần mềm", gpa: "3.42", role: "Backend Intern", stage: "new" },
+  { id: 2, name: "Lê Thành Đạt", major: "Mạng máy tính", gpa: "3.36", role: "Backend Intern", stage: "new" },
+  { id: 3, name: "Trần Khánh Linh", major: "Hệ thống thông tin", gpa: "3.67", role: "Product Intern", stage: "screening" },
+  { id: 4, name: "Võ Minh Anh", major: "Khoa học máy tính", gpa: "3.51", role: "Backend Intern", stage: "interview" },
+  { id: 5, name: "Phạm Gia Huy", major: "Khoa học dữ liệu", gpa: "3.18", role: "Product Intern", stage: "result" },
 ];
 
 function Brand({ inverse = false }) {
@@ -520,7 +520,7 @@ export function CompanyPortal({ route, navigate, user, onLogout }) {
 }
 
 function CompanyDashboard({navigate}){
-  return <><div className="metric-grid four"><MetricCard label="Tin đang tuyển" value="2" helper="1 tin chờ UIT duyệt" Icon={Briefcase}/><MetricCard label="Hồ sơ mới từ UIT" value="14" helper="6 hồ sơ nhận hôm nay" Icon={Users} tone="amber"/><MetricCard label="Phỏng vấn tuần này" value="7" helper="3 lịch cần cập nhật" Icon={CalendarCheck} tone="purple"/><MetricCard label="Ứng viên đã chọn" value="9" helper="Trong tháng 8/2026" Icon={UserCheck} tone="green"/></div><div className="portal-two-column wide-left"><Panel title="Ứng viên mới cần xử lý" action={<button className="link-button" onClick={()=>navigate('company-candidates')}>Xem tất cả <ArrowRight/></button>}><div className="candidate-quick-list">{candidates.slice(0,3).map(candidate=><button key={candidate.id} onClick={()=>navigate('company-candidates')}><span className="candidate-initials">{candidate.name.split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><strong>{candidate.name}</strong><small>{candidate.role} · GPA {candidate.gpa}</small></div><Status tone="info">Phù hợp {candidate.score}%</Status><ArrowRight/></button>)}</div></Panel><Panel title="Hạn xử lý"><div className="sla-card urgent"><ClockCountdown/><div><strong>6 hồ sơ quá 48 giờ</strong><p>Hệ thống sẽ tiếp tục nhắc lúc 08:15 ngày mai.</p></div></div><div className="sla-card warning"><Warning/><div><strong>1 tin cần chỉnh sửa</strong><p>UIT đã phản hồi về yêu cầu thời gian làm việc.</p></div></div><button className="secondary-button full" onClick={()=>navigate('company-notifications')}>Xem tất cả việc cần làm</button></Panel></div><Panel title="Hiệu quả tin đang tuyển"><div className="simple-table company-job-summary"><div className="table-head"><span>Vị trí</span><span>Lượt xem</span><span>Ứng tuyển</span><span>UIT chuyển đến</span><span>Phỏng vấn</span><span/></div>{[["Backend Developer Intern",412,28,14,6],["Product Analyst Intern",278,16,9,3]].map(row=><button key={row[0]} onClick={()=>navigate('company-jobs')}><strong>{row[0]}</strong>{row.slice(1).map((value,index)=><span key={index}>{value}</span>)}<ArrowRight/></button>)}</div></Panel></>;
+  return <><div className="metric-grid four"><MetricCard label="Tin đang tuyển" value="2" helper="1 tin chờ UIT duyệt" Icon={Briefcase}/><MetricCard label="Hồ sơ mới từ UIT" value="14" helper="6 hồ sơ nhận hôm nay" Icon={Users} tone="amber"/><MetricCard label="Phỏng vấn tuần này" value="7" helper="3 lịch cần cập nhật" Icon={CalendarCheck} tone="purple"/><MetricCard label="Ứng viên đã chọn" value="9" helper="Trong tháng 8/2026" Icon={UserCheck} tone="green"/></div><div className="portal-two-column wide-left"><Panel title="Ứng viên mới cần xử lý" action={<button className="link-button" onClick={()=>navigate('company-candidates')}>Xem tất cả <ArrowRight/></button>}><div className="candidate-quick-list">{candidates.slice(0,3).map(candidate=><button key={candidate.id} onClick={()=>navigate('company-candidates')}><span className="candidate-initials">{candidate.name.split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><strong>{candidate.name}</strong><small>{candidate.role} · GPA {candidate.gpa}</small></div><Status tone="info">Hồ sơ mới</Status><ArrowRight/></button>)}</div></Panel><Panel title="Hạn xử lý"><div className="sla-card urgent"><ClockCountdown/><div><strong>6 hồ sơ quá 48 giờ</strong><p>Hệ thống sẽ tiếp tục nhắc lúc 08:15 ngày mai.</p></div></div><div className="sla-card warning"><Warning/><div><strong>1 tin cần chỉnh sửa</strong><p>UIT đã phản hồi về yêu cầu thời gian làm việc.</p></div></div><button className="secondary-button full" onClick={()=>navigate('company-notifications')}>Xem tất cả việc cần làm</button></Panel></div><Panel title="Hiệu quả tin đang tuyển"><div className="simple-table company-job-summary"><div className="table-head"><span>Vị trí</span><span>Lượt xem</span><span>Ứng tuyển</span><span>UIT chuyển đến</span><span>Phỏng vấn</span><span/></div>{[["Backend Developer Intern",412,28,14,6],["Product Analyst Intern",278,16,9,3]].map(row=><button key={row[0]} onClick={()=>navigate('company-jobs')}><strong>{row[0]}</strong>{row.slice(1).map((value,index)=><span key={index}>{value}</span>)}<ArrowRight/></button>)}</div></Panel></>;
 }
 
 function CompanyProfile(){
@@ -627,12 +627,208 @@ function CompanyJobs({onCreate}){
   return <Panel title="Danh sách tin" action={<div className="segmented-filter">{['Tất cả','Đang tuyển','Chờ UIT duyệt','Đã đóng'].map(item=><button key={item} className={filter===item?'active':''} onClick={()=>setFilter(item)}>{item}</button>)}</div>}><div className="simple-table company-jobs-table"><div className="table-head"><span>Vị trí</span><span>Loại hình</span><span>Hạn nộp</span><span>Ứng tuyển</span><span>UIT chuyển đến</span><span>Trạng thái</span><span/></div>{rows.map(job=><button key={job.id}><strong>{job.title}</strong><span>{job.type}</span><span>{job.deadline}</span><span>{job.applications}</span><span>{job.forwarded}</span><span><Status tone={job.status==='Đang tuyển'?'success':job.status==='Chờ UIT duyệt'?'warning':'neutral'}>{job.status}</Status></span><DotsThree/></button>)}</div>{!rows.length&&<EmptyHint title="Chưa có tin phù hợp" text="Hãy chọn trạng thái khác hoặc tạo tin mới."/>}</Panel>;
 }
 
-function CompanyCandidates(){
-  const [items,setItems]=useState(candidates);
-  const move=(id,next)=>setItems(currentItems=>currentItems.map(item=>item.id===id?{...item,stage:next}:item));
-  const reject=(id)=>setItems(currentItems=>currentItems.map(item=>item.id===id?{...item,stage:'rejected'}:item));
-  const columns=[['new','Mới từ UIT','screening'],['screening','Đang sàng lọc','interview'],['interview','Phỏng vấn','result'],['result','Kết quả',null]];
-  return <><div className="portal-toolbar"><label className="portal-search"><MagnifyingGlass/><input placeholder="Tìm ứng viên, vị trí..."/></label><button className="secondary-button"><FunnelSimple/>Vị trí: Tất cả</button><button className="secondary-button"><ListBullets/>Danh sách</button></div><div className="candidate-board">{columns.map(([stage,label,next])=><section key={stage}><header><h2>{label}</h2><span>{items.filter(i=>i.stage===stage).length}</span></header><div>{items.filter(i=>i.stage===stage).map(candidate=><article key={candidate.id}><div className="candidate-card-heading"><span className="candidate-initials">{candidate.name.split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><strong>{candidate.name}</strong><small>{candidate.major}</small></div><button><DotsThree/></button></div><p>{candidate.role}</p><div className="candidate-meta"><span>GPA <b>{candidate.gpa}</b></span><Status tone="info">Phù hợp {candidate.score}%</Status></div><div className="candidate-card-actions"><button><Eye/>Xem</button>{next&&<button className="reject" onClick={()=>reject(candidate.id)}>Không phù hợp</button>}{next&&<button className="primary" onClick={()=>move(candidate.id,next)}>Chuyển bước <ArrowRight/></button>}</div></article>)}</div></section>)}</div></>;
+const companyCandidateStatusCopy = {
+  UIT_REVIEWING: ["UIT đang kiểm duyệt", "warning"],
+  NEEDS_SUPPLEMENT: ["Cần bổ sung hồ sơ", "urgent"],
+  FORWARDED_TO_COMPANY: ["Mới từ UIT", "info"],
+  COMPANY_REVIEWING: ["Đang sàng lọc", "warning"],
+  INTERVIEW_INVITED: ["Đã mời phỏng vấn", "info"],
+  NOT_SUITABLE: ["Không phù hợp", "urgent"],
+  INTERVIEW_FAILED: ["Chưa đạt phỏng vấn", "neutral"],
+  OFFER_PENDING_STUDENT: ["Chờ phản hồi offer", "success"],
+  ACCEPTED_PENDING_UIT_CONFIRMATION: ["Chờ UIT xác nhận", "success"],
+  HIRED: ["Đã nhận việc", "success"],
+  OFFER_DECLINED: ["Từ chối offer", "neutral"],
+  WITHDRAWN: ["Đã rút", "neutral"],
+};
+
+function companyCandidateStage(status) {
+  if (status === "FORWARDED_TO_COMPANY") return "new";
+  if (status === "COMPANY_REVIEWING") return "screening";
+  if (status === "INTERVIEW_INVITED") return "interview";
+  return "result";
+}
+
+function CompanyCandidateDetailModal({ application, close }) {
+  const status = companyCandidateStatusCopy[application.status] || [application.status, "neutral"];
+  return (
+    <div className="modal-backdrop" onMouseDown={close}>
+      <div className="modal portal-modal candidate-detail-modal" onMouseDown={event => event.stopPropagation()}>
+        <button className="modal-close" onClick={close}><X /></button>
+        <div className="candidate-modal-heading">
+          <span className="large-avatar small">{userInitials(application.student.fullName)}</span>
+          <div><h2>{application.student.fullName}</h2><p>{application.student.studentCode} · {application.student.major}</p></div>
+          <Status tone={status[1]}>{status[0]}</Status>
+        </div>
+        <div className="eligibility-grid candidate-detail-grid">
+          <article><small>Vị trí</small><strong>{application.job.title}</strong></article>
+          <article><small>GPA</small><strong>{application.student.gpa ?? "—"} / 4.0</strong></article>
+          <article><small>Email UIT</small><strong>{application.student.email}</strong></article>
+          <article><small>Nhận từ UIT</small><strong>{formatSubmitted(application.submittedAt)}</strong></article>
+        </div>
+        <section className="candidate-documents">
+          <h3>Hồ sơ được UIT chuyển ({application.documents.length})</h3>
+          {application.documents.map(document => <div key={document.id}><FileText /><span><strong>{document.fileName}</strong><small>{document.documentType} · Phiên bản {document.sourceVersion} · {Math.max(1, Math.round(document.fileSizeBytes / 1024))} KB</small></span><Status tone="success">Đã xác minh</Status></div>)}
+        </section>
+        <section className="candidate-timeline">
+          <h3>Lịch sử xử lý</h3>
+          {application.timeline.map((event, index) => {
+            const copy = companyCandidateStatusCopy[event.toStatus]?.[0] || event.toStatus;
+            return <div key={`${event.createdAt}-${index}`}><span /><div><strong>{copy}</strong><small>{formatSubmitted(event.createdAt)} · {event.actorType}</small>{event.note && <p>{event.note}</p>}</div></div>;
+          })}
+        </section>
+        <button className="primary-button full" onClick={close}>Đóng</button>
+      </div>
+    </div>
+  );
+}
+
+function CompanyCandidateDecisionModal({ mode, application, busy, error, close, submit, interviewerName }) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState(tomorrow.toISOString().slice(0, 10));
+  const [time, setTime] = useState("09:30");
+  const [interviewMode, setInterviewMode] = useState("ONLINE");
+  const [location, setLocation] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [interviewer, setInterviewer] = useState(interviewerName || "");
+  const isReject = mode === "reject";
+  const valid = isReject
+    ? note.trim().length >= 5
+    : Boolean(date && time && interviewer.trim().length >= 2 && (
+      interviewMode === "PHONE" || (interviewMode === "ONLINE" ? meetingUrl.trim() : location.trim().length >= 3)
+    ));
+  const send = () => {
+    if (isReject) {
+      submit({ reasonCode: "COMPANY_NOT_SUITABLE", note: note.trim() });
+      return;
+    }
+    submit({
+      scheduledAt: `${date}T${time}:00+07:00`,
+      timeZone: "Asia/Ho_Chi_Minh",
+      mode: interviewMode,
+      interviewerName: interviewer.trim(),
+      ...(interviewMode === "ONLINE" ? { meetingUrl: meetingUrl.trim() } : {}),
+      ...(interviewMode === "ONSITE" ? { location: location.trim() } : {}),
+    });
+  };
+  return (
+    <div className="modal-backdrop" onMouseDown={() => !busy && close()}>
+      <div className="modal portal-modal candidate-decision-modal" onMouseDown={event => event.stopPropagation()}>
+        <button className="modal-close" disabled={busy} onClick={close}><X /></button>
+        <span className={`modal-icon ${isReject ? "danger" : ""}`}>{isReject ? <Warning /> : <CalendarCheck />}</span>
+        <h2>{isReject ? "Chọn Không phù hợp" : "Mời ứng viên phỏng vấn"}</h2>
+        <p>{isReject ? `Lý do sẽ được lưu và thông báo cho ${application.student.fullName}.` : `Tạo lịch cho ${application.student.fullName} · ${application.job.title}.`}</p>
+        {isReject ? (
+          <label className="review-note"><span>Lý do chi tiết *</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Nêu lý do ngắn gọn, chuyên nghiệp..." maxLength={2000} /></label>
+        ) : (
+          <div className="modal-form two-cols interview-form">
+            <label><span>Ngày *</span><input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
+            <label><span>Giờ *</span><input type="time" value={time} onChange={event => setTime(event.target.value)} /></label>
+            <label><span>Hình thức *</span><select value={interviewMode} onChange={event => setInterviewMode(event.target.value)}><option value="ONLINE">Trực tuyến</option><option value="ONSITE">Tại văn phòng</option><option value="PHONE">Điện thoại</option></select></label>
+            <label><span>Người phỏng vấn *</span><input value={interviewer} onChange={event => setInterviewer(event.target.value)} placeholder="Họ tên người phỏng vấn" /></label>
+            {interviewMode === "ONLINE" && <label className="full"><span>Đường dẫn tham gia *</span><input value={meetingUrl} onChange={event => setMeetingUrl(event.target.value)} placeholder="https://meet.google.com/..." /></label>}
+            {interviewMode === "ONSITE" && <label className="full"><span>Địa điểm *</span><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Văn phòng, tầng, phòng..." /></label>}
+          </div>
+        )}
+        {error && <p className="form-error"><Warning />{error}</p>}
+        <div className="modal-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><button className={isReject ? "secondary-button danger" : "primary-button"} disabled={busy || !valid} onClick={send}>{busy ? <CircleNotch className="spin" /> : isReject ? <X /> : <PaperPlaneTilt />}{isReject ? "Xác nhận không phù hợp" : "Gửi lời mời"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyCandidates() {
+  const { authorizedRequest, user } = useAuth();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+  const [jobId, setJobId] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [detail, setDetail] = useState(null);
+  const [decision, setDecision] = useState(null);
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await authorizedRequest("/companies/me/candidates?page=1&pageSize=100");
+      setItems(response.data);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  const jobs = useMemo(() => Array.from(new Map(items.map(item => [item.job.id, item.job.title])).entries()), [items]);
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return items.filter(item => (!jobId || item.job.id === jobId) && (!keyword || `${item.student.fullName} ${item.student.studentCode} ${item.job.title}`.toLowerCase().includes(keyword)));
+  }, [items, jobId, search]);
+  const replace = application => setItems(current => current.map(item => item.id === application.id ? application : item));
+  const startReview = async application => {
+    setBusyId(application.id);
+    setError("");
+    try {
+      const response = await authorizedRequest(`/companies/me/applications/${application.id}/start-review`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } });
+      replace(response.data);
+      setMessage("Hồ sơ đã chuyển sang đang sàng lọc.");
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyId("");
+    }
+  };
+  const decide = async payload => {
+    const application = decision.application;
+    setBusyId(application.id);
+    setError("");
+    try {
+      if (decision.mode === "reject") {
+        const response = await authorizedRequest(`/companies/me/applications/${application.id}/reject`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
+        replace(response.data);
+        setMessage("Đã ghi nhận ứng viên không phù hợp.");
+      } else {
+        await authorizedRequest(`/companies/me/applications/${application.id}/interviews`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
+        await load();
+        setMessage("Đã tạo lịch và gửi lời mời phỏng vấn.");
+      }
+      setDecision(null);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyId("");
+    }
+  };
+  const columns = [{ key: "new", label: "Mới từ UIT" }, { key: "screening", label: "Đang sàng lọc" }, { key: "interview", label: "Phỏng vấn" }, { key: "result", label: "Kết quả" }];
+  return (
+    <>
+      {message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}
+      <div className="portal-toolbar">
+        <label className="portal-search"><MagnifyingGlass /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Tìm ứng viên, MSSV, vị trí..." /></label>
+        <label className="candidate-job-filter"><FunnelSimple /><select value={jobId} onChange={event => setJobId(event.target.value)}><option value="">Vị trí: Tất cả</option>{jobs.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</select></label>
+        <button className="secondary-button" onClick={() => void load()} disabled={loading}>{loading ? <CircleNotch className="spin" /> : <ListBullets />}Làm mới</button>
+      </div>
+      {error && !decision && <p className="review-error"><Warning />{error}</p>}
+      {loading ? <div className="loading-state"><CircleNotch className="spin" />Đang tải hồ sơ ứng viên...</div> : (
+        <div className="candidate-board live-candidate-board">
+          {columns.map(column => {
+            const candidatesInStage = filtered.filter(item => companyCandidateStage(item.status) === column.key);
+            return <section key={column.key}><header><h2>{column.label}</h2><span>{candidatesInStage.length}</span></header><div>{!candidatesInStage.length && <p className="candidate-empty">Chưa có hồ sơ</p>}{candidatesInStage.map(application => {
+              const status = companyCandidateStatusCopy[application.status] || [application.status, "neutral"];
+              const busy = busyId === application.id;
+              return <article key={application.id}><div className="candidate-card-heading"><span className="candidate-initials">{userInitials(application.student.fullName)}</span><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.student.major}</small></div></div><p>{application.job.title}</p><div className="candidate-meta"><span>GPA <b>{application.student.gpa ?? "—"}</b></span><Status tone={status[1]}>{status[0]}</Status></div><small className="candidate-received">Cập nhật {formatSubmitted(application.lastTransitionAt)}</small><div className="candidate-card-actions"><button onClick={() => setDetail(application)}><Eye />Xem</button>{application.status === "FORWARDED_TO_COMPANY" && <button className="primary wide" disabled={busy} onClick={() => void startReview(application)}>{busy ? <CircleNotch className="spin" /> : <ArrowRight />}Bắt đầu xem</button>}{application.status === "COMPANY_REVIEWING" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "reject", application }); }}>Không phù hợp</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "interview", application }); }}><CalendarCheck />Mời PV</button></>}</div></article>;
+            })}</div></section>;
+          })}
+        </div>
+      )}
+      {detail && <CompanyCandidateDetailModal application={detail} close={() => setDetail(null)} />}
+      {decision && <CompanyCandidateDecisionModal mode={decision.mode} application={decision.application} interviewerName={user?.displayName} busy={busyId === decision.application.id} error={error} close={() => { if (!busyId) { setDecision(null); setError(""); } }} submit={payload => void decide(payload)} />}
+    </>
+  );
 }
 
 function CompanyInterviews({onCreate}){

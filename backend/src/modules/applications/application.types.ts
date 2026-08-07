@@ -71,6 +71,20 @@ export type ApplicationDto = {
 };
 
 export type ApplicationReviewDecision = "request-supplement" | "reject" | "forward";
+export type CompanyApplicationDecision = "start-review" | "reject";
+
+export type InterviewDto = {
+  id: string;
+  applicationId: string;
+  scheduledAt: string;
+  timeZone: string;
+  mode: "ONSITE" | "ONLINE" | "PHONE";
+  location: string | null;
+  meetingUrl: string | null;
+  interviewerName: string | null;
+  status: string;
+  version: number;
+};
 
 export type StudentProfileDto = {
   id: string;

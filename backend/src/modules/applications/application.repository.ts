@@ -4,6 +4,7 @@ import type {
   ApplicationDto,
   ApplicationStatus,
   AvailableAction,
+  InterviewDto,
   StudentDocumentDto,
   StudentProfileDto,
 } from "./application.types.js";
@@ -155,6 +156,32 @@ function mapApplication(row: ApplicationRow): ApplicationDto {
   };
 }
 
+function mapInterview(row: {
+  id: string;
+  application_id: string;
+  scheduled_at: Date;
+  time_zone: string;
+  mode: "ONSITE" | "ONLINE" | "PHONE";
+  location: string | null;
+  meeting_url: string | null;
+  interviewer_name: string | null;
+  status: string;
+  version: number;
+}): InterviewDto {
+  return {
+    id: row.id,
+    applicationId: row.application_id,
+    scheduledAt: row.scheduled_at.toISOString(),
+    timeZone: row.time_zone,
+    mode: row.mode,
+    location: row.location,
+    meetingUrl: row.meeting_url,
+    interviewerName: row.interviewer_name,
+    status: row.status,
+    version: row.version,
+  };
+}
+
 export class ApplicationRepository {
   constructor(readonly database: ApplicationDatabase) {}
 
@@ -281,6 +308,24 @@ export class ApplicationRepository {
     return result.rows[0] ? mapApplication(result.rows[0]) : null;
   }
 
+  async findByIdForCompany(
+    applicationId: string,
+    companyId: string,
+    client: Pick<PoolClient, "query"> = this.database,
+  ) {
+    const result = await client.query<ApplicationRow>(
+      `${applicationSelect}
+       WHERE a.id = $1 AND j.company_id = $2
+         AND EXISTS (
+           SELECT 1 FROM application_status_history company_visibility
+           WHERE company_visibility.application_id = a.id
+             AND company_visibility.to_status = 'FORWARDED_TO_COMPANY'
+         )`,
+      [applicationId, companyId],
+    );
+    return result.rows[0] ? mapApplication(result.rows[0]) : null;
+  }
+
   async findByCommand(client: PoolClient, studentProfileId: string, commandId: string) {
     const result = await client.query<ApplicationRow>(
       `${applicationSelect}
@@ -327,6 +372,44 @@ export class ApplicationRepository {
     return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
   }
 
+  async listCompanyCandidates(
+    companyId: string,
+    input: { page: number; pageSize: number; jobId?: string; status?: ApplicationStatus },
+  ) {
+    const filters = [
+      "j.company_id = $1",
+      `EXISTS (
+        SELECT 1 FROM application_status_history company_visibility
+        WHERE company_visibility.application_id = a.id
+          AND company_visibility.to_status = 'FORWARDED_TO_COMPANY'
+      )`,
+    ];
+    const values: unknown[] = [companyId];
+    if (input.jobId) {
+      values.push(input.jobId);
+      filters.push(`a.job_post_id = $${values.length}`);
+    }
+    if (input.status) {
+      values.push(input.status);
+      filters.push(`a.status = $${values.length}`);
+    }
+    const where = filters.join(" AND ");
+    const count = await this.database.query<{ total: string }>(
+      `SELECT count(*)::text AS total
+       FROM applications a JOIN job_posts j ON j.id = a.job_post_id
+       WHERE ${where}`,
+      values,
+    );
+    values.push(input.pageSize, (input.page - 1) * input.pageSize);
+    const result = await this.database.query<ApplicationRow>(
+      `${applicationSelect} WHERE ${where}
+       ORDER BY a.last_transition_at DESC, a.id ASC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
   async lockApplication(client: PoolClient, applicationId: string) {
     const result = await client.query<{
       id: string;
@@ -367,11 +450,32 @@ export class ApplicationRepository {
       : null;
   }
 
-  async reviewCommandExists(client: PoolClient, applicationId: string, commandId: string) {
+  async commandExists(client: PoolClient, applicationId: string, commandId: string) {
     const result = await client.query(
       "SELECT 1 FROM application_status_history WHERE application_id = $1 AND command_id = $2",
       [applicationId, commandId],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async findInterviewByCommand(client: Pick<PoolClient, "query">, applicationId: string, commandId: string) {
+    const result = await client.query<{
+      id: string;
+      application_id: string;
+      scheduled_at: Date;
+      time_zone: string;
+      mode: "ONSITE" | "ONLINE" | "PHONE";
+      location: string | null;
+      meeting_url: string | null;
+      interviewer_name: string | null;
+      status: string;
+      version: number;
+    }>(
+      `SELECT id, application_id, scheduled_at, time_zone, mode, location, meeting_url,
+              interviewer_name, status, version
+       FROM interviews WHERE application_id = $1 AND command_id = $2`,
+      [applicationId, commandId],
+    );
+    return result.rows[0] ? mapInterview(result.rows[0]) : null;
   }
 }

@@ -12,6 +12,8 @@ import {
   applicationReviewReasonSchema,
   applicationSubmitSchema,
   applicationSupplementRequestSchema,
+  companyCandidateListQuerySchema,
+  interviewRequestSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
 
@@ -33,6 +35,7 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
   router.use(createAuthenticate(tokenService));
   const studentOnly = requireRoles("STUDENT");
   const uitOnly = requireRoles("UIT_ADMIN");
+  const companyOnly = requireRoles("COMPANY");
 
   router.get("/students/me", studentOnly, async (request, response) => {
     response.json({ data: await service.getStudentProfile(principal(request).studentProfileId) });
@@ -113,6 +116,55 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
         applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
         "forward",
         {},
+        metadata(request),
+      ),
+    });
+  });
+
+  router.get("/companies/me/candidates", companyOnly, async (request, response) => {
+    const auth = principal(request);
+    const query = companyCandidateListQuerySchema.parse(request.query);
+    const result = await service.listCompanyCandidates(auth.companyId, query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post(
+    "/companies/me/applications/:applicationId/start-review",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.startCompanyReview(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
+  router.post("/companies/me/applications/:applicationId/reject", companyOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.rejectCompanyApplication(
+        { userId: auth.userId, companyId: auth.companyId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        applicationReviewReasonSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/companies/me/applications/:applicationId/interviews", companyOnly, async (request, response) => {
+    const auth = principal(request);
+    response.status(201).json({
+      data: await service.scheduleInterview(
+        { userId: auth.userId, companyId: auth.companyId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        interviewRequestSchema.parse(request.body),
         metadata(request),
       ),
     });
