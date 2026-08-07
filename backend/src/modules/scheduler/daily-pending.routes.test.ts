@@ -13,6 +13,7 @@ const summary = {
   uitRecipientCount: 1,
   companyRecipientCount: 2,
   notificationsCreated: 3,
+  emailDelivery: { enabled: true, claimed: 3, sent: 3, failed: 0 },
 };
 
 describe("daily pending cron route", () => {

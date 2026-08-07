@@ -10,12 +10,15 @@ describe("daily pending service", () => {
 
   it("passes the deterministic local date to the repository", async () => {
     const createSummaryNotifications = vi.fn(async (summaryDate: string) => ({ summaryDate }));
+    const dispatchPending = vi.fn(async () => ({ enabled: true, claimed: 2, sent: 2, failed: 0 }));
     const service = new DailyPendingService({
       createSummaryNotifications,
-    } as unknown as DailyPendingRepository);
+    } as unknown as DailyPendingRepository, { dispatchPending });
 
-    await service.run(new Date("2026-08-07T01:15:00.000Z"));
+    const result = await service.run(new Date("2026-08-07T01:15:00.000Z"));
 
     expect(createSummaryNotifications).toHaveBeenCalledWith("2026-08-07");
+    expect(dispatchPending).toHaveBeenCalledOnce();
+    expect(result.emailDelivery).toEqual({ enabled: true, claimed: 2, sent: 2, failed: 0 });
   });
 });

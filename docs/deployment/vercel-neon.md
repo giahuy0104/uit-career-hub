@@ -36,6 +36,11 @@ Browser
 - `ALLOW_DEMO_RESET=false`.
 - `CRON_SECRET`: secret ngẫu nhiên tối thiểu 32 ký tự, lưu dạng Sensitive. Vercel tự gửi
   `Authorization: Bearer <CRON_SECRET>` khi gọi cron.
+- `EMAIL_ENABLED=true` sau khi đã cấu hình Resend và sender hợp lệ.
+- `RESEND_API_KEY`: API key bắt đầu bằng `re_`, lưu dạng Sensitive.
+- `EMAIL_FROM`: sender hiển thị, ví dụ `UIT Career Hub <notifications@careers.example.edu.vn>`.
+- `PUBLIC_APP_URL=https://uit-career-hub-web-041204.vercel.app`: base URL để tạo link trong email.
+- `EMAIL_BATCH_SIZE=10`, `EMAIL_MAX_ATTEMPTS=5`.
 
 Không đưa `DATABASE_URL_DIRECT`, `DATABASE_URL_TEST` hoặc secret vào frontend.
 
@@ -55,9 +60,41 @@ Mỗi lần chạy, hệ thống:
    và `INTERVIEW_INVITED`, sau đó gửi cho recruiter đang hoạt động của đúng doanh nghiệp.
 3. Không gửi khi hàng đợi tương ứng bằng 0.
 4. Dùng `dedupe_key` gồm ngày và người nhận nên retry cùng ngày không tạo bản trùng.
+5. Gửi email tổng hợp và retry các email sự kiện trước đó đang đến hạn.
 
-Trước khi merge nhánh này vào `main`, thêm `CRON_SECRET` vào Backend project → Settings →
-Environment Variables → Production, rồi redeploy Production sau khi migration đã chạy.
+## Email transactional qua Resend
+
+Email Phase 2 áp dụng cho bốn loại notification:
+
+- `APPLICATION_SUBMITTED`: sinh viên nộp đơn, báo UIT Admin.
+- `APPLICATION_RECEIVED`: UIT chuyển hồ sơ, báo recruiter của đúng doanh nghiệp.
+- `DAILY_UIT_PENDING_APPLICATIONS`: tổng hợp hằng ngày cho UIT.
+- `DAILY_COMPANY_PENDING_APPLICATIONS`: tổng hợp hằng ngày cho doanh nghiệp.
+
+Migration `0010_email_delivery_outbox.sql` tạo outbox và trigger enqueue trong cùng transaction
+với in-app notification. API gọi Resend sau khi transaction nghiệp vụ đã commit. Nếu provider lỗi,
+đơn ứng tuyển vẫn thành công; delivery chuyển `FAILED`, lưu lỗi và được retry với backoff. Mỗi delivery
+dùng idempotency key theo UUID để chống gửi lặp khi request được retry.
+
+`EMAIL_BATCH_SIZE` là kích thước mỗi lượt claim trong database; một lần chạy sẽ tiếp tục lấy các batch
+đến khi hết email đang đến hạn. Khi `EMAIL_ENABLED=false`, trigger vẫn ghi outbox nhưng backend không
+gọi provider. Nếu để tắt lâu trên production, cần kiểm tra các bản ghi `PENDING` trước khi bật lại để
+tránh gửi hàng loạt email cũ ngoài ý muốn.
+
+Thiết lập production:
+
+1. Cài Resend trong Vercel Marketplace hoặc tạo API key trong Resend Dashboard.
+2. Xác minh domain gửi bằng SPF và DKIM. Nên dùng subdomain riêng cho email hệ thống.
+3. Thêm các biến `EMAIL_*`, `RESEND_API_KEY` và `PUBLIC_APP_URL` vào Backend project.
+4. Chạy migration `0010` trên Neon production trước khi bật `EMAIL_ENABLED=true`.
+5. Redeploy backend, tạo một đơn test và kiểm tra trạng thái trong Resend Dashboard.
+
+`onboarding@resend.dev` chỉ phù hợp thử nghiệm và bị giới hạn gửi tới email của chính tài khoản
+Resend. Muốn gửi cho sinh viên và doanh nghiệp thật phải dùng domain đã xác minh.
+
+Tài liệu chính thức: [Resend với Express](https://resend.com/docs/send-with-express/),
+[idempotency keys](https://resend.com/docs/dashboard/emails/idempotency-keys) và
+[xác minh domain](https://resend.com/docs/dashboard/domains/introduction).
 
 ### Frontend production
 

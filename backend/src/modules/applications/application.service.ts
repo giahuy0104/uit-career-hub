@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { AppError } from "../../shared/app-error.js";
+import type { EmailDeliveryService } from "../email/email-delivery.service.js";
 import { ApplicationRepository } from "./application.repository.js";
 import type { ApplicationReviewDecision, ApplicationStatus, RequestMetadata } from "./application.types.js";
 
@@ -13,7 +14,10 @@ function applicationNotFound() {
 }
 
 export class ApplicationService {
-  constructor(private readonly repository: ApplicationRepository) {}
+  constructor(
+    private readonly repository: ApplicationRepository,
+    private readonly emailDeliveryService?: Pick<EmailDeliveryService, "dispatchPending">,
+  ) {}
 
   async getStudentProfile(studentProfileId: string | null) {
     if (!studentProfileId) throw studentNotFound();
@@ -63,7 +67,7 @@ export class ApplicationService {
     },
     request: RequestMetadata,
   ) {
-    return this.repository.withTransaction(async (client) => {
+    const result = await this.repository.withTransaction(async (client) => {
       const application = await this.repository.lockApplication(client, applicationId);
       if (!application) throw applicationNotFound();
 
@@ -189,6 +193,11 @@ export class ApplicationService {
       );
       return (await this.repository.findByIdForUit(applicationId, client))!;
     });
+
+    if (decision === "forward") {
+      await this.dispatchEmailsBestEffort(applicationId);
+    }
+    return result;
   }
 
   async listCompanyCandidates(
@@ -1287,7 +1296,7 @@ export class ApplicationService {
   ) {
     if (!actor.studentProfileId) throw studentNotFound();
     const studentProfileId = actor.studentProfileId;
-    return this.repository.withTransaction(async (client) => {
+    const result = await this.repository.withTransaction(async (client) => {
       const lockKey = `${studentProfileId}:${input.jobId}`;
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [lockKey]);
 
@@ -1407,5 +1416,24 @@ export class ApplicationService {
       );
       return (await this.repository.findById(applicationId, studentProfileId, client))!;
     });
+
+    await this.dispatchEmailsBestEffort(result.id);
+    return result;
+  }
+
+  private async dispatchEmailsBestEffort(applicationId: string) {
+    if (!this.emailDeliveryService) return;
+
+    try {
+      const summary = await this.emailDeliveryService.dispatchPending(applicationId);
+      if (summary.failed > 0) {
+        console.error(`Có ${summary.failed} email cho hồ sơ ${applicationId} được đưa vào hàng đợi retry.`);
+      }
+    } catch (error) {
+      console.error(
+        `Không thể xử lý email cho hồ sơ ${applicationId}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 }
