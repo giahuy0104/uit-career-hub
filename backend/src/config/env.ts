@@ -36,6 +36,7 @@ const environmentSchema = z.object({
   AUTH_COOKIE_SECURE: optionalBoolean,
   AUTH_COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   UIT_EMAIL_DOMAINS: z.string().min(1).default("student.uit.edu.vn,uit.edu.vn"),
+  ALLOW_DEMO_RESET: optionalBoolean.default(false),
 });
 
 function assertPostgresUrl(value: string, key: string) {
@@ -106,6 +107,7 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     authCookieSecure,
     authCookieSameSite: parsed.AUTH_COOKIE_SAME_SITE,
     uitEmailDomains,
+    allowDemoReset: parsed.ALLOW_DEMO_RESET,
   } as const;
 }
 

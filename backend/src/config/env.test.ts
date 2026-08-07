@@ -10,6 +10,16 @@ describe("parseEnvironment", () => {
     expect(result.corsOrigin).toBe("http://localhost:5173");
     expect(result.databaseUrl).toContain("localhost");
     expect(result.databaseUrlDirect).toBeUndefined();
+    expect(result.allowDemoReset).toBe(false);
+  });
+
+  it("should_only_enable_demo_reset_when_explicitly_requested", () => {
+    const result = parseEnvironment({
+      NODE_ENV: "test",
+      ALLOW_DEMO_RESET: "true",
+    });
+
+    expect(result.allowDemoReset).toBe(true);
   });
 
   it("should_accept_neon_urls_when_ssl_is_required", () => {

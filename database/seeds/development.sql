@@ -263,5 +263,13 @@ INSERT INTO notifications (
         'APPLICATION', '00000000-0000-4000-8000-000000008003',
         '/uit/applications/00000000-0000-4000-8000-000000008003',
         'demo:application:8003:submitted'
+    ),
+    (
+        '00000000-0000-4000-8000-000000012003', '00000000-0000-4000-8000-000000000103',
+        'APPLICATION_RECEIVED', 'Có hồ sơ ứng viên cần tiếp tục xử lý',
+        'Hồ sơ Thực tập sinh Data Engineer đang ở bước doanh nghiệp sàng lọc.',
+        'APPLICATION', '00000000-0000-4000-8000-000000008002',
+        '/company/candidates/00000000-0000-4000-8000-000000008002',
+        'demo:application:8002:company-reviewing'
     )
 ON CONFLICT DO NOTHING;

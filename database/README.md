@@ -10,7 +10,8 @@ database/
 │   ├── 0001_initial_mvp_schema.sql
 │   └── 0002_authentication_rbac.sql
 └── seeds/
-    └── development.sql
+    ├── development.sql
+    └── demo-reset.sql
 ```
 
 Migration runner lưu version, checksum và thời gian áp dụng trong `schema_migrations`. File migration đã áp dụng không được chỉnh sửa; hãy tạo version mới.
@@ -21,11 +22,29 @@ Migration runner lưu version, checksum và thời gian áp dụng trong `schema
 pnpm db:migrate
 pnpm db:seed
 pnpm db:setup
+pnpm db:demo:check
 ```
 
 - `db:migrate` yêu cầu `DATABASE_URL_DIRECT` khi runtime URL là Neon pooler.
 - `db:seed` chỉ dành cho development và dùng dữ liệu cố định với `ON CONFLICT DO NOTHING`.
 - `DATABASE_URL_TEST` phải là branch/database riêng; không dùng URL production cho test.
+
+## Khôi phục checkpoint demo
+
+`db:seed` chỉ bổ sung bản ghi còn thiếu và không đưa các trạng thái đã thay đổi về ban đầu. Trước buổi bảo vệ, dùng lệnh reset có chốt an toàn:
+
+```powershell
+$env:ALLOW_DEMO_RESET = "true"
+pnpm db:demo:reset
+$env:ALLOW_DEMO_RESET = "false"
+pnpm db:demo:check
+```
+
+- Lệnh reset bị chặn trong `NODE_ENV=production` và khi chưa bật `ALLOW_DEMO_RESET`.
+- Reset chỉ tác động đến các tài khoản, doanh nghiệp, tin và hồ sơ có định danh demo cố định; không dùng `TRUNCATE` hoặc `DROP`.
+- Reset xóa refresh token của tài khoản demo, nên cần đăng nhập lại trên các cửa sổ trình bày.
+- `db:demo:check` là lệnh chỉ đọc, kiểm tra tài khoản, tin, ba đơn, offer và thông báo có đúng checkpoint hay không.
+- Kịch bản trình bày nằm tại `docs/demo/e2e-defense-script.md`.
 
 ## Tài khoản/định danh demo
 

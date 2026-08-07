@@ -70,7 +70,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.8.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.9.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
