@@ -134,6 +134,6 @@ Không đẩy trực tiếp vào `main`. Mỗi chức năng mở pull request qu
 
 ## Phạm vi hiện tại
 
-Lát cắt nền tảng và Authentication/RBAC đã hoàn thành: đăng nhập ba vai trò, access JWT, refresh token xoay vòng bằng cookie HttpOnly, khóa đăng nhập tạm thời, company activation, audit và middleware ownership. Lát cắt tiếp theo là Doanh nghiệp tạo tin → UIT duyệt.
+Lát cắt nền tảng, Authentication/RBAC và quy trình tin tuyển dụng đã hoàn thành: doanh nghiệp tạo/lưu nháp/gửi tin, UIT phê duyệt/yêu cầu chỉnh sửa/từ chối, gửi lại sau chỉnh sửa, ghi history/audit và tạo thông báo trong hệ thống. API dùng optimistic locking và `Idempotency-Key` cho các lệnh chuyển trạng thái.
 
 Thông báo trong hệ thống thuộc MVP. Email/FCM, Cron Job, Scheduler, retry/log nâng cao, Kafka, Redis, chat, AI và đa trường thuộc Phase 2.

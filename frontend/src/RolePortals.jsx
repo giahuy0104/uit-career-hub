@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Bell,
@@ -14,6 +14,7 @@ import {
   ClipboardText,
   Clock,
   ClockCountdown,
+  CircleNotch,
   Database,
   DotsThree,
   DownloadSimple,
@@ -44,6 +45,42 @@ import {
   Warning,
   X,
 } from "@phosphor-icons/react";
+import { useAuth } from "./auth/AuthContext.jsx";
+
+const jobStatusCopy = {
+  DRAFT: ["Bản nháp", "neutral"],
+  PENDING_UIT_REVIEW: ["Chờ UIT duyệt", "warning"],
+  REVISION_REQUIRED: ["Cần chỉnh sửa", "urgent"],
+  RECRUITING: ["Đang tuyển", "success"],
+  PAUSED: ["Tạm dừng", "neutral"],
+  EXPIRED: ["Hết hạn", "neutral"],
+  REJECTED: ["Đã từ chối", "urgent"],
+  CLOSED: ["Đã đóng", "neutral"],
+};
+
+const opportunityCopy = {
+  INTERNSHIP: "Thực tập",
+  PART_TIME: "Bán thời gian",
+  FULL_TIME: "Toàn thời gian",
+  FRESHER: "Fresher",
+};
+
+const workModeCopy = { ONSITE: "Tại văn phòng", REMOTE: "Từ xa", HYBRID: "Kết hợp" };
+const dateFormatter = new Intl.DateTimeFormat("vi-VN");
+
+function formatDate(value) {
+  if (!value) return "—";
+  return dateFormatter.format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function formatSubmitted(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function getApiError(error) {
+  return error?.message || "Không thể kết nối đến hệ thống. Vui lòng thử lại.";
+}
 
 const studentNavigation = [
   ["dashboard", "Tổng quan", House],
@@ -58,7 +95,7 @@ const studentNavigation = [
 const adminNavigation = [
   ["admin-dashboard", "Tổng quan", House],
   ["admin-companies", "Doanh nghiệp đối tác", Buildings],
-  ["admin-jobs", "Duyệt tin tuyển dụng", Briefcase, 6],
+  ["admin-jobs", "Duyệt tin tuyển dụng", Briefcase],
   ["admin-applications", "Duyệt hồ sơ sinh viên", UserCheck, 12],
   ["admin-placements", "Theo dõi kết quả", GraduationCap],
   ["admin-scheduler", "Nhắc việc & tác vụ", ClockCountdown, 2],
@@ -69,7 +106,7 @@ const adminNavigation = [
 const companyNavigation = [
   ["company-dashboard", "Tổng quan", House],
   ["company-profile", "Hồ sơ doanh nghiệp", Buildings],
-  ["company-jobs", "Tin tuyển dụng", Briefcase, 2],
+  ["company-jobs", "Tin tuyển dụng", Briefcase],
   ["company-candidates", "Ứng viên", Users, 14],
   ["company-interviews", "Lịch phỏng vấn", CalendarCheck, 3],
   ["company-notifications", "Thông báo", Bell, 4],
@@ -262,7 +299,7 @@ export function AdminPortal({ route, navigate, user, onLogout }) {
   return <WorkspaceShell role="admin" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
     {route === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
     {route === "admin-companies" && <AdminCompanies onCreate={() => setModal("company")} />}
-    {route === "admin-jobs" && <AdminJobReview selected={selectedJob} setSelected={setSelectedJob} states={jobStates} setStates={setJobStates} />}
+    {route === "admin-jobs" && <LiveAdminJobReview />}
     {route === "admin-applications" && <AdminApplicationReview selected={selectedApplication} setSelected={setSelectedApplication} states={applicationStates} setStates={setApplicationStates} />}
     {route === "admin-placements" && <AdminPlacements />}
     {route === "admin-scheduler" && <AdminScheduler />}
@@ -285,6 +322,70 @@ function AdminCompanies({ onCreate }) {
 function CompanyCreateModal({ close }) {
   const [created, setCreated] = useState(false);
   return <div className="modal-backdrop"><div className="modal portal-modal"><button className="modal-close" onClick={close}><X/></button>{created ? <div className="modal-success"><CheckCircle size={52} weight="fill"/><h2>Đã tạo hồ sơ doanh nghiệp</h2><p>Email mời thiết lập tài khoản đã được gửi đến người phụ trách.</p><button className="primary-button full" onClick={close}>Hoàn tất</button></div> : <><span className="modal-icon"><Buildings/></span><h2>Thêm doanh nghiệp đối tác</h2><p>Tạo hồ sơ và tài khoản quản trị đầu tiên cho doanh nghiệp.</p><div className="modal-form"><label><span>Tên doanh nghiệp</span><input defaultValue="KMS Technology"/></label><label><span>Mã số thuế</span><input placeholder="Nhập mã số thuế"/></label><label><span>Email người phụ trách</span><input defaultValue="recruitment@kms-technology.com"/></label><label><span>Nhóm ngành</span><select defaultValue="technology"><option value="technology">Công nghệ thông tin</option><option>Thương mại điện tử</option></select></label></div><div className="modal-actions"><button className="secondary-button" onClick={close}>Hủy</button><button className="primary-button" onClick={()=>setCreated(true)}><PaperPlaneTilt/>Tạo và gửi lời mời</button></div></>}</div></div>;
+}
+
+function ReviewReasonModal({ mode, busy, error, onClose, onSubmit }) {
+  const [note, setNote] = useState("");
+  const isRevision = mode === "request-revision";
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X /></button><span className={`modal-icon ${isRevision ? "" : "danger"}`}>{isRevision ? <PencilSimple /> : <Warning />}</span><h2>{isRevision ? "Yêu cầu doanh nghiệp chỉnh sửa" : "Từ chối tin tuyển dụng"}</h2><p>Lý do sẽ được gửi đến doanh nghiệp, lưu trong lịch sử và không thể chỉnh sửa sau khi xác nhận.</p><div className="modal-form"><label><span>Lý do chi tiết *</span><textarea autoFocus value={note} onChange={event => setNote(event.target.value)} placeholder={isRevision ? "Ví dụ: Vui lòng bổ sung thời gian làm việc và quyền lợi..." : "Ví dụ: Nội dung không phù hợp quy định của nhà trường..."} maxLength={2000} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className={`primary-button ${isRevision ? "" : "danger-fill"}`} disabled={busy || note.trim().length < 5} onClick={() => onSubmit(note.trim())}>{busy ? <><CircleNotch className="spin" />Đang xử lý</> : isRevision ? <><PaperPlaneTilt />Gửi yêu cầu</> : "Xác nhận từ chối"}</button></div></div></div>;
+}
+
+function LiveAdminJobReview() {
+  const { authorizedRequest } = useAuth();
+  const [jobs, setJobs] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [reasonMode, setReasonMode] = useState(null);
+  const selected = jobs.find(job => job.id === selectedId) || jobs[0] || null;
+
+  const loadQueue = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await authorizedRequest("/uit/jobs/review-queue?page=1&pageSize=100");
+      setJobs(response.data);
+      setSelectedId(current => response.data.some(job => job.id === current) ? current : response.data[0]?.id ?? null);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadQueue(); }, [authorizedRequest]);
+
+  const decide = async (mode, note = "") => {
+    if (!selected || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const options = {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        ...(mode === "approve" ? {} : { body: JSON.stringify({ reasonCode: mode === "reject" ? "UIT_REJECTED" : "UIT_REVISION_REQUIRED", note }) }),
+      };
+      await authorizedRequest(`/uit/jobs/${selected.id}/${mode}`, options);
+      setJobs(current => current.filter(job => job.id !== selected.id));
+      setReasonMode(null);
+      setMessage(mode === "approve" ? "Tin đã được phê duyệt và công khai." : mode === "reject" ? "Tin đã được từ chối và doanh nghiệp đã nhận thông báo." : "Yêu cầu chỉnh sửa đã được gửi đến doanh nghiệp.");
+      window.setTimeout(() => setMessage(""), 3500);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) return <Panel title="Hàng đợi duyệt tin"><div className="portal-loading"><CircleNotch className="spin" />Đang tải tin chờ duyệt...</div></Panel>;
+  if (error && !selected) return <Panel title="Hàng đợi duyệt tin"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={loadQueue}>Thử lại</button></div></Panel>;
+  if (!selected) return <Panel title="Hàng đợi duyệt tin" action={<Status tone="success">0 cần xử lý</Status>}><EmptyHint title="Đã xử lý hết hàng đợi" text="Hiện không có tin tuyển dụng nào đang chờ UIT phê duyệt." />{message && <div className="inline-success"><CheckCircle />{message}</div>}</Panel>;
+
+  const categories = selected.categories.length ? selected.categories.map(item => item.name) : ["Doanh nghiệp chưa chọn nhóm ngành"];
+  const skills = selected.skills.length ? selected.skills.map(item => item.name) : [];
+  return <><div className="review-workspace"><Panel title="Hàng đợi" action={<Status tone="warning">{jobs.length} cần xử lý</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Cũ nhất trước</button><button onClick={loadQueue}>Làm mới</button></div><div className="review-list">{jobs.map(job => <button key={job.id} className={selected.id === job.id ? "selected" : ""} onClick={() => { setSelectedId(job.id); setError(""); }}><div><strong>{job.title}</strong><small>{job.company.name}</small></div><Status tone="warning">Chờ duyệt</Status><p><span>{job.categories[0]?.name || opportunityCopy[job.opportunityType]}</span><span>Hạn {formatDate(job.deadline)}</span></p><small>Gửi {formatSubmitted(job.submittedAt)}</small></button>)}</div></Panel><Panel title="Nội dung tin tuyển dụng" action={<span className="version-label">Phiên bản {selected.version}</span>} className="review-detail-panel"><div className="review-detail-heading"><div className="company-logo vng">{selected.company.code.slice(0, 3)}</div><div><h2>{selected.title}</h2><p>{selected.company.name} · Đối tác UIT đã xác thực</p></div><Status tone="warning">Chờ UIT duyệt</Status></div><div className="review-checks"><span className="done"><CheckCircle />Doanh nghiệp hợp lệ</span><span className="done"><CheckCircle />Thông tin bắt buộc đầy đủ</span><span className="warning"><Warning />UIT cần rà soát nội dung</span></div><div className="review-content-grid"><section><h3>Thông tin chung</h3><dl><div><dt>Loại hình</dt><dd>{opportunityCopy[selected.opportunityType]} · {workModeCopy[selected.workMode]}</dd></div><div><dt>Địa điểm</dt><dd>{selected.location}</dd></div><div><dt>Số lượng</dt><dd>{selected.positions} vị trí</dd></div><div><dt>Hạn ứng tuyển</dt><dd>{formatDate(selected.deadline)}</dd></div></dl></section><section><h3>Nhóm ngành & kỹ năng</h3><div className="tag-list">{[...categories, ...skills].map(item => <span key={item}>{item}</span>)}</div></section><section className="full"><h3>Mô tả công việc</h3><p className="preserve-lines">{selected.description}</p></section><section className="full"><h3>Yêu cầu ứng viên</h3><p className="preserve-lines">{selected.requirements}</p></section>{selected.benefits && <section className="full"><h3>Quyền lợi</h3><p className="preserve-lines">{selected.benefits}</p></section>}</div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button danger" disabled={busy} onClick={() => setReasonMode("reject")}>Từ chối</button><button className="secondary-button" disabled={busy} onClick={() => setReasonMode("request-revision")}><PencilSimple />Yêu cầu chỉnh sửa</button><button className="primary-button" disabled={busy} onClick={() => { if (window.confirm(`Phê duyệt và công khai tin “${selected.title}”?`)) void decide("approve"); }}>{busy ? <CircleNotch className="spin" /> : <Check />}Phê duyệt & công khai</button></div></Panel></div>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{reasonMode && <ReviewReasonModal mode={reasonMode} busy={busy} error={error} onClose={() => { if (!busy) { setReasonMode(null); setError(""); } }} onSubmit={note => void decide(reasonMode, note)} />}</>;
 }
 
 function AdminJobReview({ selected, setSelected, states, setStates }) {
@@ -320,6 +421,7 @@ function AdminAccess() {
 
 export function CompanyPortal({ route, navigate, user, onLogout }) {
   const [modal,setModal] = useState(null);
+  const [jobsVersion, setJobsVersion] = useState(0);
   const titles = {
     "company-dashboard": ["Tổng quan tuyển dụng", "Theo dõi tin tuyển dụng, ứng viên UIT chuyển đến và việc cần xử lý."],
     "company-profile": ["Hồ sơ doanh nghiệp", "Quản lý thông tin hiển thị với sinh viên và tài khoản tuyển dụng."],
@@ -331,8 +433,8 @@ export function CompanyPortal({ route, navigate, user, onLogout }) {
   const [title,description]=titles[route]||titles['company-dashboard'];
   const action=route==='company-jobs'?<button className="primary-button" onClick={()=>setModal('job')}><Plus/>Tạo tin tuyển dụng</button>:route==='company-interviews'?<button className="primary-button" onClick={()=>setModal('interview')}><Plus/>Tạo lịch phỏng vấn</button>:null;
   return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
-    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfile/>} {route==='company-jobs'&&<CompanyJobs onCreate={()=>setModal('job')}/>} {route==='company-candidates'&&<CompanyCandidates/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications/>}
-    {modal==='job'&&<SimpleCreateModal type="job" close={()=>setModal(null)}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>} 
+    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfile/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications/>}
+    {modal?.type==='job'&&<JobPostModal job={modal.job} close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='job'&&<JobPostModal close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>}
   </WorkspaceShell>;
 }
 
@@ -343,6 +445,99 @@ function CompanyDashboard({navigate}){
 function CompanyProfile(){
   const [editing,setEditing]=useState(false);
   return <div className="company-profile-layout"><Panel title="Hồ sơ hiển thị" action={<button className="secondary-button small" onClick={()=>setEditing(!editing)}><PencilSimple/>{editing?'Lưu thay đổi':'Chỉnh sửa'}</button>}><div className="company-cover"><div className="company-logo vng large">VNG</div><div><h2>VNG Corporation</h2><p><SealCheck weight="fill"/>Đối tác UIT đã xác thực</p></div></div><div className="company-profile-fields"><label><span>Tên doanh nghiệp</span><input disabled={!editing} defaultValue="VNG Corporation"/></label><label><span>Website</span><input disabled={!editing} defaultValue="https://vng.com.vn"/></label><label className="full"><span>Giới thiệu</span><textarea disabled={!editing} defaultValue="VNG là doanh nghiệp công nghệ sản phẩm hàng đầu Việt Nam, phát triển các nền tảng phục vụ hàng triệu người dùng."/></label><label><span>Lĩnh vực</span><input disabled={!editing} defaultValue="Công nghệ sản phẩm"/></label><label><span>Quy mô</span><input disabled={!editing} defaultValue="1.000 – 5.000 nhân viên"/></label><label className="full"><span>Địa chỉ</span><input disabled={!editing} defaultValue="Z06, Đường số 13, Khu chế xuất Tân Thuận, Quận 7, TP.HCM"/></label></div></Panel><div><Panel title="Trạng thái hợp tác"><div className="partnership-state"><CheckCircle size={36}/><strong>Đang hoạt động</strong><p>Hồ sơ đã được UIT xác minh</p><small>Cập nhật lần cuối: 04/08/2026</small></div></Panel><Panel title="Tài khoản tuyển dụng" action={<button className="link-button"><Plus/>Mời thêm</button>}><div className="recruiter-list"><div><span>TH</span><div><strong>Lê Thu Hà</strong><small>Quản trị viên</small></div><Status tone="success">Hoạt động</Status></div><div><span>MN</span><div><strong>Nguyễn Hoàng Nam</strong><small>Nhà tuyển dụng</small></div><Status tone="success">Hoạt động</Status></div></div></Panel></div></div>;
+}
+
+function LiveCompanyJobs({ onCreate, onEdit, refreshKey }) {
+  const { authorizedRequest } = useAuth();
+  const [filter, setFilter] = useState("ALL");
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadJobs = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await authorizedRequest("/companies/me/jobs?page=1&pageSize=100");
+      setJobs(response.data);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadJobs(); }, [authorizedRequest, refreshKey]);
+  const filters = [
+    ["ALL", "Tất cả"],
+    ["DRAFT", "Bản nháp"],
+    ["PENDING_UIT_REVIEW", "Chờ UIT duyệt"],
+    ["REVISION_REQUIRED", "Cần chỉnh sửa"],
+    ["RECRUITING", "Đang tuyển"],
+    ["REJECTED", "Đã từ chối"],
+  ];
+  const rows = filter === "ALL" ? jobs : jobs.filter(job => job.status === filter);
+
+  return <Panel title="Danh sách tin" action={<div className="segmented-filter job-filters">{filters.map(([value, label]) => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>)}</div>}>{loading ? <div className="portal-loading"><CircleNotch className="spin" />Đang tải danh sách tin...</div> : error ? <div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={loadJobs}>Thử lại</button></div> : <><div className="simple-table company-jobs-table live-job-table"><div className="table-head"><span>Vị trí</span><span>Loại hình</span><span>Hạn nộp</span><span>Số lượng</span><span>Hình thức</span><span>Trạng thái</span><span /></div>{rows.map(job => { const [label, tone] = jobStatusCopy[job.status] || [job.status, "neutral"]; const editable = ["DRAFT", "REVISION_REQUIRED"].includes(job.status); return <button key={job.id} onClick={() => editable && onEdit(job)} className={editable ? "editable-row" : ""}><strong>{job.title}{job.latestReview?.note && job.status === "REVISION_REQUIRED" ? <small className="revision-note">UIT: {job.latestReview.note}</small> : null}</strong><span>{opportunityCopy[job.opportunityType]}</span><span>{formatDate(job.deadline)}</span><span>{job.positions}</span><span>{workModeCopy[job.workMode]}</span><span><Status tone={tone}>{label}</Status></span>{editable ? <PencilSimple /> : <DotsThree />}</button>; })}</div>{!rows.length && <EmptyHint title="Chưa có tin phù hợp" text={jobs.length ? "Hãy chọn trạng thái khác." : "Tạo tin đầu tiên để bắt đầu quy trình kiểm duyệt với UIT."} />}{!jobs.length && <div className="empty-action"><button className="primary-button" onClick={onCreate}><Plus />Tạo tin tuyển dụng</button></div>}</>}</Panel>;
+}
+
+function defaultDeadline() {
+  const value = new Date();
+  value.setDate(value.getDate() + 30);
+  return value.toISOString().slice(0, 10);
+}
+
+function JobPostModal({ job = null, close, onComplete }) {
+  const { authorizedRequest } = useAuth();
+  const [form, setForm] = useState(() => ({
+    title: job?.title || "",
+    opportunityType: job?.opportunityType || "INTERNSHIP",
+    workMode: job?.workMode || "HYBRID",
+    location: job?.location || "",
+    positions: job?.positions || 1,
+    deadline: job?.deadline || defaultDeadline(),
+    description: job?.description || "",
+    requirements: job?.requirements || "",
+    benefits: job?.benefits || "",
+    categoryIds: job?.categories?.map(item => item.id) || [],
+    skillIds: job?.skills?.map(item => item.id) || [],
+  }));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const update = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const save = async (shouldSubmit) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const payload = {
+        ...form,
+        positions: Number(form.positions),
+        benefits: form.benefits.trim() || null,
+        ...(job ? { expectedVersion: job.version } : {}),
+      };
+      const response = await authorizedRequest(job ? `/companies/me/jobs/${job.id}` : "/companies/me/jobs", {
+        method: job ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      if (shouldSubmit) {
+        await authorizedRequest(`/companies/me/jobs/${response.data.id}/submit`, {
+          method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+        });
+      }
+      onComplete();
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const valid = form.title.trim().length >= 5 && form.location.trim().length >= 2 && form.description.trim().length >= 20 && form.requirements.trim().length >= 10 && Number(form.positions) > 0 && form.deadline;
+  const isRevision = job?.status === "REVISION_REQUIRED";
+  return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal job-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" disabled={busy} onClick={close}><X /></button><span className="modal-icon"><Briefcase /></span><h2>{job ? "Chỉnh sửa tin tuyển dụng" : "Tạo tin tuyển dụng"}</h2><p>{isRevision ? "Cập nhật nội dung theo phản hồi của UIT rồi gửi lại để kiểm duyệt." : "Lưu bản nháp để hoàn thiện sau hoặc gửi ngay đến UIT khi nội dung đã đầy đủ."}</p>{isRevision && job.latestReview?.note && <p className="revision-callout"><Warning /><span><strong>Phản hồi từ UIT</strong>{job.latestReview.note}</span></p>}<div className="modal-form two-cols job-form"><label className="full"><span>Tên vị trí *</span><input value={form.title} onChange={event => update("title", event.target.value)} placeholder="Ví dụ: Thực tập sinh Backend" maxLength={180} /></label><label><span>Loại cơ hội *</span><select value={form.opportunityType} onChange={event => update("opportunityType", event.target.value)}><option value="INTERNSHIP">Thực tập</option><option value="FRESHER">Fresher</option><option value="FULL_TIME">Toàn thời gian</option><option value="PART_TIME">Bán thời gian</option></select></label><label><span>Hình thức làm việc *</span><select value={form.workMode} onChange={event => update("workMode", event.target.value)}><option value="ONSITE">Tại văn phòng</option><option value="HYBRID">Kết hợp</option><option value="REMOTE">Từ xa</option></select></label><label className="full"><span>Địa điểm *</span><input value={form.location} onChange={event => update("location", event.target.value)} placeholder="Quận/Thành phố hoặc địa chỉ làm việc" maxLength={255} /></label><label><span>Số lượng tuyển *</span><input type="number" min="1" max="1000" value={form.positions} onChange={event => update("positions", event.target.value)} /></label><label><span>Hạn ứng tuyển *</span><input type="date" value={form.deadline} onChange={event => update("deadline", event.target.value)} /></label><label className="full"><span>Mô tả công việc *</span><textarea value={form.description} onChange={event => update("description", event.target.value)} placeholder="Nhiệm vụ, phạm vi công việc và cách phối hợp..." maxLength={20000} /></label><label className="full"><span>Yêu cầu ứng viên *</span><textarea value={form.requirements} onChange={event => update("requirements", event.target.value)} placeholder="Kiến thức, kỹ năng, thời gian có thể làm việc..." maxLength={20000} /></label><label className="full"><span>Quyền lợi</span><textarea value={form.benefits} onChange={event => update("benefits", event.target.value)} placeholder="Trợ cấp, mentor, môi trường và cơ hội phát triển..." maxLength={10000} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions split-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><span /><button className="secondary-button" disabled={busy || !valid} onClick={() => void save(false)}>{busy ? <CircleNotch className="spin" /> : <FileText />}Lưu bản nháp</button><button className="primary-button" disabled={busy || !valid} onClick={() => void save(true)}>{busy ? <CircleNotch className="spin" /> : <PaperPlaneTilt />}Lưu & gửi UIT duyệt</button></div></div></div>;
 }
 
 function CompanyJobs({onCreate}){

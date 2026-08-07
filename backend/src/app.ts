@@ -13,6 +13,9 @@ import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { AuthService } from "./modules/auth/auth.service.js";
 import { TokenService } from "./modules/auth/token.service.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
+import { JobRepository, type JobDatabase } from "./modules/jobs/job.repository.js";
+import { createJobRouter } from "./modules/jobs/job.routes.js";
+import { JobService } from "./modules/jobs/job.service.js";
 import { AppError } from "./shared/app-error.js";
 
 type AppDependencies = {
@@ -20,6 +23,8 @@ type AppDependencies = {
   authDatabase?: AuthDatabase;
   authService?: AuthService;
   tokenService?: TokenService;
+  jobDatabase?: JobDatabase;
+  jobService?: JobService;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -36,12 +41,16 @@ export function createApp(dependencies: AppDependencies = {}) {
   const authService =
     dependencies.authService ??
     new AuthService(new AuthRepository(dependencies.authDatabase ?? databasePool), tokenService);
+  const jobService =
+    dependencies.jobService ??
+    new JobService(new JobRepository(dependencies.jobDatabase ?? databasePool));
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.2.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.3.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
+  app.use("/api/v1", createJobRouter(jobService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

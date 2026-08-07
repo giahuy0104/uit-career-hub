@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.2.0
+  version: 0.3.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -458,7 +458,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JobDraftRequest'
+              $ref: '#/components/schemas/JobDraftUpdateRequest'
       responses:
         '200':
           description: Chỉ sửa DRAFT hoặc REVISION_REQUIRED
@@ -1132,7 +1132,7 @@ components:
         data: { $ref: '#/components/schemas/Company' }
     Job:
       type: object
-      required: [id, company, title, opportunityType, workMode, location, deadline, status, version]
+      required: [id, company, title, opportunityType, workMode, location, description, requirements, positions, deadline, status, version, categories, skills, submittedAt, reviewedAt, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         company: { $ref: '#/components/schemas/Company' }
@@ -1147,6 +1147,38 @@ components:
         deadline: { type: string, format: date }
         status: { $ref: '#/components/schemas/JobStatus' }
         version: { type: integer, minimum: 1 }
+        categories:
+          type: array
+          items:
+            type: object
+            required: [id, code, name]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+        skills:
+          type: array
+          items:
+            type: object
+            required: [id, slug, name, isRequired]
+            properties:
+              id: { type: string, format: uuid }
+              slug: { type: string }
+              name: { type: string }
+              isRequired: { type: boolean }
+        latestReview:
+          oneOf:
+            - type: object
+              required: [reasonCode, note, createdAt]
+              properties:
+                reasonCode: { type: string }
+                note: { type: [string, 'null'] }
+                createdAt: { type: string, format: date-time }
+            - type: 'null'
+        submittedAt: { type: [string, 'null'], format: date-time }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     JobDraftRequest:
       type: object
       required: [title, opportunityType, workMode, location, description, requirements, positions, deadline]
@@ -1166,6 +1198,16 @@ components:
         skillIds:
           type: array
           items: { type: string, format: uuid }
+    JobDraftUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/JobDraftRequest'
+        - type: object
+          required: [expectedVersion]
+          properties:
+            expectedVersion:
+              type: integer
+              minimum: 1
+              description: Phiên bản hiện tại dùng cho optimistic locking.
     JobEnvelope:
       type: object
       required: [data]
