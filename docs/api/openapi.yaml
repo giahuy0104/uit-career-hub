@@ -17,6 +17,7 @@ tags:
   - name: UIT
   - name: Interviews
   - name: Notifications
+  - name: Scheduler
 
 paths:
   /auth/login:
@@ -974,12 +975,56 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /cron/daily-pending-notifications:
+    get:
+      tags: [Scheduler]
+      operationId: runDailyPendingNotifications
+      summary: Tổng hợp hồ sơ còn chờ UIT/doanh nghiệp xử lý
+      description: |
+        Vercel Cron gọi một lần mỗi ngày. Request lặp lại trong cùng ngày không tạo
+        thông báo trùng nhờ dedupe key theo ngày và người nhận.
+      security:
+        - cronBearerAuth: []
+      responses:
+        '200':
+          description: Đã quét hàng đợi và tạo các in-app notification cần thiết
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required:
+                      - summaryDate
+                      - uitPendingCount
+                      - companyPendingCount
+                      - companyCount
+                      - uitRecipientCount
+                      - companyRecipientCount
+                      - notificationsCreated
+                    properties:
+                      summaryDate: { type: string, format: date }
+                      uitPendingCount: { type: integer, minimum: 0 }
+                      companyPendingCount: { type: integer, minimum: 0 }
+                      companyCount: { type: integer, minimum: 0 }
+                      uitRecipientCount: { type: integer, minimum: 0 }
+                      companyRecipientCount: { type: integer, minimum: 0 }
+                      notificationsCreated: { type: integer, minimum: 0 }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    cronBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: CRON_SECRET
     refreshCookie:
       type: apiKey
       in: cookie

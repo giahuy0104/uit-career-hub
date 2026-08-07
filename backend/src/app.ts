@@ -22,6 +22,9 @@ import { JobService } from "./modules/jobs/job.service.js";
 import { NotificationRepository, type NotificationDatabase } from "./modules/notifications/notification.repository.js";
 import { createNotificationRouter } from "./modules/notifications/notification.routes.js";
 import { NotificationService } from "./modules/notifications/notification.service.js";
+import { DailyPendingRepository, type DailyPendingDatabase } from "./modules/scheduler/daily-pending.repository.js";
+import { createDailyPendingRouter } from "./modules/scheduler/daily-pending.routes.js";
+import { DailyPendingService } from "./modules/scheduler/daily-pending.service.js";
 import { AppError } from "./shared/app-error.js";
 
 type AppDependencies = {
@@ -35,6 +38,9 @@ type AppDependencies = {
   applicationService?: ApplicationService;
   notificationDatabase?: NotificationDatabase;
   notificationService?: NotificationService;
+  dailyPendingDatabase?: DailyPendingDatabase;
+  dailyPendingService?: DailyPendingService;
+  cronSecret?: string;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -71,11 +77,20 @@ export function createApp(dependencies: AppDependencies = {}) {
     new NotificationService(
       new NotificationRepository(dependencies.notificationDatabase ?? databasePool),
     );
+  const dailyPendingService =
+    dependencies.dailyPendingService ??
+    new DailyPendingService(
+      new DailyPendingRepository(dependencies.dailyPendingDatabase ?? databasePool),
+    );
 
   app.get("/api", (_request, response) => {
     response.json({ name: "UIT Career Hub API", version: "0.9.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
+  app.use(
+    "/api/v1",
+    createDailyPendingRouter(dailyPendingService, dependencies.cronSecret ?? env.cronSecret),
+  );
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
   app.use("/api/v1", createJobRouter(jobService, tokenService));
   app.use("/api/v1", createApplicationRouter(applicationService, tokenService));

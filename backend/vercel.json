@@ -13,5 +13,11 @@
       "dest": "api/index.ts"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/v1/cron/daily-pending-notifications",
+      "schedule": "15 1 * * *"
+    }
+  ],
   "regions": ["sin1"]
 }
