@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.4.0
+  version: 0.5.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -730,6 +730,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /uit/applications/{applicationId}/request-supplement:
     post:
       tags: [UIT]
@@ -750,6 +752,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /uit/applications/{applicationId}/reject:
     post:
       tags: [UIT]
@@ -770,6 +780,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /uit/applications/{applicationId}/forward:
     post:
       tags: [UIT]
@@ -784,6 +802,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /uit/applications/{applicationId}/confirm-placement:
     post:
       tags: [UIT]
@@ -1259,7 +1283,7 @@ components:
         consentToShare: { type: boolean, const: true }
     Application:
       type: object
-      required: [id, studentProfileId, status, version, submittedAt, lastTransitionAt, availableActions, job, documents, timeline]
+      required: [id, studentProfileId, status, version, submittedAt, lastTransitionAt, availableActions, student, job, documents, timeline]
       properties:
         id: { type: string, format: uuid }
         studentProfileId: { type: string, format: uuid }
@@ -1272,6 +1296,19 @@ components:
           items:
             type: string
             enum: [RESUBMIT, WITHDRAW, CANCEL_INTERVIEW, ACCEPT_OFFER, DECLINE_OFFER]
+        student:
+          type: object
+          required: [id, studentCode, fullName, faculty, major, cohort, gpa, academicStatus, email]
+          properties:
+            id: { type: string, format: uuid }
+            studentCode: { type: string }
+            fullName: { type: string }
+            faculty: { type: string }
+            major: { type: string }
+            cohort: { type: string }
+            gpa: { type: [number, 'null'], minimum: 0, maximum: 4 }
+            academicStatus: { type: string, enum: [ACTIVE, SUSPENDED, GRADUATED, INACTIVE] }
+            email: { type: string, format: email }
         job:
           type: object
           required: [id, title, opportunityType, workMode, location, deadline, company]
@@ -1306,7 +1343,7 @@ components:
           type: array
           items:
             type: object
-            required: [fromStatus, toStatus, actorType, reasonCode, note, createdAt]
+            required: [fromStatus, toStatus, actorType, reasonCode, note, metadata, createdAt]
             properties:
               fromStatus:
                 oneOf:
@@ -1316,6 +1353,7 @@ components:
               actorType: { type: string, enum: [STUDENT, UIT_ADMIN, COMPANY, SYSTEM] }
               reasonCode: { type: [string, 'null'] }
               note: { type: [string, 'null'] }
+              metadata: { type: object, additionalProperties: true }
               createdAt: { type: string, format: date-time }
     ApplicationEnvelope:
       type: object

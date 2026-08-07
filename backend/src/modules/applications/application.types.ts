@@ -30,6 +30,17 @@ export type ApplicationDto = {
   submittedAt: string;
   lastTransitionAt: string;
   availableActions: AvailableAction[];
+  student: {
+    id: string;
+    studentCode: string;
+    fullName: string;
+    faculty: string;
+    major: string;
+    cohort: string;
+    gpa: number | null;
+    academicStatus: string;
+    email: string;
+  };
   job: {
     id: string;
     title: string;
@@ -54,9 +65,12 @@ export type ApplicationDto = {
     actorType: string;
     reasonCode: string | null;
     note: string | null;
+    metadata: Record<string, unknown>;
     createdAt: string;
   }>;
 };
+
+export type ApplicationReviewDecision = "request-supplement" | "reject" | "forward";
 
 export type StudentProfileDto = {
   id: string;
@@ -86,4 +100,3 @@ export type RequestMetadata = {
   ipAddress: string | null;
   userAgent: string | null;
 };
-

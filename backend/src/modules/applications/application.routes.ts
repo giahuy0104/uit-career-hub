@@ -8,7 +8,10 @@ import {
   applicationIdSchema,
   applicationIdempotencyKeySchema,
   applicationListQuerySchema,
+  applicationReviewQueueQuerySchema,
+  applicationReviewReasonSchema,
   applicationSubmitSchema,
+  applicationSupplementRequestSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
 
@@ -28,23 +31,24 @@ function pageMeta(page: number, pageSize: number, totalItems: number) {
 export function createApplicationRouter(service: ApplicationService, tokenService = new TokenService()) {
   const router = Router();
   router.use(createAuthenticate(tokenService));
-  router.use(requireRoles("STUDENT"));
+  const studentOnly = requireRoles("STUDENT");
+  const uitOnly = requireRoles("UIT_ADMIN");
 
-  router.get("/students/me", async (request, response) => {
+  router.get("/students/me", studentOnly, async (request, response) => {
     response.json({ data: await service.getStudentProfile(principal(request).studentProfileId) });
   });
 
-  router.get("/students/me/documents", async (request, response) => {
+  router.get("/students/me/documents", studentOnly, async (request, response) => {
     response.json({ data: await service.listStudentDocuments(principal(request).studentProfileId) });
   });
 
-  router.get("/applications", async (request, response) => {
+  router.get("/applications", studentOnly, async (request, response) => {
     const query = applicationListQuerySchema.parse(request.query);
     const result = await service.listApplications(principal(request).studentProfileId, query);
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
 
-  router.post("/applications", async (request, response) => {
+  router.post("/applications", studentOnly, async (request, response) => {
     const auth = principal(request);
     const commandId = applicationIdempotencyKeySchema.parse(request.header("idempotency-key"));
     const application = await service.submit(
@@ -56,7 +60,7 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.status(201).json({ data: application });
   });
 
-  router.get("/applications/:applicationId", async (request, response) => {
+  router.get("/applications/:applicationId", studentOnly, async (request, response) => {
     response.json({
       data: await service.getApplication(
         principal(request).studentProfileId,
@@ -65,6 +69,54 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     });
   });
 
+  router.get("/uit/applications/review-queue", uitOnly, async (request, response) => {
+    const query = applicationReviewQueueQuerySchema.parse(request.query);
+    const result = await service.listReviewQueue(query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post("/uit/applications/:applicationId/request-supplement", uitOnly, async (request, response) => {
+    const auth = principal(request);
+    const payload = applicationSupplementRequestSchema.parse(request.body);
+    response.json({
+      data: await service.review(
+        auth.userId,
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "request-supplement",
+        payload,
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/uit/applications/:applicationId/reject", uitOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.review(
+        auth.userId,
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "reject",
+        applicationReviewReasonSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/uit/applications/:applicationId/forward", uitOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.review(
+        auth.userId,
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "forward",
+        {},
+        metadata(request),
+      ),
+    });
+  });
+
   return router;
 }
-

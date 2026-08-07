@@ -17,6 +17,14 @@ type ApplicationRow = QueryResultRow & {
   version: number;
   submitted_at: Date;
   last_transition_at: Date;
+  student_code: string;
+  student_full_name: string;
+  student_faculty: string;
+  student_major: string;
+  student_cohort: string;
+  student_gpa: string | null;
+  student_academic_status: string;
+  student_email: string;
   job_id: string;
   job_title: string;
   opportunity_type: string;
@@ -50,6 +58,14 @@ const applicationSelect = `
     a.version,
     a.submitted_at,
     a.last_transition_at,
+    sp.student_code,
+    sp.full_name AS student_full_name,
+    sp.faculty AS student_faculty,
+    sp.major AS student_major,
+    sp.cohort AS student_cohort,
+    sp.gpa AS student_gpa,
+    sp.academic_status AS student_academic_status,
+    student_user.email AS student_email,
     j.id AS job_id,
     j.title AS job_title,
     j.opportunity_type,
@@ -78,6 +94,7 @@ const applicationSelect = `
         'actorType', ah.actor_type,
         'reasonCode', ah.reason_code,
         'note', ah.note,
+        'metadata', ah.metadata,
         'createdAt', ah.created_at
       ) ORDER BY ah.created_at)
       FROM application_status_history ah WHERE ah.application_id = a.id
@@ -85,6 +102,8 @@ const applicationSelect = `
   FROM applications a
   JOIN job_posts j ON j.id = a.job_post_id
   JOIN companies c ON c.id = j.company_id
+  JOIN student_profiles sp ON sp.id = a.student_profile_id
+  JOIN users student_user ON student_user.id = sp.user_id
 `;
 
 function dateOnly(value: string | Date) {
@@ -108,6 +127,17 @@ function mapApplication(row: ApplicationRow): ApplicationDto {
     submittedAt: row.submitted_at.toISOString(),
     lastTransitionAt: row.last_transition_at.toISOString(),
     availableActions: availableActions(row.status),
+    student: {
+      id: row.student_profile_id,
+      studentCode: row.student_code,
+      fullName: row.student_full_name,
+      faculty: row.student_faculty,
+      major: row.student_major,
+      cohort: row.student_cohort,
+      gpa: row.student_gpa === null ? null : Number(row.student_gpa),
+      academicStatus: row.student_academic_status,
+      email: row.student_email,
+    },
     job: {
       id: row.job_id,
       title: row.job_title,
@@ -246,6 +276,11 @@ export class ApplicationRepository {
     return result.rows[0] ? mapApplication(result.rows[0]) : null;
   }
 
+  async findByIdForUit(applicationId: string, client: Pick<PoolClient, "query"> = this.database) {
+    const result = await client.query<ApplicationRow>(`${applicationSelect} WHERE a.id = $1`, [applicationId]);
+    return result.rows[0] ? mapApplication(result.rows[0]) : null;
+  }
+
   async findByCommand(client: PoolClient, studentProfileId: string, commandId: string) {
     const result = await client.query<ApplicationRow>(
       `${applicationSelect}
@@ -279,5 +314,64 @@ export class ApplicationRepository {
     );
     return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
   }
-}
 
+  async listUitReviewQueue(input: { page: number; pageSize: number }) {
+    const count = await this.database.query<{ total: string }>(
+      "SELECT count(*)::text AS total FROM applications WHERE status = 'UIT_REVIEWING'",
+    );
+    const result = await this.database.query<ApplicationRow>(
+      `${applicationSelect} WHERE a.status = 'UIT_REVIEWING'
+       ORDER BY a.submitted_at ASC, a.id ASC LIMIT $1 OFFSET $2`,
+      [input.pageSize, (input.page - 1) * input.pageSize],
+    );
+    return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  async lockApplication(client: PoolClient, applicationId: string) {
+    const result = await client.query<{
+      id: string;
+      status: ApplicationStatus;
+      version: number;
+      student_profile_id: string;
+      student_user_id: string;
+      student_full_name: string;
+      job_post_id: string;
+      job_title: string;
+      company_id: string;
+      company_name: string;
+    }>(
+      `SELECT a.id, a.status, a.version, a.student_profile_id, sp.user_id AS student_user_id,
+              sp.full_name AS student_full_name, j.id AS job_post_id, j.title AS job_title,
+              c.id AS company_id, c.name AS company_name
+       FROM applications a
+       JOIN student_profiles sp ON sp.id = a.student_profile_id
+       JOIN job_posts j ON j.id = a.job_post_id
+       JOIN companies c ON c.id = j.company_id
+       WHERE a.id = $1 FOR UPDATE OF a`,
+      [applicationId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          id: row.id,
+          status: row.status,
+          version: row.version,
+          studentProfileId: row.student_profile_id,
+          studentUserId: row.student_user_id,
+          studentFullName: row.student_full_name,
+          jobId: row.job_post_id,
+          jobTitle: row.job_title,
+          companyId: row.company_id,
+          companyName: row.company_name,
+        }
+      : null;
+  }
+
+  async reviewCommandExists(client: PoolClient, applicationId: string, commandId: string) {
+    const result = await client.query(
+      "SELECT 1 FROM application_status_history WHERE application_id = $1 AND command_id = $2",
+      [applicationId, commandId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+}

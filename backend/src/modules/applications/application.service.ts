@@ -1,6 +1,6 @@
 import { AppError } from "../../shared/app-error.js";
 import { ApplicationRepository } from "./application.repository.js";
-import type { ApplicationStatus, RequestMetadata } from "./application.types.js";
+import type { ApplicationReviewDecision, ApplicationStatus, RequestMetadata } from "./application.types.js";
 
 function studentNotFound() {
   return new AppError(404, "STUDENT_PROFILE_NOT_FOUND", "Không tìm thấy hồ sơ sinh viên.");
@@ -38,6 +38,144 @@ export class ApplicationService {
     const application = await this.repository.findById(applicationId, studentProfileId);
     if (!application) throw applicationNotFound();
     return application;
+  }
+
+  async listReviewQueue(input: { page: number; pageSize: number }) {
+    return this.repository.listUitReviewQueue(input);
+  }
+
+  async review(
+    actorUserId: string,
+    applicationId: string,
+    commandId: string,
+    decision: ApplicationReviewDecision,
+    payload: {
+      reasonCode?: string;
+      note?: string;
+      requiredDocumentTypes?: string[];
+      dueAt?: string;
+    },
+    request: RequestMetadata,
+  ) {
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application) throw applicationNotFound();
+
+      if (await this.repository.reviewCommandExists(client, applicationId, commandId)) {
+        return (await this.repository.findByIdForUit(applicationId, client))!;
+      }
+      if (application.status !== "UIT_REVIEWING") {
+        throw new AppError(
+          409,
+          "APPLICATION_STATE_CONFLICT",
+          "Hồ sơ không còn ở trạng thái chờ UIT kiểm duyệt.",
+        );
+      }
+
+      const toStatus: ApplicationStatus = decision === "request-supplement"
+        ? "NEEDS_SUPPLEMENT"
+        : decision === "reject"
+          ? "UIT_REJECTED"
+          : "FORWARDED_TO_COMPANY";
+      const reasonCode = decision === "forward" ? null : payload.reasonCode!;
+      const note = decision === "forward" ? null : payload.note!;
+      const historyMetadata = decision === "request-supplement"
+        ? { requiredDocumentTypes: payload.requiredDocumentTypes, dueAt: payload.dueAt }
+        : {};
+
+      await client.query(
+        `UPDATE applications
+         SET status = $2, version = version + 1, last_transition_at = now()
+         WHERE id = $1`,
+        [applicationId, toStatus],
+      );
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id,
+          reason_code, note, metadata)
+         VALUES ($1, $2, 'UIT_REVIEWING', $3, 'UIT_ADMIN', $4, $5, $6, $7::jsonb)`,
+        [applicationId, commandId, toStatus, actorUserId, reasonCode, note, JSON.stringify(historyMetadata)],
+      );
+
+      const studentNotification = decision === "request-supplement"
+        ? {
+            type: "APPLICATION_SUPPLEMENT_REQUESTED",
+            title: "Hồ sơ cần được bổ sung",
+            body: `UIT yêu cầu bạn bổ sung hồ sơ cho vị trí “${application.jobTitle}” trước ${payload.dueAt}.`,
+          }
+        : decision === "reject"
+          ? {
+              type: "APPLICATION_UIT_REJECTED",
+              title: "Hồ sơ chưa đủ điều kiện",
+              body: `UIT đã kết thúc đơn ứng tuyển vị trí “${application.jobTitle}”.`,
+            }
+          : {
+              type: "APPLICATION_FORWARDED",
+              title: "Hồ sơ đã chuyển đến doanh nghiệp",
+              body: `UIT đã chuyển hồ sơ vị trí “${application.jobTitle}” đến ${application.companyName}.`,
+            };
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         VALUES ($1, $2, $3, $4, 'APPLICATION', $5::uuid, $6,
+                 'application:' || $5::text || ':' || $7::text || ':student',
+                 jsonb_build_object('applicationId', $5::text, 'commandId', $7::text, 'status', $8::text))
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          application.studentUserId,
+          studentNotification.type,
+          studentNotification.title,
+          studentNotification.body,
+          applicationId,
+          `/applications/${applicationId}`,
+          commandId,
+          toStatus,
+        ],
+      );
+
+      if (decision === "forward") {
+        await client.query(
+          `INSERT INTO notifications
+           (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+           SELECT u.id, 'APPLICATION_RECEIVED', 'Có hồ sơ ứng viên cần xử lý',
+                  $3 || ' đã được UIT chuyển đến vị trí “' || $4 || '”.',
+                  'APPLICATION', $1::uuid, '/company/candidates/' || $1::text,
+                  'application:' || $1::text || ':' || $2::text || ':company:' || u.id::text,
+                  jsonb_build_object('applicationId', $1::text, 'commandId', $2::text, 'jobId', $5::text)
+           FROM company_users cu JOIN users u ON u.id = cu.user_id
+           WHERE cu.company_id = $6 AND u.status = 'ACTIVE'
+           ON CONFLICT (dedupe_key) DO NOTHING`,
+          [
+            applicationId,
+            commandId,
+            application.studentFullName,
+            application.jobTitle,
+            application.jobId,
+            application.companyId,
+          ],
+        );
+      }
+
+      const action = decision === "request-supplement"
+        ? "APPLICATION_SUPPLEMENT_REQUESTED"
+        : decision === "reject"
+          ? "APPLICATION_UIT_REJECTED"
+          : "APPLICATION_FORWARDED";
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, $2, 'APPLICATION', $3, $4::jsonb, $5, $6)`,
+        [
+          actorUserId,
+          action,
+          applicationId,
+          JSON.stringify({ commandId, fromStatus: "UIT_REVIEWING", toStatus, ...historyMetadata }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findByIdForUit(applicationId, client))!;
+    });
   }
 
   async submit(

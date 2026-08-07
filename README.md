@@ -134,8 +134,8 @@ Không đẩy trực tiếp vào `main`. Mỗi chức năng mở pull request qu
 
 ## Phạm vi hiện tại
 
-Lát cắt nền tảng, Authentication/RBAC, quy trình tin tuyển dụng và bước sinh viên ứng tuyển đã hoàn thành. Doanh nghiệp có thể tạo/lưu nháp/gửi tin; UIT phê duyệt/yêu cầu chỉnh sửa/từ chối; sinh viên chỉ thấy tin đã duyệt còn hạn, chọn CV/tài liệu đã xác minh và gửi đơn qua hai bước. Đơn mới chuyển sang `UIT_REVIEWING`, lưu bản chụp tài liệu, history/audit, chống gửi trùng và tạo thông báo cho UIT. API dùng optimistic locking và `Idempotency-Key` cho các lệnh ghi quan trọng.
+Lát cắt nền tảng, Authentication/RBAC, quy trình tin tuyển dụng, sinh viên ứng tuyển và UIT kiểm duyệt hồ sơ đã hoàn thành. Doanh nghiệp có thể tạo/lưu nháp/gửi tin; UIT phê duyệt/yêu cầu chỉnh sửa/từ chối; sinh viên chỉ thấy tin đã duyệt còn hạn, chọn CV/tài liệu đã xác minh và gửi đơn qua hai bước. Đơn mới chuyển sang `UIT_REVIEWING`; UIT có hàng đợi thật để yêu cầu bổ sung, từ chối hoặc chuyển hồ sơ đến đúng doanh nghiệp. Mỗi quyết định đều cập nhật state machine, lưu bản chụp tài liệu/history/audit, chống xử lý trùng và gửi thông báo đúng người nhận.
 
-Lát cắt kế tiếp là UIT kiểm duyệt đơn, yêu cầu bổ sung/từ chối/chuyển hồ sơ sang đúng doanh nghiệp.
+Lát cắt kế tiếp là doanh nghiệp tiếp nhận hồ sơ được UIT chuyển, bắt đầu sàng lọc, chọn “Không phù hợp” hoặc mời phỏng vấn.
 
 Thông báo trong hệ thống thuộc MVP. Email/FCM, Cron Job, Scheduler, retry/log nâng cao, Kafka, Redis, chat, AI và đa trường thuộc Phase 2.

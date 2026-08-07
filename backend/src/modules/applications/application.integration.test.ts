@@ -62,6 +62,7 @@ describeWithDatabase("student job application flow", () => {
         [companyIds],
       );
       await client.query("DELETE FROM job_posts WHERE company_id = ANY($1::uuid[])", [companyIds]);
+      await client.query("DELETE FROM company_users WHERE company_id = ANY($1::uuid[])", [companyIds]);
       await client.query("DELETE FROM companies WHERE id = ANY($1::uuid[])", [companyIds]);
     }
     await client.query("DELETE FROM uit_staff WHERE user_id = ANY($1::uuid[])", [userIds]);
@@ -76,7 +77,11 @@ describeWithDatabase("student job application flow", () => {
     await database.end();
   });
 
-  async function createUser(role: UserRole, studentProfileId: string | null = null) {
+  async function createUser(
+    role: UserRole,
+    studentProfileId: string | null = null,
+    companyId: string | null = null,
+  ) {
     const id = randomUUID();
     const user: AuthUser = {
       id,
@@ -89,7 +94,7 @@ describeWithDatabase("student job application flow", () => {
       displayName: `${role} test`,
       organization: null,
       studentProfileId,
-      companyId: null,
+      companyId,
     };
     userIds.push(id);
     await client.query("INSERT INTO users (id, email, role, status) VALUES ($1, $2, $3, 'ACTIVE')", [
@@ -101,6 +106,12 @@ describeWithDatabase("student job application flow", () => {
       await client.query(
         "INSERT INTO uit_staff (user_id, full_name, department) VALUES ($1, 'Admin test', 'Phòng QHDN')",
         [id],
+      );
+    }
+    if (role === "COMPANY" && companyId) {
+      await client.query(
+        "INSERT INTO company_users (user_id, company_id, full_name, is_primary) VALUES ($1, $2, 'Recruiter test', true)",
+        [id, companyId],
       );
     }
     const signed = await tokenService.signAccessToken(user);
@@ -163,6 +174,7 @@ describeWithDatabase("student job application flow", () => {
        VALUES ($1, $2, 'Công ty kiểm thử hồ sơ', 'Công nghệ', 'ACTIVE', $3)`,
       [companyId, `TEST-${randomUUID()}`, admin.id],
     );
+    const recruiter = await createUser("COMPANY", null, companyId);
     const jobId = randomUUID();
     const unavailableJobId = randomUUID();
     await client.query(
@@ -179,7 +191,7 @@ describeWithDatabase("student job application flow", () => {
       [jobId, unavailableJobId, companyId, admin.id],
     );
     const student = await createStudent();
-    return { admin, companyId, jobId, unavailableJobId, student };
+    return { admin, recruiter, companyId, jobId, unavailableJobId, student };
   }
 
   function submit(token: string, jobId: string, documentIds: string[], commandId = randomUUID()) {
@@ -283,5 +295,122 @@ describeWithDatabase("student job application flow", () => {
       [student.studentProfileId, jobId],
     );
     expect(Number(applications.rows[0]?.count)).toBe(1);
+  });
+
+  it("lists UIT_REVIEWING applications for UIT admins only", async () => {
+    const { admin, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
+
+    const queue = await request(app)
+      .get("/api/v1/uit/applications/review-queue?page=1&pageSize=100")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(queue.status).toBe(200);
+    expect(queue.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: created.body.data.id,
+        status: "UIT_REVIEWING",
+        student: expect.objectContaining({ fullName: "Sinh viên kiểm thử", academicStatus: "ACTIVE" }),
+      }),
+    ]));
+
+    const forbidden = await request(app)
+      .get("/api/v1/uit/applications/review-queue")
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(forbidden.status).toBe(403);
+  });
+
+  it("requests a supplement idempotently with reason, requirements and student notification", async () => {
+    const { admin, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+    const commandId = randomUUID();
+    const body = {
+      reasonCode: "MISSING_TRANSCRIPT",
+      note: "Vui lòng bổ sung bảng điểm đã được xác nhận bởi nhà trường.",
+      requiredDocumentTypes: ["TRANSCRIPT"],
+      dueAt: "2099-12-20T17:00:00+07:00",
+    };
+
+    const supplement = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/request-supplement`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+    expect(supplement.status).toBe(200);
+    expect(supplement.body.data).toMatchObject({ status: "NEEDS_SUPPLEMENT", version: 2 });
+    expect(supplement.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "UIT_REVIEWING",
+      toStatus: "NEEDS_SUPPLEMENT",
+      reasonCode: "MISSING_TRANSCRIPT",
+      metadata: { requiredDocumentTypes: ["TRANSCRIPT"], dueAt: body.dueAt },
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/request-supplement`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.version).toBe(2);
+
+    const notification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2
+         AND type = 'APPLICATION_SUPPLEMENT_REQUESTED'`,
+      [student.id, applicationId],
+    );
+    expect(Number(notification.rows[0]?.count)).toBe(1);
+  });
+
+  it("forwards the application to the correct company and blocks a second decision", async () => {
+    const { admin, recruiter, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
+    const applicationId = created.body.data.id as string;
+    const commandId = randomUUID();
+
+    const forwarded = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/forward`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .set("Idempotency-Key", commandId);
+    expect(forwarded.status).toBe(200);
+    expect(forwarded.body.data).toMatchObject({ status: "FORWARDED_TO_COMPANY", version: 2 });
+
+    const companyNotification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2 AND type = 'APPLICATION_RECEIVED'`,
+      [recruiter.id, applicationId],
+    );
+    expect(Number(companyNotification.rows[0]?.count)).toBe(1);
+
+    const secondDecision = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/reject`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ reasonCode: "UIT_REJECTED", note: "Hồ sơ không còn ở trạng thái UIT xử lý." });
+    expect(secondDecision.status).toBe(409);
+    expect(secondDecision.body.error.code).toBe("APPLICATION_STATE_CONFLICT");
+  });
+
+  it("allows only one UIT decision when two admins review concurrently", async () => {
+    const { admin, jobId, student } = await createScenario();
+    const secondAdmin = await createUser("UIT_ADMIN");
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+
+    const [forwarded, rejected] = await Promise.all([
+      request(app)
+        .post(`/api/v1/uit/applications/${applicationId}/forward`)
+        .set("Authorization", `Bearer ${admin.token}`)
+        .set("Idempotency-Key", randomUUID()),
+      request(app)
+        .post(`/api/v1/uit/applications/${applicationId}/reject`)
+        .set("Authorization", `Bearer ${secondAdmin.token}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ reasonCode: "UIT_REJECTED", note: "Hồ sơ chưa đáp ứng quy định kiểm thử." }),
+    ]);
+
+    expect([forwarded.status, rejected.status].sort()).toEqual([200, 409]);
+    const finalState = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [applicationId]);
+    expect(["FORWARDED_TO_COMPANY", "UIT_REJECTED"]).toContain(finalState.rows[0]?.status);
   });
 });

@@ -280,10 +280,6 @@ function StudentNotifications() {
 
 export function AdminPortal({ route, navigate, user, onLogout }) {
   const [modal, setModal] = useState(null);
-  const [selectedJob, setSelectedJob] = useState(reviewJobs[0]);
-  const [selectedApplication, setSelectedApplication] = useState(reviewApplications[0]);
-  const [jobStates, setJobStates] = useState({});
-  const [applicationStates, setApplicationStates] = useState({});
   const titles = {
     "admin-dashboard": ["Tổng quan vận hành", "Theo dõi khối lượng xử lý, hạn cam kết và hoạt động tuyển dụng toàn trường."],
     "admin-companies": ["Doanh nghiệp đối tác", "Tạo hồ sơ, cấp tài khoản và quản lý trạng thái hợp tác với UIT."],
@@ -300,7 +296,7 @@ export function AdminPortal({ route, navigate, user, onLogout }) {
     {route === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
     {route === "admin-companies" && <AdminCompanies onCreate={() => setModal("company")} />}
     {route === "admin-jobs" && <LiveAdminJobReview />}
-    {route === "admin-applications" && <AdminApplicationReview selected={selectedApplication} setSelected={setSelectedApplication} states={applicationStates} setStates={setApplicationStates} />}
+    {route === "admin-applications" && <LiveAdminApplicationReview />}
     {route === "admin-placements" && <AdminPlacements />}
     {route === "admin-scheduler" && <AdminScheduler />}
     {route === "admin-reports" && <AdminReports />}
@@ -328,6 +324,34 @@ function ReviewReasonModal({ mode, busy, error, onClose, onSubmit }) {
   const [note, setNote] = useState("");
   const isRevision = mode === "request-revision";
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X /></button><span className={`modal-icon ${isRevision ? "" : "danger"}`}>{isRevision ? <PencilSimple /> : <Warning />}</span><h2>{isRevision ? "Yêu cầu doanh nghiệp chỉnh sửa" : "Từ chối tin tuyển dụng"}</h2><p>Lý do sẽ được gửi đến doanh nghiệp, lưu trong lịch sử và không thể chỉnh sửa sau khi xác nhận.</p><div className="modal-form"><label><span>Lý do chi tiết *</span><textarea autoFocus value={note} onChange={event => setNote(event.target.value)} placeholder={isRevision ? "Ví dụ: Vui lòng bổ sung thời gian làm việc và quyền lợi..." : "Ví dụ: Nội dung không phù hợp quy định của nhà trường..."} maxLength={2000} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className={`primary-button ${isRevision ? "" : "danger-fill"}`} disabled={busy || note.trim().length < 5} onClick={() => onSubmit(note.trim())}>{busy ? <><CircleNotch className="spin" />Đang xử lý</> : isRevision ? <><PaperPlaneTilt />Gửi yêu cầu</> : "Xác nhận từ chối"}</button></div></div></div>;
+}
+
+function ApplicationDecisionModal({ mode, application, busy, error, onClose, onSubmit }) {
+  const [note, setNote] = useState("");
+  const [requiredDocumentTypes, setRequiredDocumentTypes] = useState(["TRANSCRIPT"]);
+  const defaultDueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [dueDate, setDueDate] = useState(defaultDueDate);
+  const isSupplement = mode === "request-supplement";
+  const isReject = mode === "reject";
+  const documentTypes = [
+    ["CV", "CV ứng tuyển"],
+    ["TRANSCRIPT", "Bảng điểm"],
+    ["STUDENT_CONFIRMATION", "Giấy xác nhận sinh viên"],
+    ["OTHER", "Tài liệu khác"],
+  ];
+  const toggleDocument = value => setRequiredDocumentTypes(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
+  const canSubmit = mode === "forward" || (note.trim().length >= 5 && (!isSupplement || requiredDocumentTypes.length > 0));
+  const submit = () => {
+    if (mode === "forward") return onSubmit({});
+    if (isReject) return onSubmit({ reasonCode: "UIT_ELIGIBILITY_NOT_MET", note: note.trim() });
+    return onSubmit({
+      reasonCode: "MISSING_REQUIRED_DOCUMENTS",
+      note: note.trim(),
+      requiredDocumentTypes,
+      dueAt: `${dueDate}T17:00:00+07:00`,
+    });
+  };
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal application-decision-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X /></button><span className={`modal-icon ${isReject ? "danger" : ""}`}>{mode === "forward" ? <PaperPlaneTilt /> : isSupplement ? <FileText /> : <Warning />}</span><h2>{mode === "forward" ? "Chuyển hồ sơ đến doanh nghiệp?" : isSupplement ? "Yêu cầu sinh viên bổ sung" : "Từ chối hồ sơ ứng tuyển"}</h2><p>{mode === "forward" ? <>CV và tài liệu của <strong>{application.student.fullName}</strong> sẽ được chuyển đúng đến <strong>{application.job.company.name}</strong>.</> : "Lý do sẽ được gửi cho sinh viên và lưu vào lịch sử xử lý."}</p>{isSupplement && <><div className="document-type-options"><span>Tài liệu cần bổ sung *</span>{documentTypes.map(([value, label]) => <label key={value}><input type="checkbox" checked={requiredDocumentTypes.includes(value)} onChange={() => toggleDocument(value)} />{label}</label>)}</div><div className="modal-form"><label><span>Hạn bổ sung *</span><input type="date" value={dueDate} min={new Date().toISOString().slice(0, 10)} onChange={event => setDueDate(event.target.value)} /></label></div></>}{mode !== "forward" && <div className="modal-form"><label><span>Lý do chi tiết *</span><textarea autoFocus value={note} onChange={event => setNote(event.target.value)} placeholder={isSupplement ? "Ví dụ: Vui lòng bổ sung bảng điểm có xác nhận..." : "Ví dụ: Sinh viên chưa đáp ứng điều kiện tham gia..."} maxLength={2000} /></label></div>}{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className={`primary-button ${isReject ? "danger-fill" : ""}`} disabled={busy || !canSubmit} onClick={submit}>{busy ? <><CircleNotch className="spin" />Đang xử lý</> : mode === "forward" ? <><PaperPlaneTilt />Xác nhận chuyển</> : isSupplement ? <><PaperPlaneTilt />Gửi yêu cầu</> : "Xác nhận từ chối"}</button></div></div></div>;
 }
 
 function LiveAdminJobReview() {
@@ -386,6 +410,63 @@ function LiveAdminJobReview() {
   const categories = selected.categories.length ? selected.categories.map(item => item.name) : ["Doanh nghiệp chưa chọn nhóm ngành"];
   const skills = selected.skills.length ? selected.skills.map(item => item.name) : [];
   return <><div className="review-workspace"><Panel title="Hàng đợi" action={<Status tone="warning">{jobs.length} cần xử lý</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Cũ nhất trước</button><button onClick={loadQueue}>Làm mới</button></div><div className="review-list">{jobs.map(job => <button key={job.id} className={selected.id === job.id ? "selected" : ""} onClick={() => { setSelectedId(job.id); setError(""); }}><div><strong>{job.title}</strong><small>{job.company.name}</small></div><Status tone="warning">Chờ duyệt</Status><p><span>{job.categories[0]?.name || opportunityCopy[job.opportunityType]}</span><span>Hạn {formatDate(job.deadline)}</span></p><small>Gửi {formatSubmitted(job.submittedAt)}</small></button>)}</div></Panel><Panel title="Nội dung tin tuyển dụng" action={<span className="version-label">Phiên bản {selected.version}</span>} className="review-detail-panel"><div className="review-detail-heading"><div className="company-logo vng">{selected.company.code.slice(0, 3)}</div><div><h2>{selected.title}</h2><p>{selected.company.name} · Đối tác UIT đã xác thực</p></div><Status tone="warning">Chờ UIT duyệt</Status></div><div className="review-checks"><span className="done"><CheckCircle />Doanh nghiệp hợp lệ</span><span className="done"><CheckCircle />Thông tin bắt buộc đầy đủ</span><span className="warning"><Warning />UIT cần rà soát nội dung</span></div><div className="review-content-grid"><section><h3>Thông tin chung</h3><dl><div><dt>Loại hình</dt><dd>{opportunityCopy[selected.opportunityType]} · {workModeCopy[selected.workMode]}</dd></div><div><dt>Địa điểm</dt><dd>{selected.location}</dd></div><div><dt>Số lượng</dt><dd>{selected.positions} vị trí</dd></div><div><dt>Hạn ứng tuyển</dt><dd>{formatDate(selected.deadline)}</dd></div></dl></section><section><h3>Nhóm ngành & kỹ năng</h3><div className="tag-list">{[...categories, ...skills].map(item => <span key={item}>{item}</span>)}</div></section><section className="full"><h3>Mô tả công việc</h3><p className="preserve-lines">{selected.description}</p></section><section className="full"><h3>Yêu cầu ứng viên</h3><p className="preserve-lines">{selected.requirements}</p></section>{selected.benefits && <section className="full"><h3>Quyền lợi</h3><p className="preserve-lines">{selected.benefits}</p></section>}</div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button danger" disabled={busy} onClick={() => setReasonMode("reject")}>Từ chối</button><button className="secondary-button" disabled={busy} onClick={() => setReasonMode("request-revision")}><PencilSimple />Yêu cầu chỉnh sửa</button><button className="primary-button" disabled={busy} onClick={() => { if (window.confirm(`Phê duyệt và công khai tin “${selected.title}”?`)) void decide("approve"); }}>{busy ? <CircleNotch className="spin" /> : <Check />}Phê duyệt & công khai</button></div></Panel></div>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{reasonMode && <ReviewReasonModal mode={reasonMode} busy={busy} error={error} onClose={() => { if (!busy) { setReasonMode(null); setError(""); } }} onSubmit={note => void decide(reasonMode, note)} />}</>;
+}
+
+function LiveAdminApplicationReview() {
+  const { authorizedRequest } = useAuth();
+  const [applications, setApplications] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [decisionMode, setDecisionMode] = useState(null);
+  const selected = applications.find(application => application.id === selectedId) || applications[0] || null;
+
+  const loadQueue = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await authorizedRequest("/uit/applications/review-queue?page=1&pageSize=100");
+      setApplications(response.data);
+      setSelectedId(current => response.data.some(application => application.id === current) ? current : response.data[0]?.id ?? null);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadQueue(); }, [authorizedRequest]);
+
+  const decide = async payload => {
+    if (!selected || !decisionMode || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await authorizedRequest(`/uit/applications/${selected.id}/${decisionMode}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        ...(decisionMode === "forward" ? {} : { body: JSON.stringify(payload) }),
+      });
+      setApplications(current => current.filter(application => application.id !== selected.id));
+      setDecisionMode(null);
+      setMessage(decisionMode === "forward" ? "Hồ sơ đã được chuyển đến đúng doanh nghiệp." : decisionMode === "reject" ? "Hồ sơ đã bị từ chối và sinh viên đã nhận thông báo." : "Yêu cầu bổ sung đã được gửi đến sinh viên.");
+      window.setTimeout(() => setMessage(""), 3500);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) return <Panel title="Hồ sơ chờ xử lý"><div className="portal-loading"><CircleNotch className="spin" />Đang tải hồ sơ chờ kiểm duyệt...</div></Panel>;
+  if (error && !selected) return <Panel title="Hồ sơ chờ xử lý"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={loadQueue}>Thử lại</button></div></Panel>;
+  if (!selected) return <Panel title="Hồ sơ chờ xử lý" action={<Status tone="success">0 cần xử lý</Status>}><EmptyHint title="Đã xử lý hết hàng đợi" text="Hiện không có hồ sơ sinh viên nào đang chờ UIT kiểm duyệt." />{message && <div className="inline-success"><CheckCircle />{message}</div>}</Panel>;
+
+  const initials = selected.student.fullName.split(" ").filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase();
+  const hasCv = selected.documents.some(document => document.documentType === "CV");
+  return <><div className="review-workspace"><Panel title="Hồ sơ chờ xử lý" action={<Status tone="urgent">{applications.length} hồ sơ</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Cũ nhất trước</button><button onClick={loadQueue}>Làm mới</button></div><div className="review-list application-review-list">{applications.map(application => { const itemInitials = application.student.fullName.split(" ").filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase(); return <button key={application.id} className={selected.id === application.id ? "selected" : ""} onClick={() => { setSelectedId(application.id); setError(""); }}><div className="candidate-initials">{itemInitials}</div><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.job.title}</small><p>{application.job.company.name} · Nộp {formatDate(application.submittedAt)}</p></div><Status tone="warning">Chờ UIT</Status></button>; })}</div></Panel><Panel title="Hồ sơ ứng tuyển" action={<Status tone="warning">UIT đang kiểm duyệt</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{initials}</div><div><h2>{selected.student.fullName}</h2><p>MSSV {selected.student.studentCode} · {selected.student.faculty}</p><span>Ứng tuyển <strong>{selected.job.title}</strong> tại {selected.job.company.name}</span></div><span className="version-label">Phiên bản {selected.version}</span></div><div className="eligibility-grid"><article><small>Tình trạng sinh viên</small><strong><CheckCircle />{selected.student.academicStatus === "ACTIVE" ? "Đang hoạt động" : selected.student.academicStatus}</strong></article><article><small>GPA tích lũy</small><strong>{selected.student.gpa ?? "—"} / 4.0</strong></article><article><small>Khóa / Ngành</small><strong>{selected.student.cohort} · {selected.student.major}</strong></article><article><small>Email UIT</small><strong>{selected.student.email}</strong></article></div><section className="document-verification"><h3>Kiểm tra tài liệu đã nộp ({selected.documents.length})</h3>{selected.documents.map(document => <div key={document.id}><span><CheckCircle /><div><strong>{document.fileName}</strong><small>{document.documentType} · Phiên bản {document.sourceVersion} · {Math.max(1, Math.round(document.fileSizeBytes / 1024))} KB</small></div></span><Status tone="success">Đã xác minh</Status></div>)}</section><div className="review-checks"><span className="done"><CheckCircle />Tài khoản sinh viên hợp lệ</span><span className={hasCv ? "done" : "warning"}>{hasCv ? <CheckCircle /> : <Warning />}{hasCv ? "Có CV ứng tuyển" : "Thiếu CV"}</span><span className="done"><CheckCircle />Đã đồng ý chia sẻ dữ liệu</span></div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button danger" disabled={busy} onClick={() => setDecisionMode("reject")}>Từ chối</button><button className="secondary-button" disabled={busy} onClick={() => setDecisionMode("request-supplement")}><FileText />Yêu cầu bổ sung</button><button className="primary-button" disabled={busy || !hasCv || selected.student.academicStatus !== "ACTIVE"} onClick={() => setDecisionMode("forward")}><PaperPlaneTilt />Duyệt & chuyển doanh nghiệp</button></div></Panel></div>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{decisionMode && <ApplicationDecisionModal mode={decisionMode} application={selected} busy={busy} error={error} onClose={() => { if (!busy) { setDecisionMode(null); setError(""); } }} onSubmit={payload => void decide(payload)} />}</>;
 }
 
 function AdminJobReview({ selected, setSelected, states, setStates }) {
