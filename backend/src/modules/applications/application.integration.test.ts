@@ -222,6 +222,35 @@ describeWithDatabase("student job application flow", () => {
       .set("Idempotency-Key", commandId);
   }
 
+  function requestSupplement(
+    token: string,
+    applicationId: string,
+    body: Record<string, unknown>,
+    commandId = randomUUID(),
+  ) {
+    return request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/request-supplement`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+  }
+
+  function resubmitApplication(
+    token: string,
+    applicationId: string,
+    documentIds: string[],
+    commandId = randomUUID(),
+  ) {
+    return request(app)
+      .post(`/api/v1/applications/${applicationId}/resubmit`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId)
+      .send({
+        documents: documentIds.map((documentId) => ({ documentId })),
+        consentToShare: true,
+      });
+  }
+
   function startCompanyReview(token: string, applicationId: string, commandId = randomUUID()) {
     return request(app)
       .post(`/api/v1/companies/me/applications/${applicationId}/start-review`)
@@ -581,6 +610,120 @@ describeWithDatabase("student job application flow", () => {
       [student.id, applicationId],
     );
     expect(Number(notification.rows[0]?.count)).toBe(1);
+  });
+
+  it("resubmits verified requested documents idempotently and preserves every snapshot", async () => {
+    const { admin, jobId, student } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+    const requestBody = {
+      reasonCode: "MISSING_TRANSCRIPT",
+      note: "Vui lòng bổ sung bảng điểm đã được xác nhận bởi nhà trường.",
+      requiredDocumentTypes: ["TRANSCRIPT"],
+      dueAt: "2099-12-20T17:00:00+07:00",
+    };
+    await requestSupplement(admin.token, applicationId, requestBody);
+
+    const commandId = randomUUID();
+    const resubmitted = await resubmitApplication(
+      student.token,
+      applicationId,
+      [student.transcriptId],
+      commandId,
+    );
+    expect(resubmitted.status).toBe(200);
+    expect(resubmitted.body.data).toMatchObject({
+      status: "UIT_REVIEWING",
+      version: 3,
+      availableActions: ["WITHDRAW"],
+    });
+    expect(resubmitted.body.data.documents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceDocumentId: student.cvId, documentType: "CV" }),
+      expect.objectContaining({ sourceDocumentId: student.transcriptId, documentType: "TRANSCRIPT" }),
+    ]));
+    expect(resubmitted.body.data.documents).toHaveLength(2);
+    expect(resubmitted.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "NEEDS_SUPPLEMENT",
+      toStatus: "UIT_REVIEWING",
+      actorType: "STUDENT",
+      metadata: {
+        requiredDocumentTypes: ["TRANSCRIPT"],
+        documents: [expect.objectContaining({
+          sourceDocumentId: student.transcriptId,
+          documentType: "TRANSCRIPT",
+          sourceVersion: 1,
+        })],
+      },
+    });
+
+    const repeated = await resubmitApplication(
+      student.token,
+      applicationId,
+      [student.transcriptId],
+      commandId,
+    );
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data).toMatchObject({ status: "UIT_REVIEWING", version: 3 });
+    expect(repeated.body.data.documents).toHaveLength(2);
+
+    const notification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2 AND type = 'APPLICATION_RESUBMITTED'`,
+      [admin.id, applicationId],
+    );
+    expect(Number(notification.rows[0]?.count)).toBe(1);
+    const audit = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM audit_logs
+       WHERE actor_user_id = $1 AND target_id = $2 AND action = 'APPLICATION_RESUBMITTED'`,
+      [student.id, applicationId],
+    );
+    expect(Number(audit.rows[0]?.count)).toBe(1);
+  });
+
+  it("validates supplement ownership, verification, requested types and deadline", async () => {
+    const { admin, jobId, student } = await createScenario();
+    const otherStudent = await createStudent();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    const applicationId = created.body.data.id as string;
+
+    const wrongState = await resubmitApplication(student.token, applicationId, [student.transcriptId]);
+    expect(wrongState.status).toBe(409);
+    expect(wrongState.body.error.code).toBe("APPLICATION_STATE_CONFLICT");
+
+    const expiredRequest = await requestSupplement(admin.token, applicationId, {
+      reasonCode: "MISSING_TRANSCRIPT",
+      note: "Yêu cầu có thời hạn không hợp lệ để kiểm thử.",
+      requiredDocumentTypes: ["TRANSCRIPT"],
+      dueAt: "2020-01-01T00:00:00+07:00",
+    });
+    expect(expiredRequest.status).toBe(400);
+    expect(expiredRequest.body.error.code).toBe("APPLICATION_SUPPLEMENT_DUE_DATE_INVALID");
+
+    await requestSupplement(admin.token, applicationId, {
+      reasonCode: "MISSING_STUDENT_CONFIRMATION",
+      note: "Vui lòng bổ sung giấy xác nhận sinh viên còn hiệu lực.",
+      requiredDocumentTypes: ["STUDENT_CONFIRMATION"],
+      dueAt: "2099-12-20T17:00:00+07:00",
+    });
+
+    const foreign = await resubmitApplication(student.token, applicationId, [otherStudent.transcriptId]);
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.error.code).toBe("APPLICATION_DOCUMENT_INVALID");
+
+    const pending = await resubmitApplication(student.token, applicationId, [student.pendingDocumentId]);
+    expect(pending.status).toBe(400);
+    expect(pending.body.error.code).toBe("APPLICATION_DOCUMENT_NOT_VERIFIED");
+
+    const existing = await resubmitApplication(student.token, applicationId, [student.cvId]);
+    expect(existing.status).toBe(400);
+    expect(existing.body.error.code).toBe("APPLICATION_DOCUMENT_ALREADY_SUBMITTED");
+
+    const missingType = await resubmitApplication(student.token, applicationId, [student.transcriptId]);
+    expect(missingType.status).toBe(400);
+    expect(missingType.body.error.code).toBe("APPLICATION_REQUIRED_DOCUMENTS_MISSING");
+
+    const hidden = await resubmitApplication(otherStudent.token, applicationId, [otherStudent.transcriptId]);
+    expect(hidden.status).toBe(404);
   });
 
   it("forwards the application to the correct company and blocks a second decision", async () => {

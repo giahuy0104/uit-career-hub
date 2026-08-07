@@ -10,6 +10,7 @@ import {
   applicationListQuerySchema,
   applicationReviewQueueQuerySchema,
   applicationReviewReasonSchema,
+  applicationResubmitSchema,
   applicationSubmitSchema,
   applicationSupplementRequestSchema,
   companyCandidateListQuerySchema,
@@ -70,6 +71,19 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
       data: await service.getApplication(
         principal(request).studentProfileId,
         applicationIdSchema.parse(request.params.applicationId),
+      ),
+    });
+  });
+
+  router.post("/applications/:applicationId/resubmit", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.resubmit(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        applicationResubmitSchema.parse(request.body),
+        metadata(request),
       ),
     });
   });

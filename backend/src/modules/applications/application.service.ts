@@ -70,6 +70,13 @@ export class ApplicationService {
       if (await this.repository.commandExists(client, applicationId, commandId)) {
         return (await this.repository.findByIdForUit(applicationId, client))!;
       }
+      if (decision === "request-supplement" && new Date(payload.dueAt!).getTime() <= Date.now()) {
+        throw new AppError(
+          400,
+          "APPLICATION_SUPPLEMENT_DUE_DATE_INVALID",
+          "Hạn bổ sung hồ sơ phải nằm trong tương lai.",
+        );
+      }
       if (application.status !== "UIT_REVIEWING") {
         throw new AppError(
           409,
@@ -577,6 +584,187 @@ export class ApplicationService {
         ],
       );
       return (await this.repository.findByIdForCompany(applicationId, companyId, client))!;
+    });
+  }
+
+  async resubmit(
+    actor: { userId: string; studentProfileId: string | null },
+    applicationId: string,
+    commandId: string,
+    input: { documents: Array<{ documentId: string }>; consentToShare: true },
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application || application.studentProfileId !== studentProfileId) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        return (await this.repository.findById(applicationId, studentProfileId, client))!;
+      }
+      if (application.status !== "NEEDS_SUPPLEMENT") {
+        throw new AppError(
+          409,
+          "APPLICATION_STATE_CONFLICT",
+          "Chỉ có thể nộp bổ sung khi UIT đang yêu cầu cập nhật hồ sơ.",
+        );
+      }
+
+      const latestRequest = await client.query<{
+        command_id: string;
+        note: string | null;
+        metadata: { requiredDocumentTypes?: string[]; dueAt?: string };
+      }>(
+        `SELECT command_id, note, metadata
+         FROM application_status_history
+         WHERE application_id = $1 AND to_status = 'NEEDS_SUPPLEMENT'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1`,
+        [applicationId],
+      );
+      const supplementRequest = latestRequest.rows[0];
+      const requiredDocumentTypes = supplementRequest?.metadata.requiredDocumentTypes ?? [];
+      const dueAt = supplementRequest?.metadata.dueAt;
+      if (!supplementRequest || requiredDocumentTypes.length === 0 || !dueAt) {
+        throw new AppError(
+          409,
+          "APPLICATION_SUPPLEMENT_REQUEST_INVALID",
+          "Yêu cầu bổ sung không còn đầy đủ thông tin để xử lý.",
+        );
+      }
+      if (new Date(dueAt).getTime() < Date.now()) {
+        throw new AppError(
+          409,
+          "APPLICATION_SUPPLEMENT_DEADLINE_EXPIRED",
+          "Đã quá hạn bổ sung hồ sơ. Vui lòng liên hệ bộ phận phụ trách UIT.",
+        );
+      }
+
+      const documentIds = input.documents.map((document) => document.documentId);
+      const documents = await this.repository.findSourceDocuments(client, studentProfileId, documentIds);
+      if (documents.length !== documentIds.length) {
+        throw new AppError(400, "APPLICATION_DOCUMENT_INVALID", "Có tài liệu không thuộc hồ sơ của bạn.");
+      }
+      if (documents.some((document) => document.verificationStatus !== "VERIFIED")) {
+        throw new AppError(400, "APPLICATION_DOCUMENT_NOT_VERIFIED", "Chỉ có thể gửi tài liệu đã được xác minh.");
+      }
+
+      const existingSnapshots = await client.query<{ source_document_id: string | null }>(
+        "SELECT source_document_id FROM application_documents WHERE application_id = $1 FOR SHARE",
+        [applicationId],
+      );
+      const existingSourceIds = new Set(
+        existingSnapshots.rows.flatMap((row) => row.source_document_id ? [row.source_document_id] : []),
+      );
+      if (documents.some((document) => existingSourceIds.has(document.id))) {
+        throw new AppError(
+          400,
+          "APPLICATION_DOCUMENT_ALREADY_SUBMITTED",
+          "Hãy chọn phiên bản tài liệu mới, chưa có trong đơn ứng tuyển.",
+        );
+      }
+
+      const selectedTypes = new Set(documents.map((document) => document.documentType));
+      const missingDocumentTypes = requiredDocumentTypes.filter((documentType) => !selectedTypes.has(documentType));
+      if (missingDocumentTypes.length > 0) {
+        throw new AppError(
+          400,
+          "APPLICATION_REQUIRED_DOCUMENTS_MISSING",
+          `Còn thiếu loại tài liệu UIT yêu cầu: ${missingDocumentTypes.join(", ")}.`,
+          [{ missingDocumentTypes }],
+        );
+      }
+
+      for (const document of documents) {
+        await client.query(
+          `INSERT INTO application_documents
+           (application_id, source_document_id, document_type, file_name, mime_type,
+            file_size_bytes, storage_key, checksum, source_version)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            applicationId,
+            document.id,
+            document.documentType,
+            document.fileName,
+            document.mimeType,
+            document.fileSizeBytes,
+            document.storageKey,
+            document.checksum,
+            document.version,
+          ],
+        );
+      }
+
+      const documentSnapshots = documents.map((document) => ({
+        sourceDocumentId: document.id,
+        documentType: document.documentType,
+        fileName: document.fileName,
+        sourceVersion: document.version,
+      }));
+      await client.query(
+        `UPDATE applications
+         SET status = 'UIT_REVIEWING', consented_at = now(), version = version + 1,
+             last_transition_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [applicationId],
+      );
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id, note, metadata)
+         VALUES ($1, $2, 'NEEDS_SUPPLEMENT', 'UIT_REVIEWING', 'STUDENT', $3, $4, $5::jsonb)`,
+        [
+          applicationId,
+          commandId,
+          actor.userId,
+          `Sinh viên đã nộp ${documents.length} tài liệu bổ sung.`,
+          JSON.stringify({
+            supplementRequestCommandId: supplementRequest.command_id,
+            requiredDocumentTypes,
+            documents: documentSnapshots,
+          }),
+        ],
+      );
+
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, 'APPLICATION_RESUBMITTED', 'Sinh viên đã bổ sung hồ sơ',
+                $3 || ' đã bổ sung hồ sơ vị trí “' || $4 || '” tại ' || $5 || '.',
+                'APPLICATION', $1::uuid, '/uit/applications/' || $1::text,
+                'application:' || $1::text || ':' || $2::text || ':resubmit:uit:' || u.id::text,
+                jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                   'status', 'UIT_REVIEWING', 'documentCount', $6::int)
+         FROM users u WHERE u.role = 'UIT_ADMIN' AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          applicationId,
+          commandId,
+          application.studentFullName,
+          application.jobTitle,
+          application.companyName,
+          documents.length,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'APPLICATION_RESUBMITTED', 'APPLICATION', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          applicationId,
+          JSON.stringify({
+            commandId,
+            supplementRequestCommandId: supplementRequest.command_id,
+            documentSnapshots,
+          }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+
+      return (await this.repository.findById(applicationId, studentProfileId, client))!;
     });
   }
 

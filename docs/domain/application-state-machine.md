@@ -57,6 +57,13 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 - Tại `OFFER_PENDING_STUDENT`, không có generic withdraw; sinh viên dùng accept hoặc decline offer.
 - API trả `availableActions` để client chỉ hiện `WITHDRAW` hoặc `CANCEL_INTERVIEW` ở đúng bước; backend vẫn kiểm tra state trong transaction.
 - Cả hai hành động đều bắt buộc `reasonCode` và `note`, ghi history/audit, chống gửi lặp và thông báo cho UIT; doanh nghiệp chỉ nhận thông báo sau khi hồ sơ đã được chuyển đến họ.
+
+## Quy tắc bổ sung hồ sơ
+
+- UIT chỉ có thể đặt hạn bổ sung trong tương lai và phải chỉ rõ ít nhất một loại tài liệu cần bổ sung.
+- Sinh viên chỉ được nộp lại khi đơn ở `NEEDS_SUPPLEMENT`; tài liệu phải thuộc sinh viên, đã `VERIFIED`, chưa tồn tại trong snapshot của đơn và bao phủ đủ loại UIT yêu cầu.
+- Snapshot cũ không bị ghi đè. Lần nộp lại tạo thêm snapshot, ghi history/audit và chuyển đơn về `UIT_REVIEWING` để UIT kiểm duyệt lại.
+- Nếu quá hạn, backend từ chối nộp lại và sinh viên cần liên hệ UIT để được xử lý hoặc tạo yêu cầu mới.
 - `NOT_SUITABLE` là hành động riêng của doanh nghiệp trước/sàng lọc; `INTERVIEW_FAILED` dùng sau phỏng vấn.
 - Yêu cầu bổ sung, UIT từ chối, Không phù hợp, không đạt, rút đơn, hủy tham gia và từ chối offer luôn ghi reason/note và history.
 

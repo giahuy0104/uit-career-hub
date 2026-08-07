@@ -300,6 +300,13 @@ const applicationStatusLabels = {
   WITHDRAWN: "Đã rút đơn",
 };
 
+const applicationDocumentTypeLabels = {
+  CV: "CV ứng tuyển",
+  TRANSCRIPT: "Bảng điểm",
+  STUDENT_CONFIRMATION: "Giấy xác nhận sinh viên",
+  OTHER: "Tài liệu khác",
+};
+
 function formatDate(value) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
@@ -424,6 +431,12 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
   const [withdrawalNote, setWithdrawalNote] = useState("");
   const [withdrawalBusy, setWithdrawalBusy] = useState(false);
   const [withdrawalError, setWithdrawalError] = useState("");
+  const [supplementOpen, setSupplementOpen] = useState(false);
+  const [supplementDocuments, setSupplementDocuments] = useState([]);
+  const [selectedSupplementIds, setSelectedSupplementIds] = useState([]);
+  const [supplementLoading, setSupplementLoading] = useState(false);
+  const [supplementBusy, setSupplementBusy] = useState(false);
+  const [supplementError, setSupplementError] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -446,6 +459,8 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
   const selected = items.find((application) => application.id === selectedId) || filtered[0] || items[0];
   const stage = selected ? applicationStage(selected.status) : 0;
   const terminal = selected && ["NOT_SUITABLE", "INTERVIEW_FAILED", "OFFER_DECLINED", "UIT_REJECTED", "WITHDRAWN"].includes(selected.status);
+  const supplementRequest = selected?.timeline.slice().reverse().find((event) => event.toStatus === "NEEDS_SUPPLEMENT");
+  const requiredSupplementTypes = supplementRequest?.metadata?.requiredDocumentTypes || [];
   const journeyLabels = ["Đã nộp", "UIT kiểm duyệt", "Doanh nghiệp xử lý", "Phỏng vấn", "Kết quả"];
   const openOfferDecision = (decision) => {
     setOfferDecision(decision);
@@ -481,6 +496,55 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
       setWithdrawalBusy(false);
     }
   };
+  const openSupplement = async () => {
+    if (!selected) return;
+    setSupplementOpen(true);
+    setSupplementLoading(true);
+    setSupplementError("");
+    setSupplementDocuments([]);
+    setSelectedSupplementIds([]);
+    try {
+      const response = await authorizedRequest("/students/me/documents");
+      const submittedIds = new Set(selected.documents.map((document) => document.sourceDocumentId).filter(Boolean));
+      const available = response.data.filter((document) =>
+        document.verificationStatus === "VERIFIED" && !submittedIds.has(document.id));
+      setSupplementDocuments(available);
+      setSelectedSupplementIds(available
+        .filter((document) => requiredSupplementTypes.includes(document.documentType))
+        .map((document) => document.id));
+    } catch (error) {
+      setSupplementError(error.message);
+    } finally {
+      setSupplementLoading(false);
+    }
+  };
+  const selectedSupplementTypes = new Set(supplementDocuments
+    .filter((document) => selectedSupplementIds.includes(document.id))
+    .map((document) => document.documentType));
+  const missingSupplementTypes = requiredSupplementTypes.filter((documentType) =>
+    !selectedSupplementTypes.has(documentType));
+  const submitSupplement = async () => {
+    if (!selected || !selectedSupplementIds.length || missingSupplementTypes.length) return;
+    setSupplementBusy(true);
+    setSupplementError("");
+    try {
+      const response = await authorizedRequest(`/applications/${selected.id}/resubmit`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({
+          documents: selectedSupplementIds.map((documentId) => ({ documentId })),
+          consentToShare: true,
+        }),
+      });
+      setItems(current => current.map(application => application.id === response.data.id ? response.data : application));
+      setSupplementOpen(false);
+      setMessage("Đã gửi tài liệu bổ sung. Hồ sơ đã quay lại hàng đợi kiểm duyệt của UIT.");
+    } catch (error) {
+      setSupplementError(error.message);
+    } finally {
+      setSupplementBusy(false);
+    }
+  };
   const respondToOffer = async () => {
     if (!selected || !offerDecision) return;
     setOfferBusy(true);
@@ -512,8 +576,9 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
           <section className="active-application">
             <div className="application-title"><LiveCompanyMark company={selected.job.company} size="lg" /><span><h2>{selected.job.title}</h2><p>{selected.job.company.name}</p><small><CalendarBlank size={15} />Đã nộp: {formatDate(selected.submittedAt)}</small></span><span className={`status-pill ${terminal ? "neutral" : "pending"}`}>{applicationStatusLabels[selected.status]}</span></div>
             <div className="journey">{journeyLabels.map((label, index) => <div className={`journey-step ${index < stage ? "done" : index === stage && !terminal ? "current" : ""}`} key={label}><span>{index < stage ? <Check size={18} /> : index + 1}</span><strong>{label}</strong><small>{index === 0 ? formatDate(selected.submittedAt) : index === stage && !terminal ? "Đang thực hiện" : index < stage ? "Đã hoàn tất" : "Chưa bắt đầu"}</small></div>)}</div>
-            <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : selected.status === "OFFER_PENDING_STUDENT" ? "Doanh nghiệp đang chờ quyết định của bạn. Hãy kiểm tra ngày bắt đầu trước khi phản hồi." : selected.status === "ACCEPTED_PENDING_UIT_CONFIRMATION" ? "Bạn đã nhận offer. UIT đang đối chiếu thông tin trước khi xác nhận nơi thực tập." : selected.status === "HIRED" ? "UIT đã xác nhận nơi thực tập. Các đơn khác còn hoạt động đã được hệ thống đóng và lưu lịch sử." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="secondary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ</button>{selected.availableActions.includes("WITHDRAW") && <button className="secondary-button danger" onClick={() => openWithdrawal("WITHDRAW")}><Trash size={18} />Rút đơn</button>}{selected.availableActions.includes("CANCEL_INTERVIEW") && <button className="secondary-button danger" onClick={() => openWithdrawal("CANCEL_INTERVIEW")}><X size={18} />Hủy tham gia PV</button>}{selected.status === "OFFER_PENDING_STUDENT" && <><button className="secondary-button danger" onClick={() => openOfferDecision("decline")}><X size={18} />Từ chối</button><button className="primary-button" onClick={() => openOfferDecision("accept")}><CheckCircle size={19} />Nhận offer</button></>}</div></div>
+            <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : selected.status === "NEEDS_SUPPLEMENT" ? "UIT đã ghi rõ tài liệu còn thiếu. Hãy bổ sung trước hạn để hồ sơ được kiểm duyệt lại." : selected.status === "OFFER_PENDING_STUDENT" ? "Doanh nghiệp đang chờ quyết định của bạn. Hãy kiểm tra ngày bắt đầu trước khi phản hồi." : selected.status === "ACCEPTED_PENDING_UIT_CONFIRMATION" ? "Bạn đã nhận offer. UIT đang đối chiếu thông tin trước khi xác nhận nơi thực tập." : selected.status === "HIRED" ? "UIT đã xác nhận nơi thực tập. Các đơn khác còn hoạt động đã được hệ thống đóng và lưu lịch sử." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="secondary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ</button>{selected.availableActions.includes("WITHDRAW") && <button className="secondary-button danger" onClick={() => openWithdrawal("WITHDRAW")}><Trash size={18} />Rút đơn</button>}{selected.availableActions.includes("CANCEL_INTERVIEW") && <button className="secondary-button danger" onClick={() => openWithdrawal("CANCEL_INTERVIEW")}><X size={18} />Hủy tham gia PV</button>}{selected.availableActions.includes("RESUBMIT") && <button className="primary-button" onClick={() => void openSupplement()}><UploadSimple size={18} />Bổ sung hồ sơ</button>}{selected.status === "OFFER_PENDING_STUDENT" && <><button className="secondary-button danger" onClick={() => openOfferDecision("decline")}><X size={18} />Từ chối</button><button className="primary-button" onClick={() => openOfferDecision("accept")}><CheckCircle size={19} />Nhận offer</button></>}</div></div>
             {selected.status === "OFFER_PENDING_STUDENT" && selected.recruitmentResult && <div className="offer-summary"><span className="offer-summary-icon"><Briefcase size={25} /></span><span><small>LỜI MỜI NHẬN VIỆC</small><strong>Ngày bắt đầu dự kiến: {formatDate(selected.recruitmentResult.startDate)}</strong><p>{selected.recruitmentResult.offerStorageKey ? "Doanh nghiệp đã đính kèm tài liệu offer." : "Offer được xác nhận trực tiếp trên hệ thống."}</p></span><i className="status-tag pending">Chờ bạn phản hồi</i></div>}
+            {selected.status === "NEEDS_SUPPLEMENT" && supplementRequest && <div className="supplement-request-card"><Warning size={24} /><span><small>YÊU CẦU BỔ SUNG TỪ UIT</small><strong>{supplementRequest.note}</strong><p>Cần nộp: {requiredSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")} · Hạn {formatDate(supplementRequest.metadata.dueAt)}</p></span><button className="primary-button" onClick={() => void openSupplement()}><UploadSimple size={18} />Chọn tài liệu</button></div>}
             {selected.status === "UIT_REVIEWING" && <p className="info-banner"><Info size={22} />Doanh nghiệp chưa thể xem CV cho đến khi UIT phê duyệt và chuyển hồ sơ.</p>}
             <section className="student-application-history"><h3>Lịch sử xử lý</h3><div>{selected.timeline.slice().reverse().slice(0, 6).map((event, index) => <article key={`${event.createdAt}-${index}`}><span className="history-dot"><Check size={12} /></span><div><strong>{applicationStatusLabels[event.toStatus] || event.toStatus}</strong><small>{formatDate(event.createdAt)} · {event.actorType}</small>{event.note && <p>{event.note}</p>}</div></article>)}</div></section>
           </section>
@@ -521,6 +586,7 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
         </>}
       </main>
       {documentsOpen && selected && <div className="modal-backdrop" onMouseDown={() => setDocumentsOpen(false)}><div className="modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setDocumentsOpen(false)}><X size={20} /></button><span className="modal-icon"><FileText size={26} /></span><h2>Hồ sơ đã nộp</h2><p>Đây là bản chụp tài liệu tại thời điểm gửi đơn.</p><div className="modal-list">{selected.documents.map((document) => <span key={document.id}><CheckCircle size={18} />{document.fileName} · {formatBytes(document.fileSizeBytes)}</span>)}</div><button className="primary-button full" onClick={() => setDocumentsOpen(false)}>Đóng</button></div></div>}
+      {supplementOpen && selected && <div className="modal-backdrop" onMouseDown={() => !supplementBusy && setSupplementOpen(false)}><div className="modal supplement-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={supplementBusy} onClick={() => setSupplementOpen(false)}><X size={20} /></button><span className="modal-icon"><UploadSimple size={26} /></span><h2>Bổ sung hồ sơ</h2><p>Chọn phiên bản tài liệu mới đã được xác minh. Tài liệu cũ vẫn được giữ lại trong snapshot để UIT đối chiếu.</p><div className="supplement-requirements"><strong>UIT yêu cầu</strong><span>{requiredSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")}</span><small>Hạn nộp: {formatDate(supplementRequest?.metadata?.dueAt)}</small></div>{supplementLoading ? <div className="portal-loading"><CircleNotch className="spin" />Đang tải tài liệu...</div> : <div className="supplement-document-list">{supplementDocuments.length ? supplementDocuments.map((document) => { const checked = selectedSupplementIds.includes(document.id); const requested = requiredSupplementTypes.includes(document.documentType); return <label className={`supplement-document ${checked ? "selected" : ""}`} key={document.id}><input type="checkbox" checked={checked} onChange={() => setSelectedSupplementIds((current) => checked ? current.filter((id) => id !== document.id) : [...current, document.id])} /><FileText size={21} /><span><strong>{document.fileName}</strong><small>{applicationDocumentTypeLabels[document.documentType] || document.documentType} · Phiên bản {document.version} · {formatBytes(document.fileSizeBytes)}</small></span>{requested && <i>Bắt buộc</i>}</label>; }) : <div className="supplement-empty"><Warning size={24} /><strong>Chưa có tài liệu mới phù hợp</strong><span>Hãy cập nhật và xác minh tài liệu trong hồ sơ sinh viên trước khi nộp lại.</span></div>}</div>}{missingSupplementTypes.length > 0 && !supplementLoading && <p className="form-error"><Warning size={18} />Còn thiếu: {missingSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")}.</p>}{supplementError && <p className="form-error"><Warning size={18} />{supplementError}</p>}<p className="supplement-consent"><ShieldCheck size={18} />Khi nộp lại, bạn đồng ý chia sẻ các tài liệu đã chọn với UIT và doanh nghiệp sau khi hồ sơ được duyệt.</p><div className="modal-actions"><button className="secondary-button" disabled={supplementBusy} onClick={() => setSupplementOpen(false)}>Để sau</button><button className="primary-button" disabled={supplementLoading || supplementBusy || !selectedSupplementIds.length || missingSupplementTypes.length > 0} onClick={() => void submitSupplement()}>{supplementBusy ? <CircleNotch className="spin" size={18} /> : <UploadSimple size={18} />}Nộp hồ sơ bổ sung</button></div></div></div>}
       {withdrawalAction && selected && <div className="modal-backdrop" onMouseDown={() => !withdrawalBusy && setWithdrawalAction("")}><div className="modal withdrawal-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={withdrawalBusy} onClick={() => setWithdrawalAction("")}><X size={20} /></button><span className="modal-icon danger"><Warning size={26} /></span><h2>{withdrawalAction === "CANCEL_INTERVIEW" ? "Hủy tham gia phỏng vấn?" : "Rút đơn ứng tuyển?"}</h2><p>{withdrawalAction === "CANCEL_INTERVIEW" ? <>Lịch phỏng vấn với <strong>{selected.job.company.name}</strong> sẽ được hủy và đơn chuyển sang Đã rút.</> : <>UIT và doanh nghiệp sẽ dừng xử lý đơn vị trí <strong>{selected.job.title}</strong>.</>} Lý do và thao tác được lưu trong lịch sử.</p><div className="withdrawal-form"><label><span>Nhóm lý do *</span><select value={withdrawalReasonCode} onChange={(event) => setWithdrawalReasonCode(event.target.value)}>{withdrawalAction === "CANCEL_INTERVIEW" && <option value="STUDENT_SCHEDULE_CONFLICT">Trùng lịch học hoặc lịch cá nhân</option>}<option value="STUDENT_CHANGED_PLAN">Thay đổi kế hoạch cá nhân</option><option value="STUDENT_ACCEPTED_OTHER_OPPORTUNITY">Đã chọn cơ hội khác</option><option value="STUDENT_OTHER_REASON">Lý do khác</option></select></label><label><span>Lý do chi tiết *</span><textarea value={withdrawalNote} onChange={(event) => setWithdrawalNote(event.target.value)} placeholder="Mô tả ngắn gọn để UIT và doanh nghiệp nắm được lý do..." maxLength={2000} /></label></div>{withdrawalError && <p className="form-error"><Warning size={18} />{withdrawalError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={withdrawalBusy} onClick={() => setWithdrawalAction("")}>Giữ lại đơn</button><button className="primary-button danger-fill" disabled={withdrawalBusy || withdrawalNote.trim().length < 5} onClick={() => void submitWithdrawal()}>{withdrawalBusy ? <CircleNotch className="spin" size={18} /> : <Trash size={18} />}{withdrawalAction === "CANCEL_INTERVIEW" ? "Xác nhận hủy tham gia" : "Xác nhận rút đơn"}</button></div></div></div>}
       {offerDecision && selected && <div className="modal-backdrop" onMouseDown={() => !offerBusy && setOfferDecision("")}><div className="modal offer-decision-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={offerBusy} onClick={() => setOfferDecision("")}><X size={20} /></button><span className={`modal-icon ${offerDecision === "decline" ? "danger" : ""}`}>{offerDecision === "accept" ? <CheckCircle size={26} /> : <Warning size={26} />}</span><h2>{offerDecision === "accept" ? "Xác nhận nhận offer" : "Từ chối offer"}</h2><p>{offerDecision === "accept" ? <>Bạn chọn <strong>{selected.job.company.name}</strong> cho vị trí <strong>{selected.job.title}</strong>. UIT sẽ xác nhận trước khi đóng các đơn còn lại.</> : <>Lý do từ chối sẽ được lưu trong lịch sử và gửi đến doanh nghiệp.</>}</p>{offerDecision === "decline" && <label className="offer-decline-note"><span>Lý do *</span><textarea value={offerNote} onChange={(event) => setOfferNote(event.target.value)} placeholder="Ví dụ: Tôi đã chọn một cơ hội phù hợp hơn..." maxLength={2000} /></label>}{offerError && <p className="form-error"><Warning size={18} />{offerError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={offerBusy} onClick={() => setOfferDecision("")}>Hủy</button><button className={offerDecision === "accept" ? "primary-button" : "secondary-button danger"} disabled={offerBusy || (offerDecision === "decline" && offerNote.trim().length < 5)} onClick={() => void respondToOffer()}>{offerBusy ? <CircleNotch className="spin" size={18} /> : offerDecision === "accept" ? <CheckCircle size={18} /> : <X size={18} />}{offerDecision === "accept" ? "Xác nhận nhận offer" : "Xác nhận từ chối"}</button></div></div></div>}
     </div>
