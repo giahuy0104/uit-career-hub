@@ -156,23 +156,33 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/StudentDocument'
+  /students/me/documents/{documentId}/default:
     post:
       tags: [Students]
-      operationId: createDocumentMetadata
-      description: Tạo metadata sau khi luồng upload object storage hoàn tất.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StudentDocumentCreateRequest'
+      operationId: setMyDefaultCv
+      description: Chỉ CV đã được UIT xác minh mới có thể được chọn làm CV mặc định.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
       responses:
-        '201':
-          description: Metadata tài liệu đã tạo
+        '200':
+          description: Danh sách tài liệu sau khi cập nhật CV mặc định
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StudentDocumentEnvelope'
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentDocument'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /students/me/interviews:
     get:
@@ -1457,8 +1467,10 @@ components:
         email: { type: string, format: email }
     StudentProfileUpdateRequest:
       type: object
+      required: [phone]
+      additionalProperties: false
       properties:
-        phone: { type: string, maxLength: 30 }
+        phone: { type: [string, 'null'], minLength: 8, maxLength: 30 }
     StudentProfileEnvelope:
       type: object
       required: [data]
@@ -1477,22 +1489,6 @@ components:
         isDefault: { type: boolean }
         verificationStatus: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
         createdAt: { type: string, format: date-time }
-    StudentDocumentCreateRequest:
-      type: object
-      required: [documentType, fileName, mimeType, fileSizeBytes, storageKey]
-      properties:
-        documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
-        fileName: { type: string, maxLength: 255 }
-        mimeType: { type: string }
-        fileSizeBytes: { type: integer, minimum: 1 }
-        storageKey: { type: string }
-        checksum: { type: string }
-        isDefault: { type: boolean, default: false }
-    StudentDocumentEnvelope:
-      type: object
-      required: [data]
-      properties:
-        data: { $ref: '#/components/schemas/StudentDocument' }
     DashboardMetricValue:
       type: integer
       minimum: 0

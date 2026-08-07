@@ -4,7 +4,20 @@ import { applicationStatuses } from "./application.types.js";
 
 export const applicationIdSchema = z.string().uuid();
 export const interviewIdSchema = z.string().uuid();
+export const studentDocumentIdSchema = z.string().uuid();
 export const applicationIdempotencyKeySchema = z.string().uuid("Idempotency-Key phải là UUID.");
+
+export const studentProfileUpdateSchema = z
+  .object({
+    phone: z
+      .string()
+      .trim()
+      .min(8, "Số điện thoại phải có ít nhất 8 ký tự.")
+      .max(30, "Số điện thoại không được vượt quá 30 ký tự.")
+      .regex(/^\+?[0-9][0-9 .()-]*$/, "Số điện thoại không đúng định dạng.")
+      .nullable(),
+  })
+  .strict();
 
 export const applicationSubmitSchema = z.object({
   jobId: z.string().uuid(),

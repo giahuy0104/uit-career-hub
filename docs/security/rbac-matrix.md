@@ -26,7 +26,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 |---|---|:---:|:---:|:---:|
 | Dùng chung | `GET /jobs`, `GET /jobs/{jobId}` | ✓ | ✓ | ✓ |
 | Dùng chung | `/notifications`, unread count, read, read-all | ✓ | ✓ | ✓ |
-| Sinh viên | `GET /students/me`, `/students/me/documents` | ✓ | — | — |
+| Sinh viên | `GET/PATCH /students/me`, `GET /students/me/documents`, chọn CV mặc định | ✓ | — | — |
 | Sinh viên | `GET /students/me/dashboard` | ✓ | — | — |
 | Sinh viên | `GET/POST /applications` và `GET /applications/{id}` | ✓ | — | — |
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |
