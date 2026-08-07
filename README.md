@@ -98,6 +98,16 @@ pnpm openapi:validate
 
 Nếu `DATABASE_URL_TEST` để trống, các integration test cần database sẽ được skip có chủ đích; unit test và health route test vẫn chạy.
 
+### GitHub Actions CI
+
+Workflow `.github/workflows/ci.yml` tự chạy khi có push hoặc pull request vào `develop` và `main`. Mỗi lượt CI sẽ:
+
+1. Cài đúng pnpm 11.16.0 và Node.js 24 theo cấu hình của dự án.
+2. Khởi tạo PostgreSQL 16 tạm thời trên GitHub runner, không dùng thông tin kết nối Neon.
+3. Chạy typecheck, kiểm tra OpenAPI, toàn bộ unit/integration test và build frontend/backend.
+
+Có thể chạy thủ công trong tab **Actions → CI → Run workflow**. Chỉ merge pull request khi job `Typecheck, test and build` đã thành công.
+
 ## PostgreSQL local bằng Docker (tùy chọn)
 
 Docker chỉ dùng khi thành viên muốn chạy PostgreSQL local:
