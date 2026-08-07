@@ -3,6 +3,7 @@ import { z } from "zod";
 import { applicationStatuses } from "./application.types.js";
 
 export const applicationIdSchema = z.string().uuid();
+export const interviewIdSchema = z.string().uuid();
 export const applicationIdempotencyKeySchema = z.string().uuid("Idempotency-Key phải là UUID.");
 
 export const applicationSubmitSchema = z.object({
@@ -55,6 +56,12 @@ export const companyCandidateListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   jobId: z.string().uuid().optional(),
   status: z.enum(applicationStatuses).optional(),
+});
+
+export const interviewListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  scope: z.enum(["upcoming", "history", "all"]).optional().default("all"),
 });
 
 export const applicationReviewReasonSchema = z.object({

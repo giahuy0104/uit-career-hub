@@ -276,6 +276,12 @@ describeWithDatabase("student job application flow", () => {
       });
   }
 
+  function confirmInterview(token: string, interviewId: string) {
+    return request(app)
+      .post(`/api/v1/students/me/interviews/${interviewId}/confirm`)
+      .set("Authorization", `Bearer ${token}`);
+  }
+
   function withdrawApplication(
     token: string,
     applicationId: string,
@@ -937,6 +943,49 @@ describeWithDatabase("student job application flow", () => {
       [student.id, applicationId],
     );
     expect(Number(notification.rows[0]?.count)).toBe(1);
+  });
+
+  it("lists interviews by tenant and lets the owning student confirm idempotently", async () => {
+    const scenario = await prepareInterview();
+    const interview = await request(app)
+      .get("/api/v1/students/me/interviews?page=1&pageSize=100&scope=all")
+      .set("Authorization", `Bearer ${scenario.student.token}`);
+    expect(interview.status).toBe(200);
+    expect(interview.body.meta.totalItems).toBe(1);
+    expect(interview.body.data[0]).toMatchObject({
+      applicationId: scenario.applicationId,
+      status: "PENDING_STUDENT_CONFIRMATION",
+      applicationStatus: "INTERVIEW_INVITED",
+      student: { id: scenario.student.studentProfileId },
+      job: { company: { id: scenario.recruiter.companyId } },
+    });
+
+    const companyList = await request(app)
+      .get("/api/v1/companies/me/interviews?page=1&pageSize=100&scope=all")
+      .set("Authorization", `Bearer ${scenario.recruiter.token}`);
+    expect(companyList.status).toBe(200);
+    expect(companyList.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: interview.body.data[0].id, applicationId: scenario.applicationId }),
+    ]));
+
+    const confirmed = await confirmInterview(scenario.student.token, interview.body.data[0].id);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.data).toMatchObject({
+      id: interview.body.data[0].id,
+      status: "CONFIRMED",
+      version: 2,
+    });
+    const repeated = await confirmInterview(scenario.student.token, interview.body.data[0].id);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data).toMatchObject({ status: "CONFIRMED", version: 2 });
+
+    const companyNotification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+       WHERE n.resource_id = $1 AND n.type = 'INTERVIEW_CONFIRMED_BY_STUDENT' AND u.role = 'COMPANY'`,
+      [interview.body.data[0].id],
+    );
+    expect(Number(companyNotification.rows[0]?.count)).toBe(1);
   });
 
   it("allows only one company decision while an application is being screened", async () => {

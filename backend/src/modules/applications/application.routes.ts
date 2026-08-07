@@ -14,6 +14,8 @@ import {
   applicationSubmitSchema,
   applicationSupplementRequestSchema,
   companyCandidateListQuerySchema,
+  interviewIdSchema,
+  interviewListQuerySchema,
   interviewRequestSchema,
   placementConfirmationSchema,
   recruitmentResultSchema,
@@ -46,6 +48,23 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
 
   router.get("/students/me/documents", studentOnly, async (request, response) => {
     response.json({ data: await service.listStudentDocuments(principal(request).studentProfileId) });
+  });
+
+  router.get("/students/me/interviews", studentOnly, async (request, response) => {
+    const query = interviewListQuerySchema.parse(request.query);
+    const result = await service.listStudentInterviews(principal(request).studentProfileId, query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post("/students/me/interviews/:interviewId/confirm", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.confirmInterview(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        interviewIdSchema.parse(request.params.interviewId),
+        metadata(request),
+      ),
+    });
   });
 
   router.get("/applications", studentOnly, async (request, response) => {
@@ -216,6 +235,13 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     const auth = principal(request);
     const query = companyCandidateListQuerySchema.parse(request.query);
     const result = await service.listCompanyCandidates(auth.companyId, query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.get("/companies/me/interviews", companyOnly, async (request, response) => {
+    const auth = principal(request);
+    const query = interviewListQuerySchema.parse(request.query);
+    const result = await service.listCompanyInterviews(auth.companyId, query);
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
 

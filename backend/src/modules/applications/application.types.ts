@@ -95,6 +95,26 @@ export type InterviewDto = {
   version: number;
 };
 
+export type InterviewListItemDto = InterviewDto & {
+  applicationStatus: ApplicationStatus;
+  student: {
+    id: string;
+    studentCode: string;
+    fullName: string;
+    major: string;
+    gpa: number | null;
+  };
+  job: {
+    id: string;
+    title: string;
+    company: { id: string; code: string; name: string };
+  };
+  recruitmentResult: {
+    outcome: "PASS" | "FAIL";
+    studentDecision: "ACCEPTED" | "DECLINED" | null;
+  } | null;
+};
+
 export type StudentProfileDto = {
   id: string;
   studentCode: string;

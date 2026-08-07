@@ -241,7 +241,7 @@ export function StudentExtraScreen({ route, navigate, user, onLogout }) {
       {route === "dashboard" && <LiveStudentDashboard navigate={navigate} />}
       {route === "companies" && <CompaniesScreen />}
       {route === "profile" && <ProfileScreen percent={profilePercent} setPercent={setProfilePercent} />}
-      {route === "interviews" && <InterviewsScreen />}
+      {route === "interviews" && <LiveInterviewsScreen />}
       {route === "notifications" && <StudentNotifications navigate={navigate} />}
     </WorkspaceShell>
   );
@@ -282,9 +282,103 @@ function ProfileScreen({ percent, setPercent }) {
   return <div className="profile-layout"><aside className="profile-summary-card"><div className="large-avatar">NK</div><h2>Nguyễn Minh Khoa</h2><p>20521067@student.uit.edu.vn</p><div className="profile-progress"><div><span style={{ width: `${uploaded ? 100 : percent}%` }} /></div><strong>{uploaded ? 100 : percent}% hoàn thiện</strong></div><ul><li className="done"><CheckCircle />Thông tin UIT</li><li className="done"><CheckCircle />CV ứng tuyển</li><li className={uploaded ? "done" : "current"}>{uploaded ? <CheckCircle /> : <Warning />}Bảng điểm</li><li className="done"><CheckCircle />Giấy xác nhận</li></ul></aside><div className="profile-content"><Panel title="Thông tin học tập" action={<button className="secondary-button small"><PencilSimple size={16} />Cập nhật bổ sung</button>}><div className="detail-grid"><div><small>Họ và tên</small><strong>Nguyễn Minh Khoa</strong></div><div><small>Mã số sinh viên</small><strong>20521067</strong></div><div><small>Khoa</small><strong>Công nghệ phần mềm</strong></div><div><small>Khóa</small><strong>2020</strong></div><div><small>GPA</small><strong>3.42 / 4.0</strong></div><div><small>Tình trạng</small><Status tone="success">Đang học</Status></div></div></Panel><Panel title="CV của tôi" action={<button className="primary-button small"><Plus size={16} />Thêm CV</button>}><div className="document-cards"><article><FileText size={28} /><div><strong>CV_Backend_NguyenMinhKhoa_2026.pdf</strong><small>Cập nhật 02/08/2026 · 412 KB</small></div><Status tone="info">Mặc định</Status><button><Eye size={18} /></button><button><DotsThree size={18} /></button></article><article><FileText size={28} /><div><strong>CV_NguyenMinhKhoa_2025.pdf</strong><small>Cập nhật 15/04/2025 · 398 KB</small></div><span /><button><Eye size={18} /></button><button><DotsThree size={18} /></button></article></div></Panel><Panel title="Tài liệu xác minh"><div className="document-cards"><article><CheckCircle size={27} className="green" /><div><strong>Giấy xác nhận sinh viên</strong><small>Còn hiệu lực đến 15/10/2026</small></div><Status tone="success">Đã xác minh</Status><button><Eye size={18} /></button></article><article><span className={uploaded ? "file-ok" : "file-missing"}>{uploaded ? <CheckCircle size={27} /> : <Warning size={27} />}</span><div><strong>Bảng điểm có xác nhận</strong><small>{uploaded ? "Đã tải lên 05/08/2026" : "Còn thiếu · bắt buộc khi ứng tuyển"}</small></div><Status tone={uploaded ? "success" : "urgent"}>{uploaded ? "Đã có" : "Cần bổ sung"}</Status><button className="upload-inline" onClick={() => { setUploaded(true); setPercent(100); }}>{uploaded ? "Thay đổi" : "Tải lên"}</button></article></div></Panel></div></div>;
 }
 
-function InterviewsScreen() {
-  const [confirmed, setConfirmed] = useState(false);
-  return <div className="portal-two-column wide-left"><div><Panel title="Sắp tới"><article className="interview-card"><div className="calendar-tile"><strong>07</strong><small>THÁNG 08</small></div><div className="interview-main"><Status tone={confirmed ? "success" : "urgent"}>{confirmed ? "Đã xác nhận" : "Cần xác nhận"}</Status><h2>Phỏng vấn Data Engineer Intern</h2><p>FPT Software · Vòng chuyên môn</p><div><span><Clock size={18} />09:30 – 10:15</span><span><MapPin size={18} />Google Meet</span><span><User size={18} />Anh Nguyễn Hoàng Nam</span></div></div><div className="interview-actions"><button className="primary-button" onClick={() => setConfirmed(true)}>{confirmed ? <><Check size={17} />Đã xác nhận</> : "Xác nhận tham gia"}</button><button className="secondary-button">Xem chi tiết</button></div></article></Panel><Panel title="Lịch sử phỏng vấn"><div className="simple-table interview-history"><div className="table-head"><span>Vị trí</span><span>Doanh nghiệp</span><span>Ngày phỏng vấn</span><span>Kết quả</span></div><div><strong>Frontend Intern</strong><span>KMS Technology</span><span>12/06/2026</span><Status tone="neutral">Không đạt</Status></div><div><strong>Software Engineer Intern</strong><span>Bosch Vietnam</span><span>04/05/2026</span><Status tone="success">Đạt vòng 1</Status></div></div></Panel></div><Panel title="Chuẩn bị phỏng vấn"><div className="preparation-list"><div><span>1</span><strong>Kiểm tra thiết bị và đường truyền</strong></div><div><span>2</span><strong>Chuẩn bị dự án Java/Spring Boot để trình bày</strong></div><div><span>3</span><strong>Tham gia trước giờ hẹn 10 phút</strong></div></div><button className="secondary-button full"><BookOpenText size={17} />Xem hướng dẫn từ UIT</button></Panel></div>;
+const activeInterviewStatuses = new Set(["PENDING_STUDENT_CONFIRMATION", "CONFIRMED", "RESCHEDULE_REQUESTED"]);
+const interviewStatusCopy = {
+  PENDING_STUDENT_CONFIRMATION: ["Cần xác nhận", "urgent"],
+  CONFIRMED: ["Đã xác nhận", "success"],
+  RESCHEDULE_REQUESTED: ["Đang đổi lịch", "warning"],
+  CANCELLED: ["Đã hủy", "urgent"],
+  COMPLETED: ["Đã hoàn tất", "neutral"],
+  NO_SHOW: ["Vắng mặt", "urgent"],
+};
+const interviewModeCopy = { ONLINE: "Trực tuyến", ONSITE: "Tại văn phòng", PHONE: "Điện thoại" };
+
+function interviewTiming(value) {
+  const date = new Date(value);
+  return {
+    day: new Intl.DateTimeFormat("vi-VN", { day: "2-digit" }).format(date),
+    month: `THÁNG ${new Intl.DateTimeFormat("vi-VN", { month: "2-digit" }).format(date)}`,
+    time: new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit" }).format(date),
+    date: new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(date),
+  };
+}
+
+function isUpcomingInterview(interview) {
+  return activeInterviewStatuses.has(interview.status) && new Date(interview.scheduledAt).getTime() >= Date.now();
+}
+
+function interviewPlace(interview) {
+  if (interview.mode === "ONLINE") return interview.meetingUrl ? "Liên kết họp trực tuyến" : "Trực tuyến";
+  if (interview.mode === "PHONE") return "Phỏng vấn qua điện thoại";
+  return interview.location || "Doanh nghiệp sẽ cập nhật địa điểm";
+}
+
+function InterviewCancelModal({ interview, busy, error, onClose, onSubmit }) {
+  const [note, setNote] = useState("");
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={onClose} disabled={busy}><X /></button><span className="modal-icon danger"><Warning /></span><h2>Hủy tham gia phỏng vấn</h2><p>Đơn ứng tuyển <strong>{interview.job.title}</strong> sẽ được chuyển sang trạng thái đã rút. Lý do được gửi đến doanh nghiệp và lưu trong lịch sử.</p><div className="modal-form"><label><span>Lý do hủy *</span><textarea autoFocus value={note} onChange={event => setNote(event.target.value)} maxLength={2000} placeholder="Ví dụ: Tôi đã nhận một cơ hội khác và không thể tham gia lịch phỏng vấn này." /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Quay lại</button><button className="primary-button danger-fill" disabled={busy || note.trim().length < 5} onClick={() => onSubmit(note.trim())}>{busy ? <><CircleNotch className="spin" />Đang xử lý</> : "Xác nhận hủy"}</button></div></div></div>;
+}
+
+function LiveInterviewsScreen() {
+  const { authorizedRequest } = useAuth();
+  const [interviews, setInterviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [busyId, setBusyId] = useState("");
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError("");
+    authorizedRequest("/students/me/interviews?page=1&pageSize=100&scope=all")
+      .then(response => { if (!ignore) setInterviews(response.data); })
+      .catch(requestError => { if (!ignore) setError(getApiError(requestError)); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [authorizedRequest, refreshKey]);
+
+  const upcoming = interviews.filter(isUpcomingInterview);
+  const history = interviews.filter(interview => !isUpcomingInterview(interview));
+
+  const confirm = async interview => {
+    setBusyId(interview.id);
+    setError("");
+    setMessage("");
+    try {
+      const response = await authorizedRequest(`/students/me/interviews/${interview.id}/confirm`, { method: "POST" });
+      setInterviews(items => items.map(item => item.id === interview.id ? response.data : item));
+      setMessage("Đã xác nhận tham gia phỏng vấn. Doanh nghiệp đã nhận được thông báo.");
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const cancel = async note => {
+    const interview = cancelTarget;
+    setBusyId(interview.id);
+    setError("");
+    try {
+      await authorizedRequest(`/applications/${interview.applicationId}/cancel-interview`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ reasonCode: "STUDENT_CANCELLED_INTERVIEW", note }),
+      });
+      setCancelTarget(null);
+      setMessage("Đã hủy tham gia và ghi nhận lý do trong lịch sử đơn ứng tuyển.");
+      setRefreshKey(value => value + 1);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  if (loading) return <div className="portal-loading"><CircleNotch className="spin" />Đang tải lịch phỏng vấn...</div>;
+  return <><>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}</>{error && !cancelTarget && <p className="review-error"><Warning />{error}</p>}<div className="portal-two-column wide-left"><div><Panel title={`Sắp tới (${upcoming.length})`}><div className="live-interview-list">{upcoming.length === 0 ? <EmptyHint icon={CalendarBlank} title="Chưa có lịch sắp tới" text="Lời mời mới từ doanh nghiệp sẽ xuất hiện tại đây." /> : upcoming.map(interview => { const timing = interviewTiming(interview.scheduledAt); const status = interviewStatusCopy[interview.status] || [interview.status, "neutral"]; const busy = busyId === interview.id; return <article className="interview-card" key={interview.id}><div className="calendar-tile"><strong>{timing.day}</strong><small>{timing.month}</small></div><div className="interview-main"><Status tone={status[1]}>{status[0]}</Status><h2>Phỏng vấn {interview.job.title}</h2><p>{interview.job.company.name} · {interviewModeCopy[interview.mode] || interview.mode}</p><div><span><Clock size={18} />{timing.time} · {timing.date}</span><span><MapPin size={18} />{interviewPlace(interview)}</span><span><User size={18} />{interview.interviewerName || "Nhà tuyển dụng"}</span></div></div><div className="interview-actions">{interview.status === "PENDING_STUDENT_CONFIRMATION" ? <button className="primary-button" disabled={busy} onClick={() => void confirm(interview)}>{busy ? <CircleNotch className="spin" /> : <Check size={17} />}Xác nhận tham gia</button> : interview.meetingUrl ? <a className="primary-button" href={interview.meetingUrl} target="_blank" rel="noreferrer"><ArrowRight size={17} />Mở liên kết họp</a> : <button className="primary-button" disabled><Check size={17} />Đã xác nhận</button>}<button className="secondary-button" disabled={busy} onClick={() => { setError(""); setCancelTarget(interview); }}>Không thể tham gia</button></div></article>; })}</div></Panel><Panel title="Lịch sử phỏng vấn"><div className="simple-table interview-history"><div className="table-head"><span>Vị trí</span><span>Doanh nghiệp</span><span>Ngày phỏng vấn</span><span>Kết quả</span></div>{history.length === 0 ? <EmptyHint icon={CalendarCheck} title="Chưa có lịch sử" text="Các lịch đã hoàn tất hoặc bị hủy sẽ được lưu tại đây." /> : history.map(interview => { const result = interview.recruitmentResult?.outcome === "PASS" ? ["Đạt", "success"] : interview.recruitmentResult?.outcome === "FAIL" ? ["Không đạt", "neutral"] : interview.status === "CANCELLED" ? ["Đã hủy", "urgent"] : [interviewStatusCopy[interview.status]?.[0] || "Chờ kết quả", "neutral"]; return <div key={interview.id}><strong>{interview.job.title}</strong><span>{interview.job.company.name}</span><span>{interviewTiming(interview.scheduledAt).date}</span><Status tone={result[1]}>{result[0]}</Status></div>; })}</div></Panel></div><Panel title="Chuẩn bị phỏng vấn"><div className="preparation-list"><div><span>1</span><strong>Kiểm tra thiết bị, đường truyền hoặc tuyến đường đến địa điểm</strong></div><div><span>2</span><strong>Đọc lại mô tả công việc và chuẩn bị dự án nổi bật để trình bày</strong></div><div><span>3</span><strong>Tham gia trước giờ hẹn 10 phút và dùng đúng email UIT</strong></div></div><button className="secondary-button full"><BookOpenText size={17} />Xem hướng dẫn từ UIT</button></Panel></div>{cancelTarget && <InterviewCancelModal interview={cancelTarget} busy={busyId === cancelTarget.id} error={error} onClose={() => { if (!busyId) { setCancelTarget(null); setError(""); } }} onSubmit={note => void cancel(note)} />}</>;
 }
 
 function StudentNotifications({ navigate }) {
@@ -589,10 +683,14 @@ export function CompanyPortal({ route, navigate, navigationPayload, user, onLogo
     "company-notifications": ["Thông báo", "Các cập nhật từ UIT, ứng viên và hệ thống."],
   };
   const [title,description]=titles[route]||titles['company-dashboard'];
-  const action=route==='company-jobs'?<button className="primary-button" onClick={()=>setModal('job')}><Plus/>Tạo tin tuyển dụng</button>:route==='company-interviews'?<button className="primary-button" onClick={()=>setModal('interview')}><Plus/>Tạo lịch phỏng vấn</button>:null;
-  return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
-    {route==='company-dashboard'&&<LiveCompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfileManagement/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
-    {modal?.type==='job'&&<JobPostModal job={modal.job} close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='job'&&<JobPostModal close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>}
+  const pageAction = route === 'company-interviews'
+    ? <button className="primary-button" onClick={() => navigate('company-candidates')}><Users />Mở danh sách ứng viên</button>
+    : undefined;
+  const action = route === 'company-jobs' ? <button className="primary-button" onClick={() => setModal('job')}><Plus />Tạo tin tuyển dụng</button> : null;
+  return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={pageAction || action} user={user} onLogout={onLogout}>
+    {route==='company-dashboard'&&<LiveCompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfileManagement/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<LiveCompanyInterviews navigate={navigate}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
+    {modal?.type === 'job' && <JobPostModal job={modal.job} close={() => setModal(null)} onComplete={() => { setJobsVersion(value => value + 1); setModal(null); }} />}
+    {modal === 'job' && <JobPostModal close={() => setModal(null)} onComplete={() => { setJobsVersion(value => value + 1); setModal(null); }} />}
   </WorkspaceShell>;
 }
 
@@ -937,16 +1035,36 @@ function CompanyCandidates({ targetApplicationId = null }) {
   );
 }
 
-function CompanyInterviews({onCreate}){
-  const [results,setResults]=useState({});
-  return <div className="portal-two-column wide-left"><Panel title="Lịch tuần này"><div className="interview-agenda">{[["07","08","09:30","Nguyễn Minh Khoa","Backend Intern","Google Meet"],["08","08","14:00","Trần Khánh Linh","Product Intern","VNG Campus"],["09","08","10:15","Võ Minh Anh","Backend Intern","Google Meet"]].map((row,index)=><article key={row[3]}><div className="agenda-date"><strong>{row[0]}</strong><small>THÁNG {row[1]}</small></div><time>{row[2]}</time><div><strong>{row[3]}</strong><small>{row[4]} · {row[5]}</small></div><Status tone={index===0?'info':'neutral'}>{index===0?'Đã xác nhận':'Đã gửi lời mời'}</Status><button><DotsThree/></button></article>)}</div></Panel><div><Panel title="Kết quả cần cập nhật"><div className="result-list">{[[1,"Phạm Gia Huy","Product Intern","02/08/2026"],[2,"Lê Thành Đạt","Backend Intern","03/08/2026"]].map(row=><div key={row[0]}><span className="candidate-initials">{row[1].split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><strong>{row[1]}</strong><small>{row[2]} · {row[3]}</small></div>{results[row[0]]?<Status tone={results[row[0]]==='Đạt'?'success':'neutral'}>{results[row[0]]}</Status>:<div className="result-buttons"><button onClick={()=>setResults({...results,[row[0]]:'Không đạt'})}>Không đạt</button><button onClick={()=>setResults({...results,[row[0]]:'Đạt'})}>Đạt</button></div>}</div>)}</div></Panel><button className="primary-button full" onClick={onCreate}><Plus/>Tạo lịch phỏng vấn</button></div></div>;
+function LiveCompanyInterviews({ navigate }) {
+  const { authorizedRequest } = useAuth();
+  const [interviews, setInterviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError("");
+    authorizedRequest("/companies/me/interviews?page=1&pageSize=100&scope=all")
+      .then(response => { if (!ignore) setInterviews(response.data); })
+      .catch(requestError => { if (!ignore) setError(getApiError(requestError)); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [authorizedRequest, refreshKey]);
+
+  const upcoming = interviews.filter(isUpcomingInterview);
+  const awaitingResults = interviews.filter(interview => (
+    interview.applicationStatus === "INTERVIEW_INVITED"
+    && !interview.recruitmentResult
+    && interview.status !== "CANCELLED"
+    && new Date(interview.scheduledAt).getTime() < Date.now()
+  ));
+
+  if (loading) return <div className="portal-loading"><CircleNotch className="spin" />Đang tải lịch phỏng vấn...</div>;
+  return <><div className="portal-toolbar"><span className="panel-count">{interviews.length} lịch phỏng vấn</span><button className="secondary-button" onClick={() => setRefreshKey(value => value + 1)}><ListBullets />Làm mới</button></div>{error && <p className="review-error"><Warning />{error}</p>}<div className="portal-two-column wide-left"><Panel title={`Lịch sắp tới (${upcoming.length})`}><div className="interview-agenda">{upcoming.length === 0 ? <EmptyHint icon={CalendarBlank} title="Chưa có lịch sắp tới" text="Mở bảng ứng viên để tạo lịch từ hồ sơ đang sàng lọc." /> : upcoming.map(interview => { const timing = interviewTiming(interview.scheduledAt); const status = interviewStatusCopy[interview.status] || [interview.status, "neutral"]; return <article key={interview.id}><div className="agenda-date"><strong>{timing.day}</strong><small>{timing.month}</small></div><time>{timing.time}</time><div><strong>{interview.student.fullName}</strong><small>{interview.job.title} · {interviewPlace(interview)}</small></div><Status tone={status[1]}>{status[0]}</Status><button className="agenda-action" aria-label={`Mở hồ sơ ${interview.student.fullName}`} onClick={() => navigate("company-candidates", { notification: { resourceId: interview.applicationId } })}><ArrowRight /></button></article>; })}</div></Panel><div><Panel title={`Kết quả cần cập nhật (${awaitingResults.length})`}><div className="result-list">{awaitingResults.length === 0 ? <EmptyHint icon={CheckCircle} title="Không có kết quả tồn" text="Các buổi đã qua cần xử lý sẽ xuất hiện tại đây." /> : awaitingResults.map(interview => <div key={interview.id}><span className="candidate-initials">{userInitials(interview.student.fullName)}</span><div><strong>{interview.student.fullName}</strong><small>{interview.job.title} · {interviewTiming(interview.scheduledAt).date}</small></div><button className="secondary-button small" onClick={() => navigate("company-candidates", { notification: { resourceId: interview.applicationId } })}>Cập nhật</button></div>)}</div></Panel><button className="primary-button full" onClick={() => navigate("company-candidates")}><Users />Tạo lịch từ hồ sơ ứng viên</button></div></div></>;
 }
 
 function CompanyNotifications({ navigate }){
   return <NotificationInbox role="company" onOpen={(notification, destination) => navigate(destination, { notification })} />;
-}
-
-function SimpleCreateModal({type,close}){
-  const [done,setDone]=useState(false); const isJob=type==='job';
-  return <div className="modal-backdrop"><div className="modal portal-modal large"><button className="modal-close" onClick={close}><X/></button>{done?<div className="modal-success"><CheckCircle size={52} weight="fill"/><h2>{isJob?'Đã gửi tin đến UIT':'Đã gửi lời mời phỏng vấn'}</h2><p>{isJob?'Tin đang ở trạng thái chờ UIT kiểm duyệt.':'Ứng viên đã nhận được email và thông báo hệ thống.'}</p><button className="primary-button full" onClick={close}>Hoàn tất</button></div>:<><span className="modal-icon">{isJob?<Briefcase/>:<CalendarCheck/>}</span><h2>{isJob?'Tạo tin tuyển dụng':'Tạo lịch phỏng vấn'}</h2><p>{isJob?'Điền thông tin chính. UIT sẽ kiểm tra trước khi công khai.':'Chọn ứng viên và lịch hẹn phù hợp.'}</p><div className="modal-form two-cols">{isJob?<><label className="full"><span>Tên vị trí</span><input defaultValue="Mobile Developer Intern"/></label><label><span>Loại hình</span><select><option>Thực tập</option><option>Toàn thời gian</option></select></label><label><span>Hạn ứng tuyển</span><input type="date" defaultValue="2026-08-30"/></label><label className="full"><span>Nhóm ngành</span><input defaultValue="Kỹ thuật phần mềm, Khoa học máy tính"/></label><label className="full"><span>Mô tả ngắn</span><textarea defaultValue="Tham gia phát triển ứng dụng di động và làm việc cùng đội ngũ sản phẩm."/></label></>:<><label className="full"><span>Ứng viên</span><select><option>Nguyễn Minh Khoa · Backend Intern</option><option>Lê Thành Đạt · Backend Intern</option></select></label><label><span>Ngày</span><input type="date" defaultValue="2026-08-10"/></label><label><span>Giờ</span><input type="time" defaultValue="09:30"/></label><label className="full"><span>Hình thức / đường dẫn</span><input defaultValue="Google Meet · https://meet.google.com/..."/></label></>}</div><div className="modal-actions"><button className="secondary-button" onClick={close}>Hủy</button><button className="primary-button" onClick={()=>setDone(true)}><PaperPlaneTilt/>{isJob?'Gửi UIT kiểm duyệt':'Gửi lời mời'}</button></div></>}</div></div>;
 }

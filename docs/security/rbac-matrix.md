@@ -56,3 +56,9 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 - Access token đã cấp có hiệu lực tối đa 15 phút. Đăng xuất hoặc khóa tài khoản thu hồi refresh token, nhưng access token hiện tại chỉ hết hiệu lực khi tới hạn; phương án deny-list hoặc kiểm tra trạng thái người dùng trên từng request để dành cho giai đoạn hardening production.
 - Rate limit hiện tập trung vào đăng nhập, refresh và kích hoạt. Rate limit theo người dùng/IP cho API nghiệp vụ sẽ được bổ sung khi triển khai production.
 - Phân quyền chi tiết theo từng chức danh trong phòng UIT hoặc nhiều recruiter của doanh nghiệp chưa thuộc MVP; hiện các tài khoản cùng vai trò có cùng tập quyền trong phạm vi tổ chức của mình.
+
+## Quyền đối với lịch phỏng vấn
+
+- `STUDENT` được gọi `GET /students/me/interviews` và `POST /students/me/interviews/{id}/confirm`; repository luôn lọc theo `studentProfileId`.
+- `COMPANY` được gọi `GET /companies/me/interviews`; truy vấn luôn lọc theo `companyId` của access token.
+- Truy cập lịch của chủ thể khác trả `404`; các vai trò không đúng bị middleware trả `403`.
