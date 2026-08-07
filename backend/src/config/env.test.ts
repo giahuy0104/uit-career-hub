@@ -12,6 +12,7 @@ describe("parseEnvironment", () => {
     expect(result.databaseUrlDirect).toBeUndefined();
     expect(result.databasePoolMax).toBe(10);
     expect(result.allowDemoReset).toBe(false);
+    expect(result.cronSecret).toBeUndefined();
   });
 
   it("should_accept_a_small_serverless_database_pool", () => {
@@ -31,6 +32,19 @@ describe("parseEnvironment", () => {
     });
 
     expect(result.allowDemoReset).toBe(true);
+  });
+
+  it("should_accept_a_cron_secret_with_at_least_32_characters", () => {
+    const result = parseEnvironment({
+      NODE_ENV: "test",
+      CRON_SECRET: "daily-cron-secret-with-at-least-32-characters",
+    });
+
+    expect(result.cronSecret).toBe("daily-cron-secret-with-at-least-32-characters");
+  });
+
+  it("should_reject_a_short_cron_secret", () => {
+    expect(() => parseEnvironment({ NODE_ENV: "test", CRON_SECRET: "too-short" })).toThrow();
   });
 
   it("should_accept_neon_urls_when_ssl_is_required", () => {

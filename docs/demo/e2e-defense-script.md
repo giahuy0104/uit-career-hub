@@ -98,7 +98,8 @@ Kết quả mong đợi trong cùng một transaction:
 ### 7:45–9:00 — Tổng kết
 
 - Nhắc lại kiểm soát quyền theo vai trò và ownership ở backend.
-- Thông báo trong hệ thống thuộc MVP; email/FCM, cron job và retry thuộc Phase 2.
+- Thông báo trong hệ thống thuộc MVP; cron tổng hợp hằng ngày đã được hiện thực ở Phase 2,
+  còn email/FCM và retry nâng cao là phần phát triển tiếp theo.
 - Hướng phát triển: thêm trường khác bằng cấu hình tenant, không thay đổi lõi quy trình.
 
 ## 5. Phương án dự phòng

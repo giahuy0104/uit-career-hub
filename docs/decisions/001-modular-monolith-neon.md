@@ -36,4 +36,6 @@ Kiến trúc Spring Boot microservices, Kafka, Redis, Keycloak và Kubernetes tr
 
 ## Không làm trong MVP
 
-Kafka, Redis, WebSocket, email/FCM, Cron/Scheduler, Keycloak, Kubernetes, Kong, đa trường và AI. Các mục này chỉ được xem xét sau khi happy flow và kiểm thử nghiệp vụ ổn định.
+Cron tổng hợp hằng ngày được bổ sung sau khi happy flow và kiểm thử nghiệp vụ đã ổn định.
+Kafka, Redis, WebSocket, email/FCM, scheduler nhiều tần suất, Keycloak, Kubernetes, Kong,
+đa trường và AI tiếp tục được hoãn sang các lát cắt sau.
