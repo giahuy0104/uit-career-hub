@@ -16,6 +16,11 @@ const optionalSecret = z.preprocess(
   z.string().min(32).optional(),
 );
 
+const optionalString = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
+
 const optionalBoolean = z.preprocess((value) => {
   if (value === undefined || value === "") return undefined;
   if (typeof value === "boolean") return value;
@@ -44,6 +49,18 @@ const environmentSchema = z.object({
   UIT_EMAIL_DOMAINS: z.string().min(1).default("student.uit.edu.vn,uit.edu.vn"),
   ALLOW_DEMO_RESET: optionalBoolean.default(false),
   CRON_SECRET: optionalSecret,
+  EMAIL_ENABLED: optionalBoolean.default(false),
+  RESEND_API_KEY: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().startsWith("re_", "RESEND_API_KEY phải bắt đầu bằng re_.").optional(),
+  ),
+  EMAIL_FROM: optionalString,
+  PUBLIC_APP_URL: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().url().optional(),
+  ),
+  EMAIL_BATCH_SIZE: z.coerce.number().int().min(1).max(50).default(10),
+  EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
 });
 
 function assertPostgresUrl(value: string, key: string) {
@@ -90,6 +107,10 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     throw new Error("UIT_EMAIL_DOMAINS phải có ít nhất một tên miền.");
   }
 
+  if (parsed.EMAIL_ENABLED && (!parsed.RESEND_API_KEY || !parsed.EMAIL_FROM)) {
+    throw new Error("EMAIL_ENABLED=true yêu cầu RESEND_API_KEY và EMAIL_FROM.");
+  }
+
   assertPostgresUrl(parsed.DATABASE_URL, "DATABASE_URL");
   if (parsed.DATABASE_URL_DIRECT) {
     assertPostgresUrl(parsed.DATABASE_URL_DIRECT, "DATABASE_URL_DIRECT");
@@ -117,6 +138,12 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     uitEmailDomains,
     allowDemoReset: parsed.ALLOW_DEMO_RESET,
     cronSecret: parsed.CRON_SECRET,
+    emailEnabled: parsed.EMAIL_ENABLED,
+    resendApiKey: parsed.RESEND_API_KEY,
+    emailFrom: parsed.EMAIL_FROM,
+    publicAppUrl: parsed.PUBLIC_APP_URL ?? parsed.CORS_ORIGIN,
+    emailBatchSize: parsed.EMAIL_BATCH_SIZE,
+    emailMaxAttempts: parsed.EMAIL_MAX_ATTEMPTS,
   } as const;
 }
 

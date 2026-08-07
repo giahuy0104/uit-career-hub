@@ -154,6 +154,7 @@ describeWithDatabase("daily pending summaries", () => {
     const fixture = await createFixture();
     const first = await service.run(testNow);
 
+    expect(first.emailDelivery).toEqual({ enabled: false, claimed: 0, sent: 0, failed: 0 });
     expect(first.summaryDate).toBe(testSummaryDate);
     expect(first.uitPendingCount).toBeGreaterThanOrEqual(1);
     expect(first.companyPendingCount).toBeGreaterThanOrEqual(3);

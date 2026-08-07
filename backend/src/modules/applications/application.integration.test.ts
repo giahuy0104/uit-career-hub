@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../../app.js";
 import { env } from "../../config/env.js";
@@ -9,6 +9,7 @@ import { runMigrations } from "../../db/migrate.js";
 import { createDatabasePool } from "../../db/pool.js";
 import type { AuthUser, UserRole } from "../auth/auth.types.js";
 import { TokenService } from "../auth/token.service.js";
+import type { EmailDeliveryService } from "../email/email-delivery.service.js";
 
 const { Client } = pg;
 const describeWithDatabase = env.databaseUrlTest ? describe : describe.skip;
@@ -20,12 +21,14 @@ describeWithDatabase("student job application flow", () => {
     application_name: "uit-career-hub-application-flow-test",
   });
   const tokenService = new TokenService();
+  const dispatchPending = vi.fn(async () => ({ enabled: true, claimed: 1, sent: 1, failed: 0 }));
   const app = createApp({
     database,
     authDatabase: database,
     jobDatabase: database,
     applicationDatabase: database,
     tokenService,
+    emailDeliveryService: { dispatchPending } as unknown as EmailDeliveryService,
   });
   const userIds: string[] = [];
   const companyIds: string[] = [];
@@ -37,6 +40,7 @@ describeWithDatabase("student job application flow", () => {
   });
 
   afterEach(async () => {
+    dispatchPending.mockClear();
     if (!userIds.length) return;
     await client.query("DELETE FROM notifications WHERE recipient_user_id = ANY($1::uuid[])", [userIds]);
     await client.query(
@@ -372,6 +376,8 @@ describeWithDatabase("student job application flow", () => {
     const created = await submit(student.token, jobId, [student.cvId, student.transcriptId], commandId);
     expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({ status: "UIT_REVIEWING", version: 1 });
+    expect(dispatchPending).toHaveBeenCalledOnce();
+    expect(dispatchPending).toHaveBeenCalledWith(created.body.data.id);
     expect(created.body.data.documents).toHaveLength(2);
     expect(created.body.data.timeline).toHaveLength(1);
 
@@ -731,6 +737,7 @@ describeWithDatabase("student job application flow", () => {
     const created = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
     const applicationId = created.body.data.id as string;
     const commandId = randomUUID();
+    dispatchPending.mockClear();
 
     const forwarded = await request(app)
       .post(`/api/v1/uit/applications/${applicationId}/forward`)
@@ -738,6 +745,8 @@ describeWithDatabase("student job application flow", () => {
       .set("Idempotency-Key", commandId);
     expect(forwarded.status).toBe(200);
     expect(forwarded.body.data).toMatchObject({ status: "FORWARDED_TO_COMPANY", version: 2 });
+    expect(dispatchPending).toHaveBeenCalledOnce();
+    expect(dispatchPending).toHaveBeenCalledWith(applicationId);
 
     const companyNotification = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM notifications

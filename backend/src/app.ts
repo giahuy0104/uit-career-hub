@@ -15,6 +15,9 @@ import { TokenService } from "./modules/auth/token.service.js";
 import { ApplicationRepository, type ApplicationDatabase } from "./modules/applications/application.repository.js";
 import { createApplicationRouter } from "./modules/applications/application.routes.js";
 import { ApplicationService } from "./modules/applications/application.service.js";
+import { EmailDeliveryRepository, type EmailDeliveryDatabase } from "./modules/email/email-delivery.repository.js";
+import { EmailDeliveryService } from "./modules/email/email-delivery.service.js";
+import { ResendEmailProvider } from "./modules/email/resend-email.provider.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { JobRepository, type JobDatabase } from "./modules/jobs/job.repository.js";
 import { createJobRouter } from "./modules/jobs/job.routes.js";
@@ -38,6 +41,8 @@ type AppDependencies = {
   applicationService?: ApplicationService;
   notificationDatabase?: NotificationDatabase;
   notificationService?: NotificationService;
+  emailDeliveryDatabase?: EmailDeliveryDatabase;
+  emailDeliveryService?: EmailDeliveryService;
   dailyPendingDatabase?: DailyPendingDatabase;
   dailyPendingService?: DailyPendingService;
   cronSecret?: string;
@@ -67,10 +72,26 @@ export function createApp(dependencies: AppDependencies = {}) {
   const jobService =
     dependencies.jobService ??
     new JobService(new JobRepository(dependencies.jobDatabase ?? databasePool));
+  const emailDeliveryService =
+    dependencies.emailDeliveryService ??
+    new EmailDeliveryService(
+      new EmailDeliveryRepository(
+        dependencies.emailDeliveryDatabase ?? dependencies.database ?? databasePool,
+      ),
+      env.emailEnabled
+        ? new ResendEmailProvider(env.resendApiKey!, env.emailFrom!)
+        : null,
+      {
+        appBaseUrl: env.publicAppUrl,
+        batchSize: env.emailBatchSize,
+        maxAttempts: env.emailMaxAttempts,
+      },
+    );
   const applicationService =
     dependencies.applicationService ??
     new ApplicationService(
       new ApplicationRepository(dependencies.applicationDatabase ?? databasePool),
+      emailDeliveryService,
     );
   const notificationService =
     dependencies.notificationService ??
@@ -81,6 +102,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     dependencies.dailyPendingService ??
     new DailyPendingService(
       new DailyPendingRepository(dependencies.dailyPendingDatabase ?? databasePool),
+      emailDeliveryService,
     );
 
   app.get("/api", (_request, response) => {

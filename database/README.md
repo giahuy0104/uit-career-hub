@@ -8,13 +8,18 @@ PostgreSQL schema được quản lý bằng SQL migration; không sửa trực 
 database/
 ├── migrations/
 │   ├── 0001_initial_mvp_schema.sql
-│   └── 0002_authentication_rbac.sql
+│   ├── ...
+│   └── 0010_email_delivery_outbox.sql
 └── seeds/
     ├── development.sql
     └── demo-reset.sql
 ```
 
 Migration runner lưu version, checksum và thời gian áp dụng trong `schema_migrations`. File migration đã áp dụng không được chỉnh sửa; hãy tạo version mới.
+
+Migration `0010` tạo transactional outbox `email_deliveries`. Chỉ các notification thuộc phạm vi
+email hiện tại được trigger enqueue; dữ liệu notification cũ không được backfill để tránh gửi email
+lịch sử ngoài ý muốn khi bật provider lần đầu.
 
 ## Lệnh
 
