@@ -369,6 +369,50 @@ describeWithDatabase("student job application flow", () => {
     expect(hidden.status).toBe(404);
   });
 
+  it("updates the student phone and selects only a verified CV as default", async () => {
+    const { student } = await createScenario();
+    const replacementCvId = randomUUID();
+    await client.query(
+      `INSERT INTO student_documents
+       (id, student_profile_id, document_type, file_name, mime_type, file_size_bytes,
+        storage_key, version, is_default, verification_status)
+       VALUES ($1, $2, 'CV', 'cv-v2.pdf', 'application/pdf', 4096, $3, 2, false, 'VERIFIED')`,
+      [replacementCvId, student.studentProfileId, `test/${replacementCvId}`],
+    );
+
+    const updatedProfile = await request(app)
+      .patch("/api/v1/students/me")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({ phone: "+84 912 345 678" });
+    expect(updatedProfile.status).toBe(200);
+    expect(updatedProfile.body.data.phone).toBe("+84 912 345 678");
+
+    const selected = await request(app)
+      .post(`/api/v1/students/me/documents/${replacementCvId}/default`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(selected.status).toBe(200);
+    expect(selected.body.data.filter((document: { isDefault: boolean }) => document.isDefault)).toEqual([
+      expect.objectContaining({ id: replacementCvId, documentType: "CV" }),
+    ]);
+
+    const invalidType = await request(app)
+      .post(`/api/v1/students/me/documents/${student.transcriptId}/default`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(invalidType.status).toBe(409);
+    expect(invalidType.body.error.code).toBe("STUDENT_DOCUMENT_NOT_CV");
+
+    const audits = await client.query<{ action: string }>(
+      `SELECT action FROM audit_logs
+       WHERE actor_user_id = $1 AND action IN ('STUDENT_PROFILE_UPDATED', 'STUDENT_DEFAULT_CV_CHANGED')
+       ORDER BY created_at`,
+      [student.id],
+    );
+    expect(audits.rows.map((row) => row.action)).toEqual([
+      "STUDENT_PROFILE_UPDATED",
+      "STUDENT_DEFAULT_CV_CHANGED",
+    ]);
+  });
+
   it("submits a two-step application idempotently and notifies UIT", async () => {
     const { admin, jobId, student } = await createScenario();
     const commandId = randomUUID();

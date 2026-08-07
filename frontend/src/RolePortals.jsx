@@ -227,7 +227,6 @@ function EmptyHint({ icon: Icon = Info, title, text }) {
 }
 
 export function StudentExtraScreen({ route, navigate, user, onLogout }) {
-  const [profilePercent, setProfilePercent] = useState(85);
   const titles = {
     dashboard: ["Tổng quan", "Thông tin quan trọng và bước tiếp theo trong hành trình nghề nghiệp của bạn."],
     companies: ["Doanh nghiệp đối tác", "Khám phá các doanh nghiệp đã được UIT xác thực và đang hợp tác tuyển dụng."],
@@ -240,7 +239,7 @@ export function StudentExtraScreen({ route, navigate, user, onLogout }) {
     <WorkspaceShell role="student" route={route} navigate={navigate} title={title} description={description} user={user} onLogout={onLogout} actions={route === "dashboard" ? <button className="primary-button" onClick={() => navigate("jobs")}><MagnifyingGlass size={18} />Tìm việc ngay</button> : null}>
       {route === "dashboard" && <LiveStudentDashboard navigate={navigate} />}
       {route === "companies" && <CompaniesScreen />}
-      {route === "profile" && <ProfileScreen percent={profilePercent} setPercent={setProfilePercent} />}
+      {route === "profile" && <ProfileScreen />}
       {route === "interviews" && <LiveInterviewsScreen />}
       {route === "notifications" && <StudentNotifications navigate={navigate} />}
     </WorkspaceShell>
@@ -277,9 +276,122 @@ function CompaniesScreen() {
   return <><div className="portal-toolbar"><label className="portal-search"><MagnifyingGlass size={19} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm tên hoặc lĩnh vực doanh nghiệp" /></label><button className="secondary-button"><FunnelSimple size={18} />Lĩnh vực</button><button className="secondary-button"><MapPin size={18} />Địa điểm</button></div><div className="company-card-grid">{companies.map(([mark, name, field, jobs, location, tone]) => <article key={name} className="company-card"><div className={`company-logo ${tone.toLowerCase()}`}>{mark}</div><Status tone="success"><SealCheck size={14} weight="fill" /> Đối tác UIT</Status><h2>{name}</h2><p>{field}</p><div><span><Briefcase size={17} />{jobs} đang tuyển</span><span><MapPin size={17} />{location}</span></div><button className="secondary-button">Xem doanh nghiệp <ArrowRight size={16} /></button></article>)}</div></>;
 }
 
-function ProfileScreen({ percent, setPercent }) {
-  const [uploaded, setUploaded] = useState(false);
-  return <div className="profile-layout"><aside className="profile-summary-card"><div className="large-avatar">NK</div><h2>Nguyễn Minh Khoa</h2><p>20521067@student.uit.edu.vn</p><div className="profile-progress"><div><span style={{ width: `${uploaded ? 100 : percent}%` }} /></div><strong>{uploaded ? 100 : percent}% hoàn thiện</strong></div><ul><li className="done"><CheckCircle />Thông tin UIT</li><li className="done"><CheckCircle />CV ứng tuyển</li><li className={uploaded ? "done" : "current"}>{uploaded ? <CheckCircle /> : <Warning />}Bảng điểm</li><li className="done"><CheckCircle />Giấy xác nhận</li></ul></aside><div className="profile-content"><Panel title="Thông tin học tập" action={<button className="secondary-button small"><PencilSimple size={16} />Cập nhật bổ sung</button>}><div className="detail-grid"><div><small>Họ và tên</small><strong>Nguyễn Minh Khoa</strong></div><div><small>Mã số sinh viên</small><strong>20521067</strong></div><div><small>Khoa</small><strong>Công nghệ phần mềm</strong></div><div><small>Khóa</small><strong>2020</strong></div><div><small>GPA</small><strong>3.42 / 4.0</strong></div><div><small>Tình trạng</small><Status tone="success">Đang học</Status></div></div></Panel><Panel title="CV của tôi" action={<button className="primary-button small"><Plus size={16} />Thêm CV</button>}><div className="document-cards"><article><FileText size={28} /><div><strong>CV_Backend_NguyenMinhKhoa_2026.pdf</strong><small>Cập nhật 02/08/2026 · 412 KB</small></div><Status tone="info">Mặc định</Status><button><Eye size={18} /></button><button><DotsThree size={18} /></button></article><article><FileText size={28} /><div><strong>CV_NguyenMinhKhoa_2025.pdf</strong><small>Cập nhật 15/04/2025 · 398 KB</small></div><span /><button><Eye size={18} /></button><button><DotsThree size={18} /></button></article></div></Panel><Panel title="Tài liệu xác minh"><div className="document-cards"><article><CheckCircle size={27} className="green" /><div><strong>Giấy xác nhận sinh viên</strong><small>Còn hiệu lực đến 15/10/2026</small></div><Status tone="success">Đã xác minh</Status><button><Eye size={18} /></button></article><article><span className={uploaded ? "file-ok" : "file-missing"}>{uploaded ? <CheckCircle size={27} /> : <Warning size={27} />}</span><div><strong>Bảng điểm có xác nhận</strong><small>{uploaded ? "Đã tải lên 05/08/2026" : "Còn thiếu · bắt buộc khi ứng tuyển"}</small></div><Status tone={uploaded ? "success" : "urgent"}>{uploaded ? "Đã có" : "Cần bổ sung"}</Status><button className="upload-inline" onClick={() => { setUploaded(true); setPercent(100); }}>{uploaded ? "Thay đổi" : "Tải lên"}</button></article></div></Panel></div></div>;
+const profileDocumentCopy = {
+  CV: "CV ứng tuyển",
+  TRANSCRIPT: "Bảng điểm có xác nhận",
+  STUDENT_CONFIRMATION: "Giấy xác nhận sinh viên",
+  OTHER: "Tài liệu khác",
+};
+
+const documentVerificationCopy = {
+  VERIFIED: ["Đã xác minh", "success"],
+  PENDING: ["Chờ xác minh", "warning"],
+  REJECTED: ["Bị từ chối", "urgent"],
+};
+
+const academicStatusCopy = {
+  ACTIVE: ["Đang học", "success"],
+  SUSPENDED: ["Tạm đình chỉ", "warning"],
+  GRADUATED: ["Đã tốt nghiệp", "info"],
+  INACTIVE: ["Không hoạt động", "neutral"],
+};
+
+function formatDocumentSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ProfilePhoneModal({ profile, busy, error, onClose, onSave }) {
+  const [phone, setPhone] = useState(profile.phone || "");
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal profile-phone-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={onClose} disabled={busy}><X /></button><span className="modal-icon"><User /></span><h2>Cập nhật thông tin bổ sung</h2><p>Thông tin học tập do UIT quản lý. Sinh viên chỉ có thể bổ sung số điện thoại liên hệ ở giai đoạn hiện tại.</p><div className="modal-form"><label><span>Số điện thoại</span><input autoFocus value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} placeholder="Ví dụ: 0912 345 678" /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className="primary-button" onClick={() => onSave(phone.trim() || null)} disabled={busy}>{busy ? <><CircleNotch className="spin" />Đang lưu</> : "Lưu thay đổi"}</button></div></div></div>;
+}
+
+function ProfileDocumentCard({ document, busy, onSetDefault }) {
+  const verification = documentVerificationCopy[document.verificationStatus] || [document.verificationStatus, "neutral"];
+  const canSetDefault = document.documentType === "CV" && document.verificationStatus === "VERIFIED" && !document.isDefault;
+  return <article><FileText size={28} className={document.verificationStatus === "VERIFIED" ? "green" : ""} /><div><strong>{document.fileName}</strong><small>{profileDocumentCopy[document.documentType] || document.documentType} · Phiên bản {document.version} · {formatDocumentSize(document.fileSizeBytes)} · {formatSubmitted(document.createdAt)}</small></div>{document.isDefault ? <Status tone="info">Mặc định</Status> : <Status tone={verification[1]}>{verification[0]}</Status>}{canSetDefault ? <button className="document-default-button" disabled={busy} onClick={() => onSetDefault(document)}>{busy ? <CircleNotch className="spin" /> : <Check />}Đặt mặc định</button> : null}</article>;
+}
+
+function MissingProfileDocument({ type }) {
+  return <article className="missing-document"><Warning size={27} /><div><strong>{profileDocumentCopy[type]}</strong><small>Chưa có tài liệu trong hồ sơ</small></div><Status tone="urgent">Cần bổ sung</Status></article>;
+}
+
+function ProfileScreen() {
+  const { authorizedRequest } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [busyDocumentId, setBusyDocumentId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError("");
+    Promise.all([
+      authorizedRequest("/students/me"),
+      authorizedRequest("/students/me/documents"),
+    ])
+      .then(([profileResponse, documentResponse]) => {
+        if (!ignore) {
+          setProfile(profileResponse.data);
+          setDocuments(documentResponse.data);
+        }
+      })
+      .catch(requestError => { if (!ignore) setError(getApiError(requestError)); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [authorizedRequest, refreshKey]);
+
+  const verifiedTypes = new Set(documents.filter(document => document.verificationStatus === "VERIFIED").map(document => document.documentType));
+  const hasDefaultCv = documents.some(document => document.documentType === "CV" && document.isDefault && document.verificationStatus === "VERIFIED");
+  const completion = profile
+    ? 25 + (profile.phone ? 10 : 0) + (profile.gpa !== null ? 10 : 0) + (hasDefaultCv ? 30 : 0) + (verifiedTypes.has("TRANSCRIPT") ? 15 : 0) + (verifiedTypes.has("STUDENT_CONFIRMATION") ? 10 : 0)
+    : 0;
+  const cvDocuments = documents.filter(document => document.documentType === "CV");
+  const verificationDocuments = documents.filter(document => document.documentType !== "CV");
+  const academicStatus = academicStatusCopy[profile?.academicStatus] || [profile?.academicStatus || "—", "neutral"];
+
+  const savePhone = async phone => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await authorizedRequest("/students/me", {
+        method: "PATCH",
+        body: JSON.stringify({ phone }),
+      });
+      setProfile(response.data);
+      setEditing(false);
+      setMessage("Đã cập nhật số điện thoại và ghi nhận lịch sử thay đổi.");
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setDefaultCv = async document => {
+    setBusyDocumentId(document.id);
+    setError("");
+    setMessage("");
+    try {
+      const response = await authorizedRequest(`/students/me/documents/${document.id}/default`, { method: "POST" });
+      setDocuments(response.data);
+      setMessage(`Đã chọn “${document.fileName}” làm CV mặc định.`);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyDocumentId("");
+    }
+  };
+
+  if (loading) return <div className="portal-loading"><CircleNotch className="spin" />Đang tải hồ sơ sinh viên...</div>;
+  if (!profile) return <div className="portal-error"><Warning />{error || "Không tìm thấy hồ sơ sinh viên."}<button className="secondary-button small" onClick={() => setRefreshKey(value => value + 1)}>Thử lại</button></div>;
+  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{error && !editing && <p className="review-error"><Warning />{error}</p>}<div className="profile-layout"><aside className="profile-summary-card"><div className="large-avatar">{userInitials(profile.fullName)}</div><h2>{profile.fullName}</h2><p>{profile.email}</p><div className="profile-progress"><div><span style={{ width: `${completion}%` }} /></div><strong>{completion}% hoàn thiện</strong></div><ul><li className="done"><CheckCircle />Thông tin UIT</li><li className={profile.phone ? "done" : "current"}>{profile.phone ? <CheckCircle /> : <Warning />}Số điện thoại</li><li className={hasDefaultCv ? "done" : "current"}>{hasDefaultCv ? <CheckCircle /> : <Warning />}CV mặc định đã xác minh</li><li className={verifiedTypes.has("TRANSCRIPT") ? "done" : "current"}>{verifiedTypes.has("TRANSCRIPT") ? <CheckCircle /> : <Warning />}Bảng điểm</li><li className={verifiedTypes.has("STUDENT_CONFIRMATION") ? "done" : "current"}>{verifiedTypes.has("STUDENT_CONFIRMATION") ? <CheckCircle /> : <Warning />}Giấy xác nhận</li></ul></aside><div className="profile-content"><Panel title="Thông tin học tập" action={<button className="secondary-button small" onClick={() => { setError(""); setEditing(true); }}><PencilSimple size={16} />Cập nhật bổ sung</button>}><div className="detail-grid"><div><small>Họ và tên</small><strong>{profile.fullName}</strong></div><div><small>Mã số sinh viên</small><strong>{profile.studentCode}</strong></div><div><small>Khoa</small><strong>{profile.faculty}</strong></div><div><small>Ngành</small><strong>{profile.major}</strong></div><div><small>Khóa</small><strong>{profile.cohort}</strong></div><div><small>GPA</small><strong>{profile.gpa === null ? "Chưa cập nhật" : `${profile.gpa} / 4.0`}</strong></div><div><small>Số điện thoại</small><strong>{profile.phone || "Chưa bổ sung"}</strong></div><div><small>Email UIT</small><strong>{profile.email}</strong></div><div><small>Tình trạng</small><Status tone={academicStatus[1]}>{academicStatus[0]}</Status></div></div></Panel><Panel title={`CV của tôi (${cvDocuments.length})`} action={<button className="secondary-button small" disabled title="Cần tích hợp Object Storage trước khi mở chức năng tải tệp"><Plus size={16} />Thêm CV · phase sau</button>}><div className="document-cards">{cvDocuments.length ? cvDocuments.map(document => <ProfileDocumentCard key={document.id} document={document} busy={busyDocumentId === document.id} onSetDefault={item => void setDefaultCv(item)} />) : <EmptyHint icon={FileText} title="Chưa có CV" text="Chức năng tải tệp sẽ được mở sau khi tích hợp Object Storage." />}</div></Panel><Panel title="Tài liệu xác minh"><div className="document-cards">{verificationDocuments.map(document => <ProfileDocumentCard key={document.id} document={document} busy={false} onSetDefault={() => undefined} />)}{!documents.some(document => document.documentType === "TRANSCRIPT") && <MissingProfileDocument type="TRANSCRIPT" />}{!documents.some(document => document.documentType === "STUDENT_CONFIRMATION") && <MissingProfileDocument type="STUDENT_CONFIRMATION" />}</div><div className="profile-storage-note"><Database size={18} /><span><strong>Upload file chưa mở ở phase hiện tại</strong><small>Cần kết nối Object Storage và cơ chế URL ký trước; giao diện không giả lập việc tải tệp thành công.</small></span><button className="secondary-button small" onClick={() => setRefreshKey(value => value + 1)}><ListBullets />Tải lại dữ liệu</button></div></Panel></div></div>{editing && <ProfilePhoneModal profile={profile} busy={busy} error={error} onClose={() => { if (!busy) { setEditing(false); setError(""); } }} onSave={phone => void savePhone(phone)} />}</>;
 }
 
 const activeInterviewStatuses = new Set(["PENDING_STUDENT_CONFIRMATION", "CONFIRMED", "RESCHEDULE_REQUESTED"]);

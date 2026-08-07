@@ -19,6 +19,8 @@ import {
   interviewRequestSchema,
   placementConfirmationSchema,
   recruitmentResultSchema,
+  studentDocumentIdSchema,
+  studentProfileUpdateSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
 
@@ -46,8 +48,30 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.json({ data: await service.getStudentProfile(principal(request).studentProfileId) });
   });
 
+  router.patch("/students/me", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.updateStudentProfile(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentProfileUpdateSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
   router.get("/students/me/documents", studentOnly, async (request, response) => {
     response.json({ data: await service.listStudentDocuments(principal(request).studentProfileId) });
+  });
+
+  router.post("/students/me/documents/:documentId/default", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.setDefaultStudentCv(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentIdSchema.parse(request.params.documentId),
+        metadata(request),
+      ),
+    });
   });
 
   router.get("/students/me/interviews", studentOnly, async (request, response) => {

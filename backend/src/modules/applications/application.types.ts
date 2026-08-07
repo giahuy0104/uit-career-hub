@@ -123,6 +123,7 @@ export type StudentProfileDto = {
   major: string;
   cohort: string;
   gpa: number | null;
+  phone: string | null;
   academicStatus: string;
   email: string;
 };

@@ -17,8 +17,10 @@ type RestrictedEndpoint = { method: HttpMethod; path: string; role: UserRole };
 const resourceId = randomUUID();
 const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "get", path: "/api/v1/students/me", role: "STUDENT" },
+  { method: "patch", path: "/api/v1/students/me", role: "STUDENT" },
   { method: "get", path: "/api/v1/students/me/dashboard", role: "STUDENT" },
   { method: "get", path: "/api/v1/students/me/documents", role: "STUDENT" },
+  { method: "post", path: `/api/v1/students/me/documents/${resourceId}/default`, role: "STUDENT" },
   { method: "get", path: "/api/v1/students/me/interviews", role: "STUDENT" },
   { method: "post", path: `/api/v1/students/me/interviews/${resourceId}/confirm`, role: "STUDENT" },
   { method: "get", path: "/api/v1/applications", role: "STUDENT" },

@@ -305,8 +305,11 @@ export class ApplicationRepository {
     }
   }
 
-  async findStudentProfile(studentProfileId: string): Promise<StudentProfileDto | null> {
-    const result = await this.database.query<{
+  async findStudentProfile(
+    studentProfileId: string,
+    client: Pick<PoolClient, "query"> = this.database,
+  ): Promise<StudentProfileDto | null> {
+    const result = await client.query<{
       id: string;
       student_code: string;
       full_name: string;
@@ -314,11 +317,12 @@ export class ApplicationRepository {
       major: string;
       cohort: string;
       gpa: string | null;
+      phone: string | null;
       academic_status: string;
       email: string;
     }>(
       `SELECT sp.id, sp.student_code, sp.full_name, sp.faculty, sp.major, sp.cohort,
-              sp.gpa, sp.academic_status, u.email
+              sp.gpa, sp.phone, sp.academic_status, u.email
        FROM student_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.id = $1`,
       [studentProfileId],
     );
@@ -332,14 +336,18 @@ export class ApplicationRepository {
           major: row.major,
           cohort: row.cohort,
           gpa: row.gpa === null ? null : Number(row.gpa),
+          phone: row.phone,
           academicStatus: row.academic_status,
           email: row.email,
         }
       : null;
   }
 
-  async listStudentDocuments(studentProfileId: string): Promise<StudentDocumentDto[]> {
-    const result = await this.database.query<{
+  async listStudentDocuments(
+    studentProfileId: string,
+    client: Pick<PoolClient, "query"> = this.database,
+  ): Promise<StudentDocumentDto[]> {
+    const result = await client.query<{
       id: string;
       document_type: string;
       file_name: string;
@@ -367,6 +375,56 @@ export class ApplicationRepository {
       verificationStatus: row.verification_status,
       createdAt: row.created_at.toISOString(),
     }));
+  }
+
+  async updateStudentPhone(client: PoolClient, studentProfileId: string, phone: string | null) {
+    const result = await client.query(
+      `UPDATE student_profiles
+       SET phone = $2
+       WHERE id = $1
+       RETURNING id`,
+      [studentProfileId, phone],
+    );
+    return result.rowCount === 1;
+  }
+
+  async lockStudentDocument(client: PoolClient, studentProfileId: string, documentId: string) {
+    const result = await client.query<{
+      id: string;
+      document_type: string;
+      verification_status: string;
+      is_default: boolean;
+    }>(
+      `SELECT id, document_type, verification_status, is_default
+       FROM student_documents
+       WHERE id = $1 AND student_profile_id = $2
+       FOR UPDATE`,
+      [documentId, studentProfileId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          id: row.id,
+          documentType: row.document_type,
+          verificationStatus: row.verification_status,
+          isDefault: row.is_default,
+        }
+      : null;
+  }
+
+  async setDefaultCv(client: PoolClient, studentProfileId: string, documentId: string) {
+    await client.query(
+      `UPDATE student_documents
+       SET is_default = false
+       WHERE student_profile_id = $1 AND document_type = 'CV' AND is_default`,
+      [studentProfileId],
+    );
+    await client.query(
+      `UPDATE student_documents
+       SET is_default = true
+       WHERE id = $1 AND student_profile_id = $2 AND document_type = 'CV'`,
+      [documentId, studentProfileId],
+    );
   }
 
   async findSourceDocuments(client: PoolClient, studentProfileId: string, ids: string[]): Promise<SourceDocument[]> {

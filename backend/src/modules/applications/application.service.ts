@@ -35,6 +35,70 @@ export class ApplicationService {
     return this.repository.listStudentDocuments(studentProfileId);
   }
 
+  async updateStudentProfile(
+    actor: { userId: string; studentProfileId: string | null },
+    input: { phone: string | null },
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+    return this.repository.withTransaction(async (client) => {
+      const normalizedPhone = input.phone?.trim() || null;
+      const updated = await this.repository.updateStudentPhone(client, studentProfileId, normalizedPhone);
+      if (!updated) throw studentNotFound();
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'STUDENT_PROFILE_UPDATED', 'STUDENT_PROFILE', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          studentProfileId,
+          JSON.stringify({ changedFields: ["phone"] }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findStudentProfile(studentProfileId, client))!;
+    });
+  }
+
+  async setDefaultStudentCv(
+    actor: { userId: string; studentProfileId: string | null },
+    documentId: string,
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+    return this.repository.withTransaction(async (client) => {
+      const document = await this.repository.lockStudentDocument(client, studentProfileId, documentId);
+      if (!document) {
+        throw new AppError(404, "STUDENT_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu của sinh viên.");
+      }
+      if (document.documentType !== "CV") {
+        throw new AppError(409, "STUDENT_DOCUMENT_NOT_CV", "Chỉ có thể chọn tài liệu CV làm mặc định.");
+      }
+      if (document.verificationStatus !== "VERIFIED") {
+        throw new AppError(409, "STUDENT_DOCUMENT_NOT_VERIFIED", "CV phải được UIT xác minh trước khi đặt làm mặc định.");
+      }
+      if (!document.isDefault) {
+        await this.repository.setDefaultCv(client, studentProfileId, documentId);
+        await client.query(
+          `INSERT INTO audit_logs
+           (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+           VALUES ($1, 'STUDENT_DEFAULT_CV_CHANGED', 'STUDENT_DOCUMENT', $2, $3::jsonb, $4, $5)`,
+          [
+            actor.userId,
+            documentId,
+            JSON.stringify({ studentProfileId }),
+            request.ipAddress,
+            request.userAgent,
+          ],
+        );
+      }
+      return this.repository.listStudentDocuments(studentProfileId, client);
+    });
+  }
+
   async listStudentInterviews(
     studentProfileId: string | null,
     input: { page: number; pageSize: number; scope: "upcoming" | "history" | "all" },
