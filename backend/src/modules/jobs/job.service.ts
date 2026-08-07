@@ -46,6 +46,16 @@ export class JobService {
     return this.repository.listReviewQueue(input);
   }
 
+  async listRecruitingJobs(input: Parameters<JobRepository["listRecruitingJobs"]>[0]) {
+    return this.repository.listRecruitingJobs(input);
+  }
+
+  async getRecruitingJob(jobId: string) {
+    const job = await this.repository.findRecruitingJob(jobId);
+    if (!job) throw notFound();
+    return job;
+  }
+
   async createDraft(actor: Actor, input: JobDraftInput, request: RequestMetadata) {
     if (!actor.companyId) throw notFound();
     return this.repository.withTransaction(async (client) => {

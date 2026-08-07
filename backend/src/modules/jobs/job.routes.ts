@@ -10,6 +10,7 @@ import {
   jobDraftUpdateSchema,
   jobIdSchema,
   jobListQuerySchema,
+  recruitingJobQuerySchema,
   reviewQueueQuerySchema,
   reviewReasonSchema,
 } from "./job.schemas.js";
@@ -46,6 +47,16 @@ export function createJobRouter(service: JobService, tokenService = new TokenSer
   const authenticate = createAuthenticate(tokenService);
 
   router.use(authenticate);
+
+  router.get("/jobs", async (request, response) => {
+    const query = recruitingJobQuerySchema.parse(request.query);
+    const result = await service.listRecruitingJobs(query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.get("/jobs/:jobId", async (request, response) => {
+    response.json(envelope(await service.getRecruitingJob(jobIdSchema.parse(request.params.jobId))));
+  });
 
   router.get("/companies/me/jobs", requireRoles("COMPANY"), async (request, response) => {
     const auth = principal(request);

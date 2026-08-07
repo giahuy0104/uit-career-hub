@@ -39,8 +39,17 @@ export const reviewQueueQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
+export const recruitingJobQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  query: z.string().trim().max(100).optional(),
+  category: z.string().trim().max(100).optional(),
+  companyId: z.string().uuid().optional(),
+  workMode: z.enum(workModes).optional(),
+  opportunityType: z.enum(opportunityTypes).optional(),
+});
+
 export const reviewReasonSchema = z.object({
   reasonCode: z.string().trim().min(2).max(80),
   note: z.string().trim().min(5).max(2_000),
 });
-

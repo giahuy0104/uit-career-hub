@@ -12,6 +12,9 @@ import { AuthRepository, type AuthDatabase } from "./modules/auth/auth.repositor
 import { createAuthRouter } from "./modules/auth/auth.routes.js";
 import { AuthService } from "./modules/auth/auth.service.js";
 import { TokenService } from "./modules/auth/token.service.js";
+import { ApplicationRepository, type ApplicationDatabase } from "./modules/applications/application.repository.js";
+import { createApplicationRouter } from "./modules/applications/application.routes.js";
+import { ApplicationService } from "./modules/applications/application.service.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { JobRepository, type JobDatabase } from "./modules/jobs/job.repository.js";
 import { createJobRouter } from "./modules/jobs/job.routes.js";
@@ -25,6 +28,8 @@ type AppDependencies = {
   tokenService?: TokenService;
   jobDatabase?: JobDatabase;
   jobService?: JobService;
+  applicationDatabase?: ApplicationDatabase;
+  applicationService?: ApplicationService;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -44,13 +49,19 @@ export function createApp(dependencies: AppDependencies = {}) {
   const jobService =
     dependencies.jobService ??
     new JobService(new JobRepository(dependencies.jobDatabase ?? databasePool));
+  const applicationService =
+    dependencies.applicationService ??
+    new ApplicationService(
+      new ApplicationRepository(dependencies.applicationDatabase ?? databasePool),
+    );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.3.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.4.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
   app.use("/api/v1", createJobRouter(jobService, tokenService));
+  app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

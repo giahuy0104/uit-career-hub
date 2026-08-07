@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.3.0
+  version: 0.4.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -193,6 +193,11 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/WorkMode'
+        - name: opportunityType
+          in: query
+          schema:
+            type: string
+            enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER]
       responses:
         '200':
           description: Chỉ gồm tin RECRUITING chưa hết hạn
@@ -252,6 +257,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
   /applications/{applicationId}:
@@ -1040,7 +1049,7 @@ components:
         data: { $ref: '#/components/schemas/User' }
     StudentProfile:
       type: object
-      required: [id, studentCode, fullName, faculty, major, cohort, academicStatus]
+      required: [id, studentCode, fullName, faculty, major, cohort, academicStatus, email]
       properties:
         id: { type: string, format: uuid }
         studentCode: { type: string }
@@ -1051,6 +1060,7 @@ components:
         gpa: { type: [number, 'null'], minimum: 0, maximum: 4 }
         phone: { type: [string, 'null'] }
         academicStatus: { type: string, enum: [ACTIVE, SUSPENDED, GRADUATED, INACTIVE] }
+        email: { type: string, format: email }
     StudentProfileUpdateRequest:
       type: object
       properties:
@@ -1062,7 +1072,7 @@ components:
         data: { $ref: '#/components/schemas/StudentProfile' }
     StudentDocument:
       type: object
-      required: [id, documentType, fileName, mimeType, fileSizeBytes, version, verificationStatus]
+      required: [id, documentType, fileName, mimeType, fileSizeBytes, version, isDefault, verificationStatus, createdAt]
       properties:
         id: { type: string, format: uuid }
         documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
@@ -1072,6 +1082,7 @@ components:
         version: { type: integer, minimum: 1 }
         isDefault: { type: boolean }
         verificationStatus: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
+        createdAt: { type: string, format: date-time }
     StudentDocumentCreateRequest:
       type: object
       required: [documentType, fileName, mimeType, fileSizeBytes, storageKey]
@@ -1234,6 +1245,7 @@ components:
         documents:
           type: array
           minItems: 1
+          maxItems: 10
           items: { $ref: '#/components/schemas/ApplicationDocumentInput' }
         consentToShare: { type: boolean, const: true }
     ApplicationResubmitRequest:
@@ -1247,10 +1259,9 @@ components:
         consentToShare: { type: boolean, const: true }
     Application:
       type: object
-      required: [id, jobId, studentProfileId, status, version, submittedAt, availableActions]
+      required: [id, studentProfileId, status, version, submittedAt, lastTransitionAt, availableActions, job, documents, timeline]
       properties:
         id: { type: string, format: uuid }
-        jobId: { type: string, format: uuid }
         studentProfileId: { type: string, format: uuid }
         status: { $ref: '#/components/schemas/ApplicationStatus' }
         version: { type: integer, minimum: 1 }
@@ -1261,6 +1272,51 @@ components:
           items:
             type: string
             enum: [RESUBMIT, WITHDRAW, CANCEL_INTERVIEW, ACCEPT_OFFER, DECLINE_OFFER]
+        job:
+          type: object
+          required: [id, title, opportunityType, workMode, location, deadline, company]
+          properties:
+            id: { type: string, format: uuid }
+            title: { type: string }
+            opportunityType: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] }
+            workMode: { $ref: '#/components/schemas/WorkMode' }
+            location: { type: string }
+            deadline: { type: string, format: date }
+            company:
+              type: object
+              required: [id, code, name]
+              properties:
+                id: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+        documents:
+          type: array
+          items:
+            type: object
+            required: [id, documentType, fileName, mimeType, fileSizeBytes, sourceVersion]
+            properties:
+              id: { type: string, format: uuid }
+              sourceDocumentId: { type: [string, 'null'], format: uuid }
+              documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
+              fileName: { type: string }
+              mimeType: { type: string }
+              fileSizeBytes: { type: integer, minimum: 1 }
+              sourceVersion: { type: integer, minimum: 1 }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [fromStatus, toStatus, actorType, reasonCode, note, createdAt]
+            properties:
+              fromStatus:
+                oneOf:
+                  - $ref: '#/components/schemas/ApplicationStatus'
+                  - type: 'null'
+              toStatus: { $ref: '#/components/schemas/ApplicationStatus' }
+              actorType: { type: string, enum: [STUDENT, UIT_ADMIN, COMPANY, SYSTEM] }
+              reasonCode: { type: [string, 'null'] }
+              note: { type: [string, 'null'] }
+              createdAt: { type: string, format: date-time }
     ApplicationEnvelope:
       type: object
       required: [data]

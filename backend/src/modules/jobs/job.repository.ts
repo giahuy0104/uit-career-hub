@@ -195,6 +195,72 @@ export class JobRepository {
     return { items: result.rows.map(mapJob), total: Number(count.rows[0]?.total ?? 0) };
   }
 
+  async listRecruitingJobs(input: {
+    page: number;
+    pageSize: number;
+    query?: string;
+    category?: string;
+    companyId?: string;
+    workMode?: WorkMode;
+    opportunityType?: OpportunityType;
+  }) {
+    const filters = ["j.status = 'RECRUITING'", "j.deadline >= current_date", "c.partner_status = 'ACTIVE'"];
+    const values: unknown[] = [];
+    if (input.query) {
+      values.push(`%${input.query}%`);
+      filters.push(`(j.title ILIKE $${values.length} OR c.name ILIKE $${values.length}
+        OR EXISTS (
+          SELECT 1 FROM job_post_skills search_jps
+          JOIN skills search_skill ON search_skill.id = search_jps.skill_id
+          WHERE search_jps.job_post_id = j.id AND search_skill.name ILIKE $${values.length}
+        ))`);
+    }
+    if (input.category) {
+      values.push(input.category);
+      filters.push(`EXISTS (
+        SELECT 1 FROM job_post_categories search_jpc
+        JOIN categories search_category ON search_category.id = search_jpc.category_id
+        WHERE search_jpc.job_post_id = j.id
+          AND (search_category.code = $${values.length} OR search_category.id::text = $${values.length})
+      )`);
+    }
+    if (input.companyId) {
+      values.push(input.companyId);
+      filters.push(`j.company_id = $${values.length}`);
+    }
+    if (input.workMode) {
+      values.push(input.workMode);
+      filters.push(`j.work_mode = $${values.length}`);
+    }
+    if (input.opportunityType) {
+      values.push(input.opportunityType);
+      filters.push(`j.opportunity_type = $${values.length}`);
+    }
+    const where = filters.join(" AND ");
+    const count = await this.database.query<{ total: string }>(
+      `SELECT count(*)::text AS total FROM job_posts j JOIN companies c ON c.id = j.company_id WHERE ${where}`,
+      values,
+    );
+    const offset = (input.page - 1) * input.pageSize;
+    values.push(input.pageSize, offset);
+    const result = await this.database.query<JobRow>(
+      `${jobSelect} WHERE ${where}
+       ORDER BY j.reviewed_at DESC NULLS LAST, j.created_at DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return { items: result.rows.map(mapJob), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  async findRecruitingJob(jobId: string) {
+    const result = await this.database.query<JobRow>(
+      `${jobSelect} WHERE j.id = $1 AND j.status = 'RECRUITING'
+       AND j.deadline >= current_date AND c.partner_status = 'ACTIVE'`,
+      [jobId],
+    );
+    return result.rows[0] ? mapJob(result.rows[0]) : null;
+  }
+
   async assertReferenceIds(client: PoolClient, table: "categories" | "skills", ids: string[]) {
     if (ids.length === 0) return true;
     const result = await client.query<{ count: string }>(
@@ -283,4 +349,3 @@ export class JobRepository {
     );
   }
 }
-
