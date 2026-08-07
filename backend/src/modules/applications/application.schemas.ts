@@ -31,6 +31,11 @@ export const applicationReviewQueueQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
+export const placementConfirmationSchema = z.object({
+  startDate: z.iso.date(),
+  note: z.string().trim().max(500).optional(),
+});
+
 export const companyCandidateListQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),

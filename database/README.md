@@ -49,4 +49,4 @@ Sinh viên `20521067` có:
 - FPT Data Engineer: `COMPANY_REVIEWING`.
 - VNG Frontend: `UIT_REVIEWING`.
 
-Kịch bản tiếp theo sẽ cho sinh viên accept offer VNG, UIT confirm placement, sau đó hai đơn đang hoạt động còn lại chuyển `WITHDRAWN` với `reason_code = ACCEPTED_OTHER_JOB` trong cùng transaction.
+Kịch bản demo cho sinh viên accept offer VNG, UIT confirm placement, sau đó hai đơn đang hoạt động còn lại chuyển `WITHDRAWN` với `reason_code = ACCEPTED_OTHER_JOB` trong cùng transaction.

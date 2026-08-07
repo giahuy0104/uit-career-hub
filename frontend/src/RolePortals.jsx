@@ -481,8 +481,63 @@ function AdminApplicationReview({ selected, setSelected, states, setStates }) {
   return <div className="review-workspace"><Panel title="Hồ sơ chờ xử lý" action={<Status tone="urgent">12 hồ sơ</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Mới nhất</button><button>Quá 24 giờ</button><button>Thiếu hồ sơ</button></div><div className="review-list application-review-list">{reviewApplications.map(item=><button key={item.id} className={selected.id===item.id?'selected':''} onClick={()=>setSelected(item)}><div className="candidate-initials">{item.student.split(' ').slice(-2).map(x=>x[0]).join('')}</div><div><strong>{item.student}</strong><small>{item.mssv} · {item.role}</small><p>{item.company} · Nộp {item.submitted}</p></div><Status tone={item.issue==='Đủ hồ sơ'?'success':'urgent'}>{states[item.id]||item.issue}</Status></button>)}</div></Panel><Panel title="Hồ sơ ứng tuyển" action={<Status tone={state==='Đã chuyển doanh nghiệp'?'success':state==='Cần bổ sung'?'urgent':'warning'}>{state}</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{selected.student.split(' ').slice(-2).map(x=>x[0]).join('')}</div><div><h2>{selected.student}</h2><p>MSSV {selected.mssv} · Khoa Công nghệ phần mềm</p><span>Ứng tuyển <strong>{selected.role}</strong> tại {selected.company}</span></div><button className="secondary-button"><FileText/>Xem CV</button></div><div className="eligibility-grid"><article><small>Tình trạng sinh viên</small><strong><CheckCircle/>Đang học</strong></article><article><small>GPA tích lũy</small><strong>{selected.gpa}</strong></article><article><small>Số tín chỉ</small><strong>118 / 145</strong></article><article><small>Kỷ luật</small><strong><CheckCircle/>Không vi phạm</strong></article></div><section className="document-verification"><h3>Kiểm tra tài liệu</h3><div><span><CheckCircle/><div><strong>CV ứng tuyển</strong><small>CV_Backend_2026.pdf</small></div></span><Status tone="success">Hợp lệ</Status><button><Eye/></button></div><div><span><CheckCircle/><div><strong>Giấy xác nhận sinh viên</strong><small>Hiệu lực đến 15/10/2026</small></div></span><Status tone="success">Hợp lệ</Status><button><Eye/></button></div><div><span className={selected.issue==='Đủ hồ sơ'?'':'warn'}>{selected.issue==='Đủ hồ sơ'?<CheckCircle/>:<Warning/>}<div><strong>Bảng điểm có xác nhận</strong><small>{selected.issue==='Đủ hồ sơ'?'Cập nhật 02/08/2026':'Chưa tải lên'}</small></div></span><Status tone={selected.issue==='Đủ hồ sơ'?'success':'urgent'}>{selected.issue==='Đủ hồ sơ'?'Hợp lệ':'Còn thiếu'}</Status><button><Eye/></button></div></section><label className="review-note"><span>Ghi chú nội bộ</span><textarea placeholder="Nhập ghi chú cho bộ phận UIT..."/></label><div className="review-actions"><button className="secondary-button" onClick={()=>update('Cần bổ sung')}><PaperPlaneTilt/>Yêu cầu bổ sung</button><button className="primary-button" disabled={selected.issue!=='Đủ hồ sơ'} onClick={()=>update('Đã chuyển doanh nghiệp')}><Check/>Duyệt & chuyển doanh nghiệp</button></div></Panel></div>;
 }
 
+function PlacementConfirmationModal({ application, busy, error, close, submit }) {
+  const [startDate, setStartDate] = useState(application.recruitmentResult?.startDate || "");
+  const [note, setNote] = useState("");
+  return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal placement-confirm-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" disabled={busy} onClick={close}><X /></button><span className="modal-icon"><GraduationCap /></span><h2>Xác nhận nơi thực tập</h2><p>Xác nhận <strong>{application.student.fullName}</strong> nhận vị trí <strong>{application.job.title}</strong> tại {application.job.company.name}.</p><div className="placement-impact"><Warning /><span><strong>Thao tác ảnh hưởng nhiều đơn</strong><small>Các đơn khác còn hoạt động của sinh viên sẽ tự chuyển sang Đã rút với lý do “Đã chọn nơi thực tập khác”. Lịch phỏng vấn liên quan cũng được hủy.</small></span></div><div className="modal-form"><label><span>Ngày bắt đầu chính thức *</span><input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></label><label><span>Ghi chú xác nhận</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Ví dụ: Đã đối chiếu offer và xác nhận với sinh viên..." maxLength={500} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><button className="primary-button" disabled={busy || !startDate} onClick={() => submit({ startDate, ...(note.trim() ? { note: note.trim() } : {}) })}>{busy ? <CircleNotch className="spin" /> : <CheckCircle />}Xác nhận & đóng đơn khác</button></div></div></div>;
+}
+
 function AdminPlacements() {
-  return <><div className="metric-grid four"><MetricCard label="Đang phỏng vấn" value="23" helper="Tại 11 doanh nghiệp" Icon={CalendarCheck}/><MetricCard label="Đã nhận offer" value="14" helper="8 sinh viên đã xác nhận" Icon={PaperPlaneTilt} tone="green"/><MetricCard label="Đã bắt đầu" value="37" helper="Trong học kỳ hiện tại" Icon={SuitcaseSimple} tone="purple"/><MetricCard label="Cần cập nhật" value="8" helper="Quá 3 ngày chưa có kết quả" Icon={Warning} tone="amber"/></div><Panel title="Theo dõi kết quả" action={<div className="page-actions"><button className="secondary-button"><FunnelSimple/>Bộ lọc</button><button className="secondary-button"><DownloadSimple/>Xuất dữ liệu</button></div>}><div className="simple-table placement-table"><div className="table-head"><span>Sinh viên</span><span>Vị trí / Doanh nghiệp</span><span>Giai đoạn</span><span>Cập nhật cuối</span><span>Bắt đầu dự kiến</span><span/></div>{[["Nguyễn Minh Khoa","Backend Intern · VNG","Phỏng vấn","05/08/2026","01/10/2026","info"],["Trần Khánh Linh","Product Intern · MoMo","Đã nhận offer","04/08/2026","15/08/2026","success"],["Võ Minh Anh","Software Intern · FPT","Đã bắt đầu","01/08/2026","01/08/2026","purple"],["Phạm Gia Huy","Data Intern · NashTech","Chờ kết quả","30/07/2026","—","urgent"]].map(row=><button key={row[0]}><strong>{row[0]}</strong><span>{row[1]}</span><span><Status tone={row[5]}>{row[2]}</Status></span><span>{row[3]}</span><span>{row[4]}</span><ArrowRight/></button>)}</div></Panel></>;
+  const { authorizedRequest } = useAuth();
+  const [items, setItems] = useState([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await authorizedRequest("/uit/applications/placement-queue?page=1&pageSize=100");
+      setItems(response.data);
+      setSelectedId(current => response.data.some(item => item.id === current) ? current : response.data[0]?.id || "");
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+  const selected = items.find(item => item.id === selectedId) || items[0];
+  const startSoon = items.filter(item => {
+    const date = item.recruitmentResult?.startDate;
+    if (!date) return false;
+    const days = (new Date(`${date}T00:00:00`).getTime() - Date.now()) / 86_400_000;
+    return days >= 0 && days <= 30;
+  }).length;
+  const overdue = items.filter(item => Date.now() - new Date(item.lastTransitionAt).getTime() > 3 * 86_400_000).length;
+  const companies = new Set(items.map(item => item.job.company.id)).size;
+  const confirm = async payload => {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await authorizedRequest(`/uit/applications/${selected.id}/confirm-placement`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
+      const closedCount = response.data.autoWithdrawnApplicationIds.length;
+      setItems(current => current.filter(item => item.id !== selected.id));
+      setConfirming(false);
+      setMessage(`Đã xác nhận ${selected.student.fullName} nhận việc${closedCount ? ` và tự đóng ${closedCount} đơn khác` : ""}.`);
+      window.setTimeout(() => setMessage(""), 4500);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}<div className="metric-grid four"><MetricCard label="Chờ UIT xác nhận" value={items.length} helper="Sinh viên đã nhận offer" Icon={UserCheck} tone="green"/><MetricCard label="Bắt đầu trong 30 ngày" value={startSoon} helper="Cần hoàn tất đối chiếu" Icon={CalendarCheck}/><MetricCard label="Doanh nghiệp liên quan" value={companies} helper="Đối tác đang chờ phản hồi" Icon={Buildings} tone="purple"/><MetricCard label="Chờ quá 3 ngày" value={overdue} helper="Cần ưu tiên xử lý" Icon={Warning} tone="amber"/></div>{loading ? <Panel title="Xác nhận nơi thực tập"><div className="portal-loading"><CircleNotch className="spin" />Đang tải hàng đợi xác nhận...</div></Panel> : error && !selected ? <Panel title="Xác nhận nơi thực tập"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={() => void load()}>Thử lại</button></div></Panel> : !selected ? <Panel title="Xác nhận nơi thực tập" action={<Status tone="success">0 cần xử lý</Status>}><EmptyHint title="Đã xử lý hết hàng đợi" text="Hiện không có sinh viên đã nhận offer đang chờ UIT xác nhận." /></Panel> : <div className="review-workspace placement-workspace"><Panel title="Chờ xác nhận" action={<Status tone="warning">{items.length} sinh viên</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Chờ lâu nhất</button><button onClick={() => void load()}>Làm mới</button></div><div className="review-list application-review-list">{items.map(item => <button key={item.id} className={selected.id === item.id ? "selected" : ""} onClick={() => { setSelectedId(item.id); setError(""); }}><div className="candidate-initials">{userInitials(item.student.fullName)}</div><div><strong>{item.student.fullName}</strong><small>{item.student.studentCode} · {item.job.title}</small><p>{item.job.company.name} · Nhận offer {formatSubmitted(item.lastTransitionAt)}</p></div><Status tone="success">Đã nhận offer</Status></button>)}</div></Panel><Panel title="Đối chiếu placement" action={<Status tone="success">Chờ UIT xác nhận</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{userInitials(selected.student.fullName)}</div><div><h2>{selected.student.fullName}</h2><p>MSSV {selected.student.studentCode} · {selected.student.faculty}</p><span>Đã nhận offer <strong>{selected.job.title}</strong> tại {selected.job.company.name}</span></div><span className="version-label">Phiên bản {selected.version}</span></div><div className="eligibility-grid placement-offer-grid"><article><small>Quyết định sinh viên</small><strong><CheckCircle />Đã nhận offer</strong></article><article><small>Ngày bắt đầu đề xuất</small><strong>{formatDate(selected.recruitmentResult?.startDate)}</strong></article><article><small>Doanh nghiệp</small><strong>{selected.job.company.name}</strong></article><article><small>Email sinh viên</small><strong>{selected.student.email}</strong></article></div><div className="placement-confirmation-card"><ShieldCheck /><span><strong>Đủ điều kiện xác nhận</strong><small>Offer có kết quả PASS và sinh viên đã phản hồi ACCEPTED. Sau khi xác nhận, đơn này thành Đã nhận việc.</small></span></div><div className="placement-impact inline"><Info /><span><strong>Quy tắc nhiều đơn</strong><small>Chỉ bước xác nhận của UIT mới đóng các đơn khác. Mỗi đơn tự đóng đều có history, lý do và thông báo đến doanh nghiệp liên quan.</small></span></div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button" onClick={() => void load()} disabled={busy}>Làm mới dữ liệu</button><button className="primary-button" onClick={() => setConfirming(true)} disabled={busy}><GraduationCap />Xác nhận nơi thực tập</button></div></Panel></div>}{confirming && selected && <PlacementConfirmationModal application={selected} busy={busy} error={error} close={() => { if (!busy) { setConfirming(false); setError(""); } }} submit={payload => void confirm(payload)} />}</>;
 }
 
 function AdminScheduler() {

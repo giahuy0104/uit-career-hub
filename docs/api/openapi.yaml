@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.7.0
+  version: 0.8.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -838,6 +838,22 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /uit/applications/placement-queue:
+    get:
+      tags: [UIT]
+      operationId: listPlacementConfirmationQueue
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Các đơn đã được sinh viên nhận offer và đang chờ UIT xác nhận
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /uit/applications/{applicationId}/confirm-placement:
     post:
       tags: [UIT]
@@ -869,6 +885,12 @@ paths:
                       autoWithdrawnApplicationIds:
                         type: array
                         items: { type: string, format: uuid }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
 

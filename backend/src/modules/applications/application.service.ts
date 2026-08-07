@@ -46,6 +46,10 @@ export class ApplicationService {
     return this.repository.listUitReviewQueue(input);
   }
 
+  async listPlacementQueue(input: { page: number; pageSize: number }) {
+    return this.repository.listUitPlacementQueue(input);
+  }
+
   async review(
     actorUserId: string,
     applicationId: string,
@@ -588,6 +592,9 @@ export class ApplicationService {
     const studentProfileId = actor.studentProfileId;
 
     return this.repository.withTransaction(async (client) => {
+      if (decision === "accept") {
+        await client.query("SELECT id FROM student_profiles WHERE id = $1 FOR UPDATE", [studentProfileId]);
+      }
       const application = await this.repository.lockApplication(client, applicationId);
       if (!application || application.studentProfileId !== studentProfileId) throw applicationNotFound();
 
@@ -599,7 +606,6 @@ export class ApplicationService {
       }
 
       if (decision === "accept") {
-        await client.query("SELECT id FROM student_profiles WHERE id = $1 FOR UPDATE", [studentProfileId]);
         const selected = await client.query(
           `SELECT 1 FROM applications
            WHERE student_profile_id = $1 AND id <> $2
@@ -714,6 +720,223 @@ export class ApplicationService {
         ],
       );
       return (await this.repository.findById(applicationId, studentProfileId, client))!;
+    });
+  }
+
+  async confirmPlacement(
+    actorUserId: string,
+    applicationId: string,
+    commandId: string,
+    input: { startDate: string; note?: string },
+    request: RequestMetadata,
+  ) {
+    return this.repository.withTransaction(async (client) => {
+      const owner = await client.query<{ student_profile_id: string }>(
+        "SELECT student_profile_id FROM applications WHERE id = $1",
+        [applicationId],
+      );
+      const studentProfileId = owner.rows[0]?.student_profile_id;
+      if (!studentProfileId) throw applicationNotFound();
+
+      await client.query("SELECT id FROM student_profiles WHERE id = $1 FOR UPDATE", [studentProfileId]);
+      const lockedApplications = await client.query<{
+        id: string;
+        status: ApplicationStatus;
+        company_id: string;
+        company_name: string;
+        job_title: string;
+      }>(
+        `SELECT a.id, a.status, c.id AS company_id, c.name AS company_name, j.title AS job_title
+         FROM applications a
+         JOIN job_posts j ON j.id = a.job_post_id
+         JOIN companies c ON c.id = j.company_id
+         WHERE a.student_profile_id = $1
+         ORDER BY a.id
+         FOR UPDATE OF a`,
+        [studentProfileId],
+      );
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        const autoWithdrawn = await client.query<{ application_id: string }>(
+          `SELECT application_id FROM application_status_history
+           WHERE command_id = $1 AND to_status = 'WITHDRAWN'
+             AND metadata->>'selectedApplicationId' = $2
+           ORDER BY application_id`,
+          [commandId, applicationId],
+        );
+        return {
+          selectedApplication: (await this.repository.findByIdForUit(applicationId, client))!,
+          autoWithdrawnApplicationIds: autoWithdrawn.rows.map((row) => row.application_id),
+        };
+      }
+      if (application.status !== "ACCEPTED_PENDING_UIT_CONFIRMATION") {
+        throw new AppError(
+          409,
+          "APPLICATION_STATE_CONFLICT",
+          "Chỉ có thể xác nhận nơi thực tập sau khi sinh viên đã nhận offer.",
+        );
+      }
+
+      const activeStatuses = new Set<ApplicationStatus>([
+        "UIT_REVIEWING",
+        "NEEDS_SUPPLEMENT",
+        "FORWARDED_TO_COMPANY",
+        "COMPANY_REVIEWING",
+        "INTERVIEW_INVITED",
+        "OFFER_PENDING_STUDENT",
+      ]);
+      const otherApplications = lockedApplications.rows.filter(
+        (item) => item.id !== applicationId && activeStatuses.has(item.status),
+      );
+      const autoWithdrawnApplicationIds = otherApplications.map((item) => item.id);
+
+      const result = await client.query(
+        `UPDATE recruitment_results
+         SET start_date = $2, updated_at = now()
+         WHERE application_id = $1 AND outcome = 'PASS' AND student_decision = 'ACCEPTED'`,
+        [applicationId, input.startDate],
+      );
+      if ((result.rowCount ?? 0) !== 1) {
+        throw new AppError(409, "PLACEMENT_RESULT_CONFLICT", "Không tìm thấy offer đã được sinh viên chấp nhận.");
+      }
+
+      await client.query(
+        `UPDATE applications
+         SET status = 'HIRED', placement_confirmed_at = now(), version = version + 1,
+             last_transition_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [applicationId],
+      );
+      if (autoWithdrawnApplicationIds.length) {
+        await client.query(
+          `UPDATE applications
+           SET status = 'WITHDRAWN', withdrawn_at = now(), version = version + 1,
+               last_transition_at = now(), updated_at = now()
+           WHERE id = ANY($1::uuid[])`,
+          [autoWithdrawnApplicationIds],
+        );
+        await client.query(
+          `UPDATE interviews
+           SET status = 'CANCELLED', cancellation_reason = 'ACCEPTED_OTHER_JOB',
+               version = version + 1, updated_at = now()
+           WHERE application_id = ANY($1::uuid[])
+             AND status IN ('PENDING_STUDENT_CONFIRMATION', 'CONFIRMED', 'RESCHEDULE_REQUESTED')`,
+          [autoWithdrawnApplicationIds],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id, note, metadata)
+         VALUES ($1, $2, 'ACCEPTED_PENDING_UIT_CONFIRMATION', 'HIRED', 'UIT_ADMIN', $3, $4, $5::jsonb)`,
+        [
+          applicationId,
+          commandId,
+          actorUserId,
+          input.note ?? null,
+          JSON.stringify({ startDate: input.startDate, autoWithdrawnApplicationIds }),
+        ],
+      );
+      for (const otherApplication of otherApplications) {
+        await client.query(
+          `INSERT INTO application_status_history
+           (application_id, command_id, from_status, to_status, actor_type,
+            reason_code, note, metadata)
+           VALUES ($1, $2, $3, 'WITHDRAWN', 'SYSTEM', 'ACCEPTED_OTHER_JOB',
+                   'Hệ thống đóng đơn sau khi UIT xác nhận sinh viên đã chọn nơi thực tập khác.', $4::jsonb)`,
+          [
+            otherApplication.id,
+            commandId,
+            otherApplication.status,
+            JSON.stringify({ selectedApplicationId: applicationId, selectedCompanyId: application.companyId }),
+          ],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         VALUES ($1, 'PLACEMENT_CONFIRMED', 'UIT đã xác nhận nơi thực tập',
+                 'UIT đã xác nhận bạn nhận vị trí “' || $2 || '” tại ' || $3 || '. ' ||
+                 CASE WHEN $4::int > 0 THEN $4::text || ' đơn khác đã được hệ thống đóng.' ELSE '' END,
+                 'APPLICATION', $5::uuid, '/applications/' || $5::text,
+                 'application:' || $5::text || ':' || $6::text || ':placement:student',
+                 jsonb_build_object('applicationId', $5::text, 'commandId', $6::text,
+                                    'status', 'HIRED', 'autoWithdrawnApplicationIds', $7::jsonb))
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          application.studentUserId,
+          application.jobTitle,
+          application.companyName,
+          autoWithdrawnApplicationIds.length,
+          applicationId,
+          commandId,
+          JSON.stringify(autoWithdrawnApplicationIds),
+        ],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, 'PLACEMENT_CONFIRMED_BY_UIT', 'UIT đã xác nhận sinh viên nhận việc',
+                $3 || ' đã được UIT xác nhận nhận vị trí “' || $4 || '”.',
+                'APPLICATION', $1::uuid, '/company/candidates/' || $1::text,
+                'application:' || $1::text || ':' || $2::text || ':placement:company:' || u.id::text,
+                jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                   'status', 'HIRED', 'startDate', $5::text)
+         FROM company_users cu JOIN users u ON u.id = cu.user_id
+         WHERE cu.company_id = $6 AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          applicationId,
+          commandId,
+          application.studentFullName,
+          application.jobTitle,
+          input.startDate,
+          application.companyId,
+        ],
+      );
+      for (const otherApplication of otherApplications) {
+        await client.query(
+          `INSERT INTO notifications
+           (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+           SELECT u.id, 'APPLICATION_AUTO_WITHDRAWN', 'Ứng viên đã chọn nơi thực tập khác',
+                  $3 || ' đã được UIT xác nhận tại doanh nghiệp khác; hồ sơ vị trí “' || $4 || '” đã tự đóng.',
+                  'APPLICATION', $1::uuid, '/company/candidates/' || $1::text,
+                  'application:' || $1::text || ':' || $2::text || ':auto-withdrawn:company:' || u.id::text,
+                  jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                     'status', 'WITHDRAWN', 'selectedApplicationId', $5::text)
+           FROM company_users cu JOIN users u ON u.id = cu.user_id
+           WHERE cu.company_id = $6 AND u.status = 'ACTIVE'
+           ON CONFLICT (dedupe_key) DO NOTHING`,
+          [
+            otherApplication.id,
+            commandId,
+            application.studentFullName,
+            otherApplication.job_title,
+            applicationId,
+            otherApplication.company_id,
+          ],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'PLACEMENT_CONFIRMED', 'APPLICATION', $2, $3::jsonb, $4, $5)`,
+        [
+          actorUserId,
+          applicationId,
+          JSON.stringify({ commandId, startDate: input.startDate, autoWithdrawnApplicationIds }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return {
+        selectedApplication: (await this.repository.findByIdForUit(applicationId, client))!,
+        autoWithdrawnApplicationIds,
+      };
     });
   }
 

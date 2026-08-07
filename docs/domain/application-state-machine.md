@@ -80,7 +80,8 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 - Kết quả `PASS/FAIL` chỉ hợp lệ tại `INTERVIEW_INVITED`; thao tác đồng thời được tuần tự hóa bằng khóa application và kết quả có `command_id` để retry không tạo trùng offer.
 - Student accept/decline chỉ hợp lệ tại `OFFER_PENDING_STUDENT`. Hai thao tác cạnh tranh chỉ có một thao tác thành công; accept còn khóa student để ngăn chọn hai nơi thực tập.
 - Khi chuyển `FORWARDED_TO_COMPANY`, thông báo doanh nghiệp được chọn theo `company_id` của chính tin tuyển dụng, không lấy doanh nghiệp từ dữ liệu phía client.
-- Transition xác nhận nơi nhận việc dùng transaction và `SELECT ... FOR UPDATE` khi được hiện thực ở service.
+- Transition xác nhận nơi nhận việc khóa student trước, sau đó khóa toàn bộ application theo thứ tự cố định để tránh deadlock với thao tác nhận offer.
+- Cùng transaction xác nhận sẽ cập nhật `HIRED`, đóng các đơn còn hoạt động, hủy lịch phỏng vấn tương ứng, ghi history/audit và tạo thông báo cho các doanh nghiệp liên quan.
 - Mỗi command có idempotency key; history có `command_id` để retry không ghi trùng.
 
 ## Terminal status

@@ -267,6 +267,21 @@ describeWithDatabase("student job application flow", () => {
     return { ...scenario, applicationId };
   }
 
+  async function prepareAcceptedOffer() {
+    const scenario = await prepareInterview();
+    const result = await recordResult(scenario.recruiter.token, scenario.applicationId, {
+      outcome: "PASS",
+      startDate: "2099-12-28",
+    });
+    expect(result.status).toBe(200);
+    const accepted = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer/accept`)
+      .set("Authorization", `Bearer ${scenario.student.token}`)
+      .set("Idempotency-Key", randomUUID());
+    expect(accepted.status).toBe(200);
+    return scenario;
+  }
+
   it("lists only active recruiting jobs and returns their details", async () => {
     const { jobId, unavailableJobId, student } = await createScenario();
 
@@ -824,4 +839,128 @@ describeWithDatabase("student job application flow", () => {
     const finalState = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [scenario.applicationId]);
     expect(["ACCEPTED_PENDING_UIT_CONFIRMATION", "OFFER_DECLINED"]).toContain(finalState.rows[0]?.status);
   });
+
+  it("confirms placement idempotently and auto-withdraws every other active application", async () => {
+    const selected = await prepareAcceptedOffer();
+    const otherCompany = await createScenario();
+    const otherCreated = await submit(selected.student.token, otherCompany.jobId, [selected.student.cvId]);
+    const otherApplicationId = otherCreated.body.data.id as string;
+    await forward(otherCompany.admin.token, otherApplicationId);
+    await startCompanyReview(otherCompany.recruiter.token, otherApplicationId);
+    const otherInterview = await scheduleInterview(otherCompany.recruiter.token, otherApplicationId);
+    expect(otherInterview.status).toBe(201);
+
+    const queue = await request(app)
+      .get("/api/v1/uit/applications/placement-queue?page=1&pageSize=100")
+      .set("Authorization", `Bearer ${selected.admin.token}`);
+    expect(queue.status).toBe(200);
+    expect(queue.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: selected.applicationId,
+        status: "ACCEPTED_PENDING_UIT_CONFIRMATION",
+        recruitmentResult: expect.objectContaining({ studentDecision: "ACCEPTED" }),
+      }),
+    ]));
+
+    const commandId = randomUUID();
+    const body = { startDate: "2099-12-30", note: "Đã đối chiếu offer và xác nhận với sinh viên." };
+    const confirmed = await request(app)
+      .post(`/api/v1/uit/applications/${selected.applicationId}/confirm-placement`)
+      .set("Authorization", `Bearer ${selected.admin.token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.data).toMatchObject({
+      selectedApplication: {
+        id: selected.applicationId,
+        status: "HIRED",
+        version: 7,
+        recruitmentResult: { studentDecision: "ACCEPTED", startDate: body.startDate },
+      },
+      autoWithdrawnApplicationIds: [otherApplicationId],
+    });
+    expect(confirmed.body.data.selectedApplication.timeline.at(-1)).toMatchObject({
+      fromStatus: "ACCEPTED_PENDING_UIT_CONFIRMATION",
+      toStatus: "HIRED",
+      actorType: "UIT_ADMIN",
+      note: body.note,
+      metadata: { startDate: body.startDate, autoWithdrawnApplicationIds: [otherApplicationId] },
+    });
+
+    const withdrawn = await request(app)
+      .get(`/api/v1/applications/${otherApplicationId}`)
+      .set("Authorization", `Bearer ${selected.student.token}`);
+    expect(withdrawn.status).toBe(200);
+    expect(withdrawn.body.data.status).toBe("WITHDRAWN");
+    expect(withdrawn.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "INTERVIEW_INVITED",
+      toStatus: "WITHDRAWN",
+      actorType: "SYSTEM",
+      reasonCode: "ACCEPTED_OTHER_JOB",
+      metadata: { selectedApplicationId: selected.applicationId },
+    });
+    const cancelledInterview = await client.query<{ status: string; cancellation_reason: string | null }>(
+      "SELECT status, cancellation_reason FROM interviews WHERE application_id = $1",
+      [otherApplicationId],
+    );
+    expect(cancelledInterview.rows[0]).toEqual({ status: "CANCELLED", cancellation_reason: "ACCEPTED_OTHER_JOB" });
+
+    const repeated = await request(app)
+      .post(`/api/v1/uit/applications/${selected.applicationId}/confirm-placement`)
+      .set("Authorization", `Bearer ${selected.admin.token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.selectedApplication.version).toBe(7);
+    expect(repeated.body.data.autoWithdrawnApplicationIds).toEqual([otherApplicationId]);
+
+    const notifications = await client.query<{ recipient_user_id: string; type: string }>(
+      `SELECT recipient_user_id, type FROM notifications
+       WHERE resource_id IN ($1, $2)
+         AND type IN ('PLACEMENT_CONFIRMED', 'PLACEMENT_CONFIRMED_BY_UIT', 'APPLICATION_AUTO_WITHDRAWN')`,
+      [selected.applicationId, otherApplicationId],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      { recipient_user_id: selected.student.id, type: "PLACEMENT_CONFIRMED" },
+      { recipient_user_id: selected.recruiter.id, type: "PLACEMENT_CONFIRMED_BY_UIT" },
+      { recipient_user_id: otherCompany.recruiter.id, type: "APPLICATION_AUTO_WITHDRAWN" },
+    ]));
+
+    const queueAfter = await request(app)
+      .get("/api/v1/uit/applications/placement-queue?page=1&pageSize=100")
+      .set("Authorization", `Bearer ${selected.admin.token}`);
+    expect(queueAfter.body.data.map((item: { id: string }) => item.id)).not.toContain(selected.applicationId);
+  }, 30_000);
+
+  it("allows only one UIT placement confirmation and rejects invalid states", async () => {
+    const pendingInterview = await prepareInterview();
+    const invalid = await request(app)
+      .post(`/api/v1/uit/applications/${pendingInterview.applicationId}/confirm-placement`)
+      .set("Authorization", `Bearer ${pendingInterview.admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ startDate: "2099-12-30" });
+    expect(invalid.status).toBe(409);
+    expect(invalid.body.error.code).toBe("APPLICATION_STATE_CONFLICT");
+
+    const accepted = await prepareAcceptedOffer();
+    const secondAdmin = await createUser("UIT_ADMIN");
+    const [first, second] = await Promise.all([
+      request(app)
+        .post(`/api/v1/uit/applications/${accepted.applicationId}/confirm-placement`)
+        .set("Authorization", `Bearer ${accepted.admin.token}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ startDate: "2099-12-30" }),
+      request(app)
+        .post(`/api/v1/uit/applications/${accepted.applicationId}/confirm-placement`)
+        .set("Authorization", `Bearer ${secondAdmin.token}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ startDate: "2099-12-30" }),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 409]);
+
+    const forbidden = await request(app)
+      .get("/api/v1/uit/applications/placement-queue")
+      .set("Authorization", `Bearer ${accepted.recruiter.token}`);
+    expect(forbidden.status).toBe(403);
+  }, 30_000);
 });

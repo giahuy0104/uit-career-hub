@@ -14,6 +14,7 @@ import {
   applicationSupplementRequestSchema,
   companyCandidateListQuerySchema,
   interviewRequestSchema,
+  placementConfirmationSchema,
   recruitmentResultSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
@@ -107,6 +108,12 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
 
+  router.get("/uit/applications/placement-queue", uitOnly, async (request, response) => {
+    const query = applicationReviewQueueQuerySchema.parse(request.query);
+    const result = await service.listPlacementQueue(query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
   router.post("/uit/applications/:applicationId/request-supplement", uitOnly, async (request, response) => {
     const auth = principal(request);
     const payload = applicationSupplementRequestSchema.parse(request.body);
@@ -145,6 +152,19 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
         applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
         "forward",
         {},
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/uit/applications/:applicationId/confirm-placement", uitOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.confirmPlacement(
+        auth.userId,
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        placementConfirmationSchema.parse(request.body),
         metadata(request),
       ),
     });

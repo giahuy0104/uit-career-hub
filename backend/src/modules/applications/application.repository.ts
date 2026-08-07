@@ -386,6 +386,18 @@ export class ApplicationRepository {
     return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
   }
 
+  async listUitPlacementQueue(input: { page: number; pageSize: number }) {
+    const count = await this.database.query<{ total: string }>(
+      "SELECT count(*)::text AS total FROM applications WHERE status = 'ACCEPTED_PENDING_UIT_CONFIRMATION'",
+    );
+    const result = await this.database.query<ApplicationRow>(
+      `${applicationSelect} WHERE a.status = 'ACCEPTED_PENDING_UIT_CONFIRMATION'
+       ORDER BY a.last_transition_at ASC, a.id ASC LIMIT $1 OFFSET $2`,
+      [input.pageSize, (input.page - 1) * input.pageSize],
+    );
+    return { items: result.rows.map(mapApplication), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
   async listCompanyCandidates(
     companyId: string,
     input: { page: number; pageSize: number; jobId?: string; status?: ApplicationStatus },
