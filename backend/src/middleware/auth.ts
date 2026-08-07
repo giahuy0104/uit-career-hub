@@ -30,6 +30,14 @@ export function requireRoles(...allowedRoles: UserRole[]) {
       next(new AppError(403, "AUTH_FORBIDDEN", "Bạn không có quyền thực hiện thao tác này."));
       return;
     }
+    if (request.auth.role === "STUDENT" && !request.auth.studentProfileId) {
+      next(new AppError(403, "AUTH_CONTEXT_MISSING", "Tài khoản chưa được liên kết với hồ sơ sinh viên."));
+      return;
+    }
+    if (request.auth.role === "COMPANY" && !request.auth.companyId) {
+      next(new AppError(403, "AUTH_CONTEXT_MISSING", "Tài khoản chưa được liên kết với doanh nghiệp."));
+      return;
+    }
     next();
   };
 }

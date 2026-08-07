@@ -46,6 +46,10 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(requestContext);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  app.use("/api/v1", (_request, response, next) => {
+    response.setHeader("cache-control", "private, no-store");
+    next();
+  });
 
   const tokenService = dependencies.tokenService ?? new TokenService();
   const authService =
@@ -66,7 +70,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.7.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.8.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));

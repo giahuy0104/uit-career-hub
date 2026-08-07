@@ -13,6 +13,7 @@ uit-career-hub/
 ├── database/        SQL migration và seed
 ├── docs/domain/     ERD và state machine
 ├── docs/api/        OpenAPI 3.1
+├── docs/security/   Ma trận phân quyền và ghi chú hardening
 └── docker-compose.yml (PostgreSQL local tùy chọn)
 ```
 
@@ -118,6 +119,7 @@ pnpm db:down
 - `docs/domain/job-state-machine.md`
 - `docs/domain/application-state-machine.md`
 - `docs/api/openapi.yaml`
+- `docs/security/rbac-matrix.md`
 - `docs/decisions/001-modular-monolith-neon.md`
 - `docs/decisions/002-jwt-refresh-rbac.md`
 - `database/README.md`
@@ -140,6 +142,6 @@ Doanh nghiệp hiện đã có hàng đợi hồ sơ thật, chỉ thấy hồ s
 
 Happy flow và các nhánh ngoại lệ chính của hồ sơ đã chạy xuyên suốt. Hộp thông báo trong hệ thống cũng đã dùng dữ liệu thật cho cả ba vai trò: xem tất cả/chưa đọc, phân trang, đếm badge, đánh dấu một hoặc tất cả là đã đọc và mở đúng màn hình/bản ghi cần xử lý. API luôn giới hạn thông báo theo người dùng đang đăng nhập; không thể đọc hoặc cập nhật thông báo của tài khoản khác.
 
-Lát cắt tiếp theo nên tập trung hoàn thiện để bảo vệ: kiểm tra lại ma trận phân quyền backend, bổ sung test cho các trạng thái quan trọng, chuẩn hóa dữ liệu demo và triển khai frontend/backend/database.
+Ma trận RBAC backend đã được kiểm tra tự động cho toàn bộ endpoint giới hạn vai trò. Middleware từ chối tài khoản thiếu context sinh viên/doanh nghiệp, ownership tiếp tục được bảo vệ ở service/repository và response API không được cache. Lát cắt tiếp theo nên chuẩn hóa tài khoản/dữ liệu demo, viết kịch bản E2E bảo vệ và triển khai frontend/backend/database.
 
 Thông báo trong hệ thống thuộc MVP. Email/FCM, Cron Job, Scheduler, retry/log nâng cao, Kafka, Redis, chat, AI và đa trường thuộc Phase 2.
