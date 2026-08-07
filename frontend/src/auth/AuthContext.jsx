@@ -51,6 +51,13 @@ export function AuthProvider({ children }) {
     return response.data;
   }, []);
 
+  const activateCompanyAccount = useCallback(async (token, password) => {
+    await apiRequest("/auth/company-activation", {
+      method: "POST",
+      body: JSON.stringify({ token, password, acceptedTerms: true }),
+    });
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiRequest("/auth/logout", { method: "POST" });
@@ -90,10 +97,11 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     loading,
     login,
+    activateCompanyAccount,
     logout,
     refresh,
     authorizedRequest,
-  }), [session, loading, login, logout, refresh, authorizedRequest]);
+  }), [session, loading, login, activateCompanyAccount, logout, refresh, authorizedRequest]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

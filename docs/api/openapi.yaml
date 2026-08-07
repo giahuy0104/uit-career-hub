@@ -402,7 +402,7 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /companies/me:
+  /companies/me/profile:
     get:
       tags: [Companies]
       operationId: getMyCompany
@@ -412,7 +412,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyEnvelope'
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
     patch:
       tags: [Companies]
       operationId: updateMyCompany
@@ -428,7 +428,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyEnvelope'
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
   /companies/me/jobs:
     get:
       tags: [Companies]
@@ -436,6 +436,12 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, ENDED] }
         - name: status
           in: query
           schema:
@@ -677,11 +683,42 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyEnvelope'
-  /uit/companies/{companyId}/accounts:
+                $ref: '#/components/schemas/CompanyCreateResultEnvelope'
+  /uit/companies/{companyId}:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    get:
+      tags: [UIT]
+      operationId: getPartnerCompany
+      responses:
+        '200':
+          description: Hồ sơ đối tác và danh sách tài khoản tuyển dụng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+    patch:
+      tags: [UIT]
+      operationId: updatePartnerCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyAdminUpdateRequest'
+      responses:
+        '200':
+          description: Hồ sơ đối tác đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /uit/companies/{companyId}/suspend:
     post:
       tags: [UIT]
-      operationId: createCompanyAccount
+      operationId: suspendPartnerCompany
       parameters:
         - $ref: '#/components/parameters/CompanyId'
       requestBody:
@@ -689,14 +726,101 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompanyAccountRequest'
+              $ref: '#/components/schemas/CompanyStateChangeRequest'
+      responses:
+        '200':
+          description: Tạm ngưng đối tác, tài khoản liên quan và refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+  /uit/companies/{companyId}/reactivate:
+    post:
+      tags: [UIT]
+      operationId: reactivatePartnerCompany
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyStateChangeRequest'
+      responses:
+        '200':
+          description: Kích hoạt lại đối tác và các tài khoản bị ngưng theo doanh nghiệp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+  /uit/companies/{companyId}/recruiters:
+    post:
+      tags: [UIT]
+      operationId: createCompanyRecruiter
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRecruiterRequest'
       responses:
         '201':
           description: Tài khoản chờ kích hoạt; token chỉ trả/gửi một lần
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserEnvelope'
+                $ref: '#/components/schemas/CompanyRecruiterCreateResultEnvelope'
+  /uit/companies/{companyId}/recruiters/{userId}/suspend:
+    post:
+      tags: [UIT]
+      operationId: suspendCompanyRecruiter
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200':
+          description: Tạm ngưng tài khoản và thu hồi refresh token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyDetailEnvelope' }
+  /uit/companies/{companyId}/recruiters/{userId}/reactivate:
+    post:
+      tags: [UIT]
+      operationId: reactivateCompanyRecruiter
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200':
+          description: Kích hoạt lại tài khoản do UIT tạm ngưng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyDetailEnvelope' }
+  /uit/companies/{companyId}/recruiters/{userId}/activation-link:
+    post:
+      tags: [UIT]
+      operationId: regenerateCompanyActivationLink
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Token thô chỉ trả một lần; database chỉ lưu SHA-256 hash
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyActivationResultEnvelope' }
   /uit/jobs/review-queue:
     get:
       tags: [UIT]
@@ -1069,6 +1193,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     NotificationId:
       name: notificationId
       in: path
@@ -1265,41 +1394,141 @@ components:
         id: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
+        legalName: { type: [string, 'null'] }
+        taxCode: { type: [string, 'null'] }
         industry: { type: [string, 'null'] }
+        companySize: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
         website: { type: [string, 'null'], format: uri }
         address: { type: [string, 'null'] }
         partnerStatus: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, ENDED] }
+        version: { type: integer, minimum: 1 }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        recruiterCount: { type: integer, minimum: 0 }
+        activeRecruiterCount: { type: integer, minimum: 0 }
+        recruitingJobCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CompanyRecruiter:
+      type: object
+      required: [userId, email, fullName, isPrimary, status, createdAt]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        title: { type: [string, 'null'] }
+        isPrimary: { type: boolean }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    CompanyDetail:
+      allOf:
+        - $ref: '#/components/schemas/Company'
+        - type: object
+          required: [recruiters]
+          properties:
+            recruiters:
+              type: array
+              items: { $ref: '#/components/schemas/CompanyRecruiter' }
     CompanyCreateRequest:
       type: object
-      required: [code, name]
+      required: [code, name, primaryRecruiter]
       properties:
         code: { type: string, pattern: '^[A-Z0-9_-]+$' }
-        name: { type: string, maxLength: 200 }
-        legalName: { type: string, maxLength: 250 }
-        industry: { type: string, maxLength: 150 }
-        website: { type: string, format: uri }
-        address: { type: string, maxLength: 500 }
+        name: { type: string, maxLength: 180 }
+        legalName: { type: [string, 'null'], maxLength: 255 }
+        taxCode: { type: [string, 'null'], maxLength: 50 }
+        industry: { type: [string, 'null'], maxLength: 120 }
+        companySize: { type: [string, 'null'], maxLength: 80 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'], maxLength: 500 }
+        primaryRecruiter: { $ref: '#/components/schemas/CompanyRecruiterRequest' }
     CompanyUpdateRequest:
       type: object
+      required: [name, expectedVersion]
       properties:
-        description: { type: string, maxLength: 3000 }
-        website: { type: string, format: uri }
-        address: { type: string, maxLength: 500 }
-        industry: { type: string, maxLength: 150 }
-        companySize: { type: string, maxLength: 100 }
-    CompanyAccountRequest:
+        name: { type: string, maxLength: 180 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'], maxLength: 500 }
+        industry: { type: [string, 'null'], maxLength: 120 }
+        companySize: { type: [string, 'null'], maxLength: 80 }
+        expectedVersion: { type: integer, minimum: 1 }
+    CompanyAdminUpdateRequest:
       type: object
-      required: [email, fullName, isPrimary]
+      required: [code, name, expectedVersion]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9_-]+$' }
+        name: { type: string, maxLength: 180 }
+        legalName: { type: [string, 'null'], maxLength: 255 }
+        taxCode: { type: [string, 'null'], maxLength: 50 }
+        industry: { type: [string, 'null'], maxLength: 120 }
+        companySize: { type: [string, 'null'], maxLength: 80 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'], maxLength: 500 }
+        expectedVersion: { type: integer, minimum: 1 }
+    CompanyRecruiterRequest:
+      type: object
+      required: [email, fullName]
       properties:
         email: { type: string, format: email }
-        fullName: { type: string, maxLength: 150 }
-        title: { type: string, maxLength: 150 }
-        isPrimary: { type: boolean }
+        fullName: { type: string, maxLength: 180 }
+        title: { type: [string, 'null'], maxLength: 120 }
+    CompanyStateChangeRequest:
+      type: object
+      required: [expectedVersion, reason]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 5, maxLength: 1000 }
+    ActivationToken:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token: { type: string, minLength: 32 }
+        expiresAt: { type: string, format: date-time }
     CompanyEnvelope:
       type: object
       required: [data]
       properties:
         data: { $ref: '#/components/schemas/Company' }
+    CompanyDetailEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CompanyDetail' }
+    CompanyCreateResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [company, activation]
+          properties:
+            company: { $ref: '#/components/schemas/CompanyDetail' }
+            activation: { $ref: '#/components/schemas/ActivationToken' }
+    CompanyRecruiterCreateResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [userId, company, activation]
+          properties:
+            userId: { type: string, format: uuid }
+            company: { $ref: '#/components/schemas/CompanyDetail' }
+            activation: { $ref: '#/components/schemas/ActivationToken' }
+    CompanyActivationResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [company, activation]
+          properties:
+            company: { $ref: '#/components/schemas/CompanyDetail' }
+            activation: { $ref: '#/components/schemas/ActivationToken' }
     Job:
       type: object
       required: [id, company, title, opportunityType, workMode, location, description, requirements, positions, deadline, status, version, categories, skills, submittedAt, reviewedAt, createdAt, updatedAt]

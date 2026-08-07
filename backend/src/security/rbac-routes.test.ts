@@ -6,6 +6,7 @@ import { createApp } from "../app.js";
 import type { ApplicationService } from "../modules/applications/application.service.js";
 import type { AuthUser, UserRole } from "../modules/auth/auth.types.js";
 import { TokenService } from "../modules/auth/token.service.js";
+import type { CompanyService } from "../modules/companies/company.service.js";
 import type { JobService } from "../modules/jobs/job.service.js";
 import type { NotificationService } from "../modules/notifications/notification.service.js";
 
@@ -35,6 +36,16 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/reject`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/forward`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/confirm-placement`, role: "UIT_ADMIN" },
+  { method: "get", path: "/api/v1/uit/companies", role: "UIT_ADMIN" },
+  { method: "post", path: "/api/v1/uit/companies", role: "UIT_ADMIN" },
+  { method: "get", path: `/api/v1/uit/companies/${resourceId}`, role: "UIT_ADMIN" },
+  { method: "patch", path: `/api/v1/uit/companies/${resourceId}`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/suspend`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/reactivate`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/suspend`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/reactivate`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/activation-link`, role: "UIT_ADMIN" },
 
   { method: "get", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
   { method: "post", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
@@ -46,6 +57,8 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/reject`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/interviews`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/results`, role: "COMPANY" },
+  { method: "get", path: "/api/v1/companies/me/profile", role: "COMPANY" },
+  { method: "patch", path: "/api/v1/companies/me/profile", role: "COMPANY" },
 ];
 
 function user(role: UserRole, withContext = true): AuthUser {
@@ -76,7 +89,8 @@ describe("HTTP RBAC matrix", () => {
     markAllRead: vi.fn(async () => undefined),
   } as unknown as NotificationService;
   const applicationService = {} as ApplicationService;
-  const app = createApp({ tokenService, jobService, applicationService, notificationService });
+  const companyService = {} as CompanyService;
+  const app = createApp({ tokenService, jobService, applicationService, notificationService, companyService });
   const tokens = new Map<UserRole, string>();
 
   beforeAll(async () => {

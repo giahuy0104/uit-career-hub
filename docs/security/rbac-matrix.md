@@ -31,7 +31,9 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |
 | UIT | hàng đợi và quyết định duyệt tin `/uit/jobs/**` | — | ✓ | — |
 | UIT | hàng đợi và quyết định hồ sơ `/uit/applications/**` | — | ✓ | — |
+| UIT | quản lý đối tác và tài khoản tuyển dụng `/uit/companies/**` | — | ✓ | — |
 | Doanh nghiệp | quản lý tin `/companies/me/jobs/**` | — | — | ✓ |
+| Doanh nghiệp | xem/cập nhật hồ sơ `/companies/me/profile` | — | — | ✓ |
 | Doanh nghiệp | danh sách và xử lý ứng viên `/companies/me/**` | — | — | ✓ |
 
 Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không phụ thuộc payload gửi lên có hợp lệ hay không.
@@ -43,6 +45,7 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 - `backend/src/modules/jobs/job.integration.test.ts`: xác nhận doanh nghiệp không đọc hoặc sửa tin của doanh nghiệp khác.
 - `backend/src/modules/applications/application.integration.test.ts`: xác nhận sinh viên và doanh nghiệp không truy cập chéo hồ sơ, tài liệu hoặc đơn ứng tuyển.
 - `backend/src/modules/notifications/notification.integration.test.ts`: xác nhận người dùng chỉ đọc/cập nhật thông báo của mình.
+- `backend/src/modules/companies/company.integration.test.ts`: xác nhận tạo đối tác, kích hoạt một lần, optimistic lock, phân quyền và quy tắc tạm ngưng/khôi phục tài khoản.
 
 ## Rủi ro còn lại và giới hạn MVP
 
