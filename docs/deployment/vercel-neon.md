@@ -34,8 +34,30 @@ Browser
 - `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SECURE=true`, `AUTH_COOKIE_SAME_SITE=lax`.
 - `UIT_EMAIL_DOMAINS`.
 - `ALLOW_DEMO_RESET=false`.
+- `CRON_SECRET`: secret ngẫu nhiên tối thiểu 32 ký tự, lưu dạng Sensitive. Vercel tự gửi
+  `Authorization: Bearer <CRON_SECRET>` khi gọi cron.
 
 Không đưa `DATABASE_URL_DIRECT`, `DATABASE_URL_TEST` hoặc secret vào frontend.
+
+## Cron tổng hợp hồ sơ chờ xử lý
+
+Backend khai báo một Vercel Cron trong `backend/vercel.json`:
+
+- Endpoint: `GET /api/v1/cron/daily-pending-notifications`.
+- Lịch: `15 1 * * *`, tương ứng 08:15 hằng ngày theo giờ Việt Nam (UTC+7).
+- Gói Hobby chỉ chạy tối đa một lần mỗi ngày; lịch này đáp ứng giới hạn đó.
+- Cron chỉ chạy trên Production Deployment, không chạy trên Preview Deployment.
+
+Mỗi lần chạy, hệ thống:
+
+1. Đếm hồ sơ `UIT_REVIEWING` và gửi tổng hợp cho UIT Admin đang hoạt động.
+2. Đếm theo từng doanh nghiệp các hồ sơ `FORWARDED_TO_COMPANY`, `COMPANY_REVIEWING`
+   và `INTERVIEW_INVITED`, sau đó gửi cho recruiter đang hoạt động của đúng doanh nghiệp.
+3. Không gửi khi hàng đợi tương ứng bằng 0.
+4. Dùng `dedupe_key` gồm ngày và người nhận nên retry cùng ngày không tạo bản trùng.
+
+Trước khi merge nhánh này vào `main`, thêm `CRON_SECRET` vào Backend project → Settings →
+Environment Variables → Production, rồi redeploy Production sau khi migration đã chạy.
 
 ### Frontend production
 

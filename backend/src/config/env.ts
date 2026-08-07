@@ -11,6 +11,11 @@ const optionalDatabaseUrl = z.preprocess(
   z.string().min(1).optional(),
 );
 
+const optionalSecret = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().min(32).optional(),
+);
+
 const optionalBoolean = z.preprocess((value) => {
   if (value === undefined || value === "") return undefined;
   if (typeof value === "boolean") return value;
@@ -38,6 +43,7 @@ const environmentSchema = z.object({
   AUTH_COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   UIT_EMAIL_DOMAINS: z.string().min(1).default("student.uit.edu.vn,uit.edu.vn"),
   ALLOW_DEMO_RESET: optionalBoolean.default(false),
+  CRON_SECRET: optionalSecret,
 });
 
 function assertPostgresUrl(value: string, key: string) {
@@ -110,6 +116,7 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     authCookieSameSite: parsed.AUTH_COOKIE_SAME_SITE,
     uitEmailDomains,
     allowDemoReset: parsed.ALLOW_DEMO_RESET,
+    cronSecret: parsed.CRON_SECRET,
   } as const;
 }
 
