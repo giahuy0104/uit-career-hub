@@ -929,6 +929,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /notifications/unread-count:
     get:
       tags: [Notifications]
@@ -947,6 +949,8 @@ paths:
                     required: [count]
                     properties:
                       count: { type: integer, minimum: 0 }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /notifications/{notificationId}/read:
     post:
       tags: [Notifications]
@@ -956,6 +960,10 @@ paths:
       responses:
         '204':
           description: Đã đánh dấu đọc
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /notifications/read-all:
     post:
       tags: [Notifications]
@@ -963,6 +971,8 @@ paths:
       responses:
         '204':
           description: Đã đánh dấu tất cả là đã đọc
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
 components:
   securitySchemes:
@@ -1537,7 +1547,7 @@ components:
         note: { type: string, maxLength: 500 }
     Notification:
       type: object
-      required: [id, type, title, body, resourceType, deepLink, createdAt]
+      required: [id, type, title, body, resourceType, deepLink, payload, createdAt]
       properties:
         id: { type: string, format: uuid }
         type: { type: string }
@@ -1546,6 +1556,9 @@ components:
         resourceType: { type: string }
         resourceId: { type: [string, 'null'], format: uuid }
         deepLink: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
         readAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
     NotificationListEnvelope:

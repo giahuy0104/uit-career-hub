@@ -138,6 +138,8 @@ Lát cắt nền tảng, Authentication/RBAC, quy trình tin tuyển dụng, sin
 
 Doanh nghiệp hiện đã có hàng đợi hồ sơ thật, chỉ thấy hồ sơ được UIT chuyển đúng đến doanh nghiệp của mình. Recruiter có thể bắt đầu sàng lọc, chọn “Không phù hợp”, tạo lịch phỏng vấn, ghi nhận kết quả `PASS/FAIL` và gửi offer khi ứng viên đạt. Khi UIT yêu cầu bổ sung, sinh viên xem đúng loại tài liệu và hạn nộp, chọn phiên bản đã xác minh rồi nộp lại; snapshot cũ vẫn được giữ để đối chiếu. Sinh viên cũng có thể rút đơn trước phỏng vấn, hủy tham gia phỏng vấn hoặc từ chối offer bằng hành động riêng của từng bước. UIT có hàng đợi xác nhận nơi thực tập; khi xác nhận, đơn được chọn chuyển `HIRED`, mọi đơn khác còn hoạt động tự chuyển `WITHDRAWN` và lịch phỏng vấn liên quan bị hủy trong cùng transaction. Mọi thao tác đều cập nhật state machine, history, audit log, chống gửi lặp và thông báo đúng sinh viên/doanh nghiệp/UIT.
 
-Happy flow và các nhánh ngoại lệ chính của hồ sơ đã chạy xuyên suốt. Lát cắt tiếp theo nên hiện thực hộp thông báo trong hệ thống để người dùng đọc, đánh dấu đã đọc và mở đúng màn hình cần xử lý.
+Happy flow và các nhánh ngoại lệ chính của hồ sơ đã chạy xuyên suốt. Hộp thông báo trong hệ thống cũng đã dùng dữ liệu thật cho cả ba vai trò: xem tất cả/chưa đọc, phân trang, đếm badge, đánh dấu một hoặc tất cả là đã đọc và mở đúng màn hình/bản ghi cần xử lý. API luôn giới hạn thông báo theo người dùng đang đăng nhập; không thể đọc hoặc cập nhật thông báo của tài khoản khác.
+
+Lát cắt tiếp theo nên tập trung hoàn thiện để bảo vệ: kiểm tra lại ma trận phân quyền backend, bổ sung test cho các trạng thái quan trọng, chuẩn hóa dữ liệu demo và triển khai frontend/backend/database.
 
 Thông báo trong hệ thống thuộc MVP. Email/FCM, Cron Job, Scheduler, retry/log nâng cao, Kafka, Redis, chat, AI và đa trường thuộc Phase 2.

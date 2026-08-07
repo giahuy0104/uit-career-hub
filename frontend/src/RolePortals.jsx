@@ -46,6 +46,8 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useAuth } from "./auth/AuthContext.jsx";
+import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
+import { useNotifications } from "./notifications/NotificationContext.jsx";
 
 const jobStatusCopy = {
   DRAFT: ["Bản nháp", "neutral"],
@@ -89,7 +91,7 @@ const studentNavigation = [
   ["applications", "Đơn ứng tuyển", FileText, 3],
   ["profile", "Hồ sơ & CV", User],
   ["interviews", "Lịch phỏng vấn", CalendarBlank, 1],
-  ["notifications", "Thông báo", Bell, 2],
+  ["notifications", "Thông báo", Bell],
 ];
 
 const adminNavigation = [
@@ -99,6 +101,7 @@ const adminNavigation = [
   ["admin-applications", "Duyệt hồ sơ sinh viên", UserCheck, 12],
   ["admin-placements", "Theo dõi kết quả", GraduationCap],
   ["admin-scheduler", "Nhắc việc & tác vụ", ClockCountdown, 2],
+  ["admin-notifications", "Thông báo", Bell],
   ["admin-reports", "Báo cáo", ChartBar],
   ["admin-access", "Tài khoản & nhật ký", ShieldCheck],
 ];
@@ -109,7 +112,7 @@ const companyNavigation = [
   ["company-jobs", "Tin tuyển dụng", Briefcase],
   ["company-candidates", "Ứng viên", Users],
   ["company-interviews", "Lịch phỏng vấn", CalendarCheck, 3],
-  ["company-notifications", "Thông báo", Bell, 4],
+  ["company-notifications", "Thông báo", Bell],
 ];
 
 const portalCopy = {
@@ -167,6 +170,7 @@ export function PrototypeRoleSwitcher({ role, onChange }) {
 }
 
 function WorkspaceShell({ role, route, navigate, children, title, description, actions, user, onLogout }) {
+  const { unreadCount } = useNotifications();
   const fallbackIdentity = portalCopy[role];
   const identity = {
     ...fallbackIdentity,
@@ -175,18 +179,19 @@ function WorkspaceShell({ role, route, navigate, children, title, description, a
     initials: userInitials(user?.displayName || fallbackIdentity.name),
   };
   const navigation = role === "admin" ? adminNavigation : role === "company" ? companyNavigation : studentNavigation;
+  const notificationKey = role === "admin" ? "admin-notifications" : role === "company" ? "company-notifications" : "notifications";
   return (
     <div className={`workspace-shell role-${role}`}>
       <aside className="workspace-sidebar">
         <Brand inverse />
         <div className="workspace-role"><small>KHÔNG GIAN LÀM VIỆC</small><strong>{identity.label}</strong></div>
-        <nav>{navigation.map(([key, label, Icon, count]) => <button key={key} className={route === key ? "active" : ""} onClick={() => navigate(key)}><Icon size={20} /><span>{label}</span>{count ? <i>{count}</i> : null}</button>)}</nav>
+        <nav>{navigation.map(([key, label, Icon, count]) => { const displayCount = key === notificationKey ? unreadCount : count; return <button key={key} className={route === key ? "active" : ""} onClick={() => navigate(key)}><Icon size={20} /><span>{label}</span>{displayCount ? <i>{displayCount > 99 ? "99+" : displayCount}</i> : null}</button>; })}</nav>
         <div className="workspace-identity"><span>{identity.initials}</span><div><strong>{identity.name}</strong><small>{identity.meta}</small></div><button aria-label="Đăng xuất" onClick={onLogout}><SignOut size={19} /></button></div>
       </aside>
       <main className="workspace-main">
         <header className="workspace-topbar">
           <div><span>UIT Career Hub</span><ArrowRight size={13} /><strong>{title}</strong></div>
-          <div className="workspace-top-actions"><label><MagnifyingGlass size={18} /><input placeholder="Tìm nhanh..." /></label><button className="icon-button"><Bell size={20} /><i /></button><button className="workspace-avatar">{identity.initials}</button></div>
+          <div className="workspace-top-actions"><label><MagnifyingGlass size={18} /><input placeholder="Tìm nhanh..." /></label><button className="icon-button notification-bell" aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`} onClick={() => navigate(notificationKey)}><Bell size={20} />{unreadCount > 0 && <span>{unreadCount > 99 ? "99+" : unreadCount}</span>}</button><button className="workspace-avatar">{identity.initials}</button></div>
         </header>
         <section className="workspace-page-header"><div><p className="eyebrow">{identity.label.toUpperCase()}</p><h1>{title}</h1>{description && <p>{description}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</section>
         <div className="workspace-page">{children}</div>
@@ -227,7 +232,7 @@ export function StudentExtraScreen({ route, navigate, user, onLogout }) {
       {route === "companies" && <CompaniesScreen />}
       {route === "profile" && <ProfileScreen percent={profilePercent} setPercent={setProfilePercent} />}
       {route === "interviews" && <InterviewsScreen />}
-      {route === "notifications" && <StudentNotifications />}
+      {route === "notifications" && <StudentNotifications navigate={navigate} />}
     </WorkspaceShell>
   );
 }
@@ -272,13 +277,11 @@ function InterviewsScreen() {
   return <div className="portal-two-column wide-left"><div><Panel title="Sắp tới"><article className="interview-card"><div className="calendar-tile"><strong>07</strong><small>THÁNG 08</small></div><div className="interview-main"><Status tone={confirmed ? "success" : "urgent"}>{confirmed ? "Đã xác nhận" : "Cần xác nhận"}</Status><h2>Phỏng vấn Data Engineer Intern</h2><p>FPT Software · Vòng chuyên môn</p><div><span><Clock size={18} />09:30 – 10:15</span><span><MapPin size={18} />Google Meet</span><span><User size={18} />Anh Nguyễn Hoàng Nam</span></div></div><div className="interview-actions"><button className="primary-button" onClick={() => setConfirmed(true)}>{confirmed ? <><Check size={17} />Đã xác nhận</> : "Xác nhận tham gia"}</button><button className="secondary-button">Xem chi tiết</button></div></article></Panel><Panel title="Lịch sử phỏng vấn"><div className="simple-table interview-history"><div className="table-head"><span>Vị trí</span><span>Doanh nghiệp</span><span>Ngày phỏng vấn</span><span>Kết quả</span></div><div><strong>Frontend Intern</strong><span>KMS Technology</span><span>12/06/2026</span><Status tone="neutral">Không đạt</Status></div><div><strong>Software Engineer Intern</strong><span>Bosch Vietnam</span><span>04/05/2026</span><Status tone="success">Đạt vòng 1</Status></div></div></Panel></div><Panel title="Chuẩn bị phỏng vấn"><div className="preparation-list"><div><span>1</span><strong>Kiểm tra thiết bị và đường truyền</strong></div><div><span>2</span><strong>Chuẩn bị dự án Java/Spring Boot để trình bày</strong></div><div><span>3</span><strong>Tham gia trước giờ hẹn 10 phút</strong></div></div><button className="secondary-button full"><BookOpenText size={17} />Xem hướng dẫn từ UIT</button></Panel></div>;
 }
 
-function StudentNotifications() {
-  const [read, setRead] = useState([]);
-  const notes = [[1,"UIT đã tiếp nhận hồ sơ ứng tuyển","Đơn Backend Developer Intern tại VNG đang được kiểm tra.","10 phút trước","review"],[2,"Bạn có lịch phỏng vấn mới","FPT Software mời bạn phỏng vấn vào 09:30 ngày 07/08.","2 giờ trước","calendar"],[3,"Hồ sơ đã chuyển đến doanh nghiệp","MoMo đã nhận CV Product Intern của bạn.","Hôm qua","success"],[4,"Sắp hết hạn ứng tuyển","Vị trí Software Engineer Intern tại KMS còn 2 ngày.","Hôm qua","warning"]];
-  return <Panel title="Tất cả thông báo" action={<button className="link-button" onClick={() => setRead(notes.map(n => n[0]))}>Đánh dấu tất cả đã đọc</button>}><div className="notification-list">{notes.map(([id,title,text,time,type]) => <button key={id} className={read.includes(id) ? "read" : ""} onClick={() => setRead([...new Set([...read,id])])}><span className={`notice-symbol ${type}`}>{type === "calendar" ? <CalendarCheck /> : type === "success" ? <CheckCircle /> : type === "warning" ? <Warning /> : <ShieldCheck />}</span><div><strong>{title}</strong><p>{text}</p><small>{time}</small></div>{!read.includes(id) && <i />}</button>)}</div></Panel>;
+function StudentNotifications({ navigate }) {
+  return <NotificationInbox role="student" onOpen={(notification, destination) => navigate(destination, { notification })} />;
 }
 
-export function AdminPortal({ route, navigate, user, onLogout }) {
+export function AdminPortal({ route, navigate, navigationPayload, user, onLogout }) {
   const [modal, setModal] = useState(null);
   const titles = {
     "admin-dashboard": ["Tổng quan vận hành", "Theo dõi khối lượng xử lý, hạn cam kết và hoạt động tuyển dụng toàn trường."],
@@ -287,6 +290,7 @@ export function AdminPortal({ route, navigate, user, onLogout }) {
     "admin-applications": ["Duyệt hồ sơ sinh viên", "Xác minh điều kiện và tài liệu trước khi chuyển hồ sơ đến doanh nghiệp."],
     "admin-placements": ["Theo dõi kết quả tuyển dụng", "Theo dõi từ phỏng vấn đến nhận việc, thực tập và hoàn thành."],
     "admin-scheduler": ["Nhắc việc & tác vụ hệ thống", "Giám sát tổng hợp hồ sơ tồn và các thông báo định kỳ mỗi ngày."],
+    "admin-notifications": ["Thông báo", "Các yêu cầu mới và thay đổi trạng thái cần bộ phận UIT theo dõi."],
     "admin-reports": ["Báo cáo & thống kê", "Tổng hợp hiệu quả tuyển dụng theo ngành, doanh nghiệp và thời gian."],
     "admin-access": ["Tài khoản & nhật ký", "Quản lý phân quyền và truy vết các thao tác quan trọng."],
   };
@@ -295,10 +299,11 @@ export function AdminPortal({ route, navigate, user, onLogout }) {
   return <WorkspaceShell role="admin" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
     {route === "admin-dashboard" && <AdminDashboard navigate={navigate} />}
     {route === "admin-companies" && <AdminCompanies onCreate={() => setModal("company")} />}
-    {route === "admin-jobs" && <LiveAdminJobReview />}
-    {route === "admin-applications" && <LiveAdminApplicationReview />}
-    {route === "admin-placements" && <AdminPlacements />}
+    {route === "admin-jobs" && <LiveAdminJobReview targetJobId={navigationPayload?.notification?.resourceId} />}
+    {route === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
+    {route === "admin-placements" && <AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-scheduler" && <AdminScheduler />}
+    {route === "admin-notifications" && <NotificationInbox role="admin" onOpen={(notification, destination) => navigate(destination, { notification })} />}
     {route === "admin-reports" && <AdminReports />}
     {route === "admin-access" && <AdminAccess />}
     {modal === "company" && <CompanyCreateModal close={() => setModal(null)} />}
@@ -354,7 +359,7 @@ function ApplicationDecisionModal({ mode, application, busy, error, onClose, onS
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal application-decision-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X /></button><span className={`modal-icon ${isReject ? "danger" : ""}`}>{mode === "forward" ? <PaperPlaneTilt /> : isSupplement ? <FileText /> : <Warning />}</span><h2>{mode === "forward" ? "Chuyển hồ sơ đến doanh nghiệp?" : isSupplement ? "Yêu cầu sinh viên bổ sung" : "Từ chối hồ sơ ứng tuyển"}</h2><p>{mode === "forward" ? <>CV và tài liệu của <strong>{application.student.fullName}</strong> sẽ được chuyển đúng đến <strong>{application.job.company.name}</strong>.</> : "Lý do sẽ được gửi cho sinh viên và lưu vào lịch sử xử lý."}</p>{isSupplement && <><div className="document-type-options"><span>Tài liệu cần bổ sung *</span>{documentTypes.map(([value, label]) => <label key={value}><input type="checkbox" checked={requiredDocumentTypes.includes(value)} onChange={() => toggleDocument(value)} />{label}</label>)}</div><div className="modal-form"><label><span>Hạn bổ sung *</span><input type="date" value={dueDate} min={new Date().toISOString().slice(0, 10)} onChange={event => setDueDate(event.target.value)} /></label></div></>}{mode !== "forward" && <div className="modal-form"><label><span>Lý do chi tiết *</span><textarea autoFocus value={note} onChange={event => setNote(event.target.value)} placeholder={isSupplement ? "Ví dụ: Vui lòng bổ sung bảng điểm có xác nhận..." : "Ví dụ: Sinh viên chưa đáp ứng điều kiện tham gia..."} maxLength={2000} /></label></div>}{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className={`primary-button ${isReject ? "danger-fill" : ""}`} disabled={busy || !canSubmit} onClick={submit}>{busy ? <><CircleNotch className="spin" />Đang xử lý</> : mode === "forward" ? <><PaperPlaneTilt />Xác nhận chuyển</> : isSupplement ? <><PaperPlaneTilt />Gửi yêu cầu</> : "Xác nhận từ chối"}</button></div></div></div>;
 }
 
-function LiveAdminJobReview() {
+function LiveAdminJobReview({ targetJobId = null }) {
   const { authorizedRequest } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -371,7 +376,9 @@ function LiveAdminJobReview() {
     try {
       const response = await authorizedRequest("/uit/jobs/review-queue?page=1&pageSize=100");
       setJobs(response.data);
-      setSelectedId(current => response.data.some(job => job.id === current) ? current : response.data[0]?.id ?? null);
+      setSelectedId(current => response.data.some(job => job.id === targetJobId)
+        ? targetJobId
+        : response.data.some(job => job.id === current) ? current : response.data[0]?.id ?? null);
     } catch (requestError) {
       setError(getApiError(requestError));
     } finally {
@@ -379,7 +386,7 @@ function LiveAdminJobReview() {
     }
   };
 
-  useEffect(() => { void loadQueue(); }, [authorizedRequest]);
+  useEffect(() => { void loadQueue(); }, [authorizedRequest, targetJobId]);
 
   const decide = async (mode, note = "") => {
     if (!selected || busy) return;
@@ -412,7 +419,7 @@ function LiveAdminJobReview() {
   return <><div className="review-workspace"><Panel title="Hàng đợi" action={<Status tone="warning">{jobs.length} cần xử lý</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Cũ nhất trước</button><button onClick={loadQueue}>Làm mới</button></div><div className="review-list">{jobs.map(job => <button key={job.id} className={selected.id === job.id ? "selected" : ""} onClick={() => { setSelectedId(job.id); setError(""); }}><div><strong>{job.title}</strong><small>{job.company.name}</small></div><Status tone="warning">Chờ duyệt</Status><p><span>{job.categories[0]?.name || opportunityCopy[job.opportunityType]}</span><span>Hạn {formatDate(job.deadline)}</span></p><small>Gửi {formatSubmitted(job.submittedAt)}</small></button>)}</div></Panel><Panel title="Nội dung tin tuyển dụng" action={<span className="version-label">Phiên bản {selected.version}</span>} className="review-detail-panel"><div className="review-detail-heading"><div className="company-logo vng">{selected.company.code.slice(0, 3)}</div><div><h2>{selected.title}</h2><p>{selected.company.name} · Đối tác UIT đã xác thực</p></div><Status tone="warning">Chờ UIT duyệt</Status></div><div className="review-checks"><span className="done"><CheckCircle />Doanh nghiệp hợp lệ</span><span className="done"><CheckCircle />Thông tin bắt buộc đầy đủ</span><span className="warning"><Warning />UIT cần rà soát nội dung</span></div><div className="review-content-grid"><section><h3>Thông tin chung</h3><dl><div><dt>Loại hình</dt><dd>{opportunityCopy[selected.opportunityType]} · {workModeCopy[selected.workMode]}</dd></div><div><dt>Địa điểm</dt><dd>{selected.location}</dd></div><div><dt>Số lượng</dt><dd>{selected.positions} vị trí</dd></div><div><dt>Hạn ứng tuyển</dt><dd>{formatDate(selected.deadline)}</dd></div></dl></section><section><h3>Nhóm ngành & kỹ năng</h3><div className="tag-list">{[...categories, ...skills].map(item => <span key={item}>{item}</span>)}</div></section><section className="full"><h3>Mô tả công việc</h3><p className="preserve-lines">{selected.description}</p></section><section className="full"><h3>Yêu cầu ứng viên</h3><p className="preserve-lines">{selected.requirements}</p></section>{selected.benefits && <section className="full"><h3>Quyền lợi</h3><p className="preserve-lines">{selected.benefits}</p></section>}</div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button danger" disabled={busy} onClick={() => setReasonMode("reject")}>Từ chối</button><button className="secondary-button" disabled={busy} onClick={() => setReasonMode("request-revision")}><PencilSimple />Yêu cầu chỉnh sửa</button><button className="primary-button" disabled={busy} onClick={() => { if (window.confirm(`Phê duyệt và công khai tin “${selected.title}”?`)) void decide("approve"); }}>{busy ? <CircleNotch className="spin" /> : <Check />}Phê duyệt & công khai</button></div></Panel></div>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{reasonMode && <ReviewReasonModal mode={reasonMode} busy={busy} error={error} onClose={() => { if (!busy) { setReasonMode(null); setError(""); } }} onSubmit={note => void decide(reasonMode, note)} />}</>;
 }
 
-function LiveAdminApplicationReview() {
+function LiveAdminApplicationReview({ targetApplicationId = null }) {
   const { authorizedRequest } = useAuth();
   const [applications, setApplications] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -429,7 +436,9 @@ function LiveAdminApplicationReview() {
     try {
       const response = await authorizedRequest("/uit/applications/review-queue?page=1&pageSize=100");
       setApplications(response.data);
-      setSelectedId(current => response.data.some(application => application.id === current) ? current : response.data[0]?.id ?? null);
+      setSelectedId(current => response.data.some(application => application.id === targetApplicationId)
+        ? targetApplicationId
+        : response.data.some(application => application.id === current) ? current : response.data[0]?.id ?? null);
     } catch (requestError) {
       setError(getApiError(requestError));
     } finally {
@@ -437,7 +446,7 @@ function LiveAdminApplicationReview() {
     }
   };
 
-  useEffect(() => { void loadQueue(); }, [authorizedRequest]);
+  useEffect(() => { void loadQueue(); }, [authorizedRequest, targetApplicationId]);
 
   const decide = async payload => {
     if (!selected || !decisionMode || busy) return;
@@ -487,7 +496,7 @@ function PlacementConfirmationModal({ application, busy, error, close, submit })
   return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal placement-confirm-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" disabled={busy} onClick={close}><X /></button><span className="modal-icon"><GraduationCap /></span><h2>Xác nhận nơi thực tập</h2><p>Xác nhận <strong>{application.student.fullName}</strong> nhận vị trí <strong>{application.job.title}</strong> tại {application.job.company.name}.</p><div className="placement-impact"><Warning /><span><strong>Thao tác ảnh hưởng nhiều đơn</strong><small>Các đơn khác còn hoạt động của sinh viên sẽ tự chuyển sang Đã rút với lý do “Đã chọn nơi thực tập khác”. Lịch phỏng vấn liên quan cũng được hủy.</small></span></div><div className="modal-form"><label><span>Ngày bắt đầu chính thức *</span><input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></label><label><span>Ghi chú xác nhận</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Ví dụ: Đã đối chiếu offer và xác nhận với sinh viên..." maxLength={500} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><button className="primary-button" disabled={busy || !startDate} onClick={() => submit({ startDate, ...(note.trim() ? { note: note.trim() } : {}) })}>{busy ? <CircleNotch className="spin" /> : <CheckCircle />}Xác nhận & đóng đơn khác</button></div></div></div>;
 }
 
-function AdminPlacements() {
+function AdminPlacements({ targetApplicationId = null }) {
   const { authorizedRequest } = useAuth();
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -502,14 +511,16 @@ function AdminPlacements() {
     try {
       const response = await authorizedRequest("/uit/applications/placement-queue?page=1&pageSize=100");
       setItems(response.data);
-      setSelectedId(current => response.data.some(item => item.id === current) ? current : response.data[0]?.id || "");
+      setSelectedId(current => response.data.some(item => item.id === targetApplicationId)
+        ? targetApplicationId
+        : response.data.some(item => item.id === current) ? current : response.data[0]?.id || "");
     } catch (requestError) {
       setError(getApiError(requestError));
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [authorizedRequest, targetApplicationId]);
   const selected = items.find(item => item.id === selectedId) || items[0];
   const startSoon = items.filter(item => {
     const date = item.recruitmentResult?.startDate;
@@ -555,7 +566,7 @@ function AdminAccess() {
   return <><div className="portal-tabs"><button className={tab==='accounts'?'active':''} onClick={()=>setTab('accounts')}>Tài khoản & phân quyền</button><button className={tab==='audit'?'active':''} onClick={()=>setTab('audit')}>Nhật ký thao tác</button></div>{tab==='accounts'?<Panel title="Tài khoản quản trị" action={<button className="primary-button small"><UserPlus/>Thêm tài khoản</button>}><div className="simple-table account-table"><div className="table-head"><span>Người dùng</span><span>Vai trò</span><span>Phạm vi</span><span>Đăng nhập gần nhất</span><span>Trạng thái</span><span/></div>{[["Trần Hoàng Anh","Quản trị viên","Toàn hệ thống","05/08 · 14:28"],["Nguyễn Thu Trang","Chuyên viên kiểm duyệt","Tin & hồ sơ","05/08 · 13:55"],["Lê Minh Đức","Chuyên viên báo cáo","Chỉ xem báo cáo","04/08 · 16:40"]].map(row=><button key={row[0]}><strong>{row[0]}</strong><span>{row[1]}</span><span>{row[2]}</span><span>{row[3]}</span><Status tone="success">Hoạt động</Status><DotsThree/></button>)}</div></Panel>:<Panel title="Nhật ký thao tác" action={<button className="secondary-button small"><DownloadSimple/>Xuất nhật ký</button>}><div className="audit-list">{[["14:28","Trần Hoàng Anh","Phê duyệt tin Backend Developer Intern","VNG Corporation","success"],["14:12","Nguyễn Thu Trang","Chuyển hồ sơ 20521067 đến doanh nghiệp","VNG Corporation","info"],["13:48","Trần Hoàng Anh","Cập nhật tài khoản doanh nghiệp","FPT Software","neutral"],["11:20","Hệ thống","Gửi tổng hợp hồ sơ chưa xử lý","8 doanh nghiệp","purple"]].map(row=><div key={row[0]+row[2]}><span className={`audit-dot ${row[4]}`}/><time>{row[0]}<small>05/08/2026</small></time><div><strong>{row[2]}</strong><p>{row[1]} · {row[3]}</p></div><button><Eye/></button></div>)}</div></Panel>}</>;
 }
 
-export function CompanyPortal({ route, navigate, user, onLogout }) {
+export function CompanyPortal({ route, navigate, navigationPayload, user, onLogout }) {
   const [modal,setModal] = useState(null);
   const [jobsVersion, setJobsVersion] = useState(0);
   const titles = {
@@ -569,7 +580,7 @@ export function CompanyPortal({ route, navigate, user, onLogout }) {
   const [title,description]=titles[route]||titles['company-dashboard'];
   const action=route==='company-jobs'?<button className="primary-button" onClick={()=>setModal('job')}><Plus/>Tạo tin tuyển dụng</button>:route==='company-interviews'?<button className="primary-button" onClick={()=>setModal('interview')}><Plus/>Tạo lịch phỏng vấn</button>:null;
   return <WorkspaceShell role="company" route={route} navigate={navigate} title={title} description={description} actions={action} user={user} onLogout={onLogout}>
-    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfile/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications/>}
+    {route==='company-dashboard'&&<CompanyDashboard navigate={navigate}/>} {route==='company-profile'&&<CompanyProfile/>} {route==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {route==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {route==='company-interviews'&&<CompanyInterviews onCreate={()=>setModal('interview')}/>} {route==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
     {modal?.type==='job'&&<JobPostModal job={modal.job} close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='job'&&<JobPostModal close={()=>setModal(null)} onComplete={()=>{ setJobsVersion(value=>value+1); setModal(null); }}/>} {modal==='interview'&&<SimpleCreateModal type="interview" close={()=>setModal(null)}/>}
   </WorkspaceShell>;
 }
@@ -817,7 +828,7 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
   );
 }
 
-function CompanyCandidates() {
+function CompanyCandidates({ targetApplicationId = null }) {
   const { authorizedRequest, user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -834,13 +845,15 @@ function CompanyCandidates() {
     try {
       const response = await authorizedRequest("/companies/me/candidates?page=1&pageSize=100");
       setItems(response.data);
+      const target = response.data.find((application) => application.id === targetApplicationId);
+      if (target) setDetail(target);
     } catch (requestError) {
       setError(getApiError(requestError));
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [authorizedRequest, targetApplicationId]);
   const jobs = useMemo(() => Array.from(new Map(items.map(item => [item.job.id, item.job.title])).entries()), [items]);
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -918,9 +931,8 @@ function CompanyInterviews({onCreate}){
   return <div className="portal-two-column wide-left"><Panel title="Lịch tuần này"><div className="interview-agenda">{[["07","08","09:30","Nguyễn Minh Khoa","Backend Intern","Google Meet"],["08","08","14:00","Trần Khánh Linh","Product Intern","VNG Campus"],["09","08","10:15","Võ Minh Anh","Backend Intern","Google Meet"]].map((row,index)=><article key={row[3]}><div className="agenda-date"><strong>{row[0]}</strong><small>THÁNG {row[1]}</small></div><time>{row[2]}</time><div><strong>{row[3]}</strong><small>{row[4]} · {row[5]}</small></div><Status tone={index===0?'info':'neutral'}>{index===0?'Đã xác nhận':'Đã gửi lời mời'}</Status><button><DotsThree/></button></article>)}</div></Panel><div><Panel title="Kết quả cần cập nhật"><div className="result-list">{[[1,"Phạm Gia Huy","Product Intern","02/08/2026"],[2,"Lê Thành Đạt","Backend Intern","03/08/2026"]].map(row=><div key={row[0]}><span className="candidate-initials">{row[1].split(' ').slice(-2).map(x=>x[0]).join('')}</span><div><strong>{row[1]}</strong><small>{row[2]} · {row[3]}</small></div>{results[row[0]]?<Status tone={results[row[0]]==='Đạt'?'success':'neutral'}>{results[row[0]]}</Status>:<div className="result-buttons"><button onClick={()=>setResults({...results,[row[0]]:'Không đạt'})}>Không đạt</button><button onClick={()=>setResults({...results,[row[0]]:'Đạt'})}>Đạt</button></div>}</div>)}</div></Panel><button className="primary-button full" onClick={onCreate}><Plus/>Tạo lịch phỏng vấn</button></div></div>;
 }
 
-function CompanyNotifications(){
-  const notes=[["UIT đã chuyển 6 hồ sơ mới","Vị trí Backend Developer Intern · Cần xử lý trước 07/08/2026","10 phút trước","info"],["Tin tuyển dụng cần chỉnh sửa","UIT yêu cầu làm rõ thời gian làm việc của vị trí QA Engineer Fresher.","2 giờ trước","warning"],["Sinh viên đã xác nhận lịch phỏng vấn","Nguyễn Minh Khoa đã xác nhận tham gia lúc 09:30 ngày 07/08.","Hôm qua","success"],["Nhắc xử lý hồ sơ tồn","Có 6 hồ sơ đã chờ phản hồi quá 48 giờ.","Hôm qua","urgent"]];
-  return <Panel title="Thông báo doanh nghiệp" action={<button className="link-button">Đánh dấu tất cả đã đọc</button>}><div className="notification-list company-notices">{notes.map(row=><button key={row[0]}><span className={`notice-symbol ${row[3]}`}>{row[3]==='success'?<CheckCircle/>:row[3]==='warning'||row[3]==='urgent'?<Warning/>:<Bell/>}</span><div><strong>{row[0]}</strong><p>{row[1]}</p><small>{row[2]}</small></div><i/><ArrowRight/></button>)}</div></Panel>;
+function CompanyNotifications({ navigate }){
+  return <NotificationInbox role="company" onOpen={(notification, destination) => navigate(destination, { notification })} />;
 }
 
 function SimpleCreateModal({type,close}){

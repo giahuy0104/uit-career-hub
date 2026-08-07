@@ -35,6 +35,7 @@ import {
 import { AdminPortal, CompanyPortal, StudentExtraScreen } from "./RolePortals";
 import { useAuth } from "./auth/AuthContext.jsx";
 import { LoginScreen, SessionLoadingScreen } from "./auth/LoginScreen.jsx";
+import { useNotifications } from "./notifications/NotificationContext.jsx";
 
 const jobs = [
   {
@@ -127,6 +128,7 @@ function StudentIdentity({ inverse = false, user }) {
 }
 
 function TopHeader({ route, navigate, user, onLogout }) {
+  const { unreadCount } = useNotifications();
   return (
     <header className="top-header">
       <AppLogo />
@@ -134,7 +136,7 @@ function TopHeader({ route, navigate, user, onLogout }) {
         <button className={route === "jobs" ? "active" : ""} onClick={() => navigate("jobs")}><Briefcase size={19} />Việc làm</button>
         <button className={route === "companies" ? "active" : ""} onClick={() => navigate("companies")}><Buildings size={19} />Doanh nghiệp</button>
         <button className={route === "applications" ? "active" : ""} onClick={() => navigate("applications")}><FileText size={19} />Đơn ứng tuyển</button>
-        <button className={route === "notifications" ? "active" : ""} onClick={() => navigate("notifications")}><Bell size={19} />Thông báo<span className="notification-dot">3</span></button>
+        <button className={route === "notifications" ? "active" : ""} onClick={() => navigate("notifications")}><Bell size={19} />Thông báo{unreadCount > 0 && <span className="notification-dot">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>
       </nav>
       <div className="top-session"><StudentIdentity user={user} /><button className="top-signout" title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div>
     </header>
@@ -207,10 +209,11 @@ function JobsScreen({ navigate, user, onLogout }) {
 }
 
 function Sidebar({ navigate, user, onLogout }) {
+  const { unreadCount } = useNotifications();
   const items = [
     ["Tổng quan", House, "dashboard"], ["Việc làm", Briefcase, "jobs"], ["Đơn ứng tuyển", FileText, "applications"], ["Hồ sơ & CV", User, "profile"], ["Lịch phỏng vấn", CalendarBlank, "interviews"], ["Thông báo", Bell, "notifications"],
   ];
-  return <aside className="sidebar"><AppLogo compact /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && <span className="side-count">2</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse user={user} /><button title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div></aside>;
+  return <aside className="sidebar"><AppLogo compact /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && unreadCount > 0 && <span className="side-count">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse user={user} /><button title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div></aside>;
 }
 
 function ApplicationsScreen({ navigate, user, onLogout }) {
@@ -413,7 +416,7 @@ function applicationStage(status) {
   return 0;
 }
 
-function LiveApplicationsScreen({ navigate, user, onLogout }) {
+function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId = null }) {
   const { authorizedRequest } = useAuth();
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -445,12 +448,14 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
     authorizedRequest("/applications?page=1&pageSize=100").then((response) => {
       if (!active) return;
       setItems(response.data);
-      setSelectedId((current) => current || response.data[0]?.id || null);
+      setSelectedId((current) => response.data.some((application) => application.id === targetApplicationId)
+        ? targetApplicationId
+        : current || response.data[0]?.id || null);
       setLoadError("");
     }).catch((error) => { if (active) setLoadError(error.message); })
       .finally(() => { if (active) setLoadingApplications(false); });
     return () => { active = false; };
-  }, [authorizedRequest]);
+  }, [authorizedRequest, targetApplicationId]);
 
   const filtered = useMemo(() => items.filter((application) => {
     const matchesQuery = `${application.job.title} ${application.job.company.name}`.toLowerCase().includes(query.toLowerCase());
@@ -672,11 +677,13 @@ export function App() {
   const { user, loading, login, logout } = useAuth();
   const [route, setRoute] = useState("jobs");
   const [selectedJob, setSelectedJob] = useState(null);
+  const [navigationPayload, setNavigationPayload] = useState(null);
   const role = user?.role === "UIT_ADMIN" ? "admin" : user?.role === "COMPANY" ? "company" : "student";
-  const navigate = (destination, payload) => { if (payload?.job) setSelectedJob(payload.job); setRoute(destination); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const navigate = (destination, payload = null) => { if (payload?.job) setSelectedJob(payload.job); setNavigationPayload(payload); setRoute(destination); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   useEffect(() => {
     if (!user) return;
+    setNavigationPayload(null);
     setRoute(role === "admin" ? "admin-dashboard" : role === "company" ? "company-dashboard" : "jobs");
   }, [user?.id, role]);
 
@@ -684,9 +691,9 @@ export function App() {
   if (!user) return <LoginScreen onLogin={login} />;
 
   let content;
-  if (role === "admin") content = <AdminPortal route={route} navigate={navigate} user={user} onLogout={logout} />;
-  else if (role === "company") content = <CompanyPortal route={route} navigate={navigate} user={user} onLogout={logout} />;
-  else if (route === "applications") content = <LiveApplicationsScreen navigate={navigate} user={user} onLogout={logout} />;
+  if (role === "admin") content = <AdminPortal route={route} navigate={navigate} navigationPayload={navigationPayload} user={user} onLogout={logout} />;
+  else if (role === "company") content = <CompanyPortal route={route} navigate={navigate} navigationPayload={navigationPayload} user={user} onLogout={logout} />;
+  else if (route === "applications") content = <LiveApplicationsScreen navigate={navigate} targetApplicationId={navigationPayload?.notification?.resourceId} user={user} onLogout={logout} />;
   else if (route === "apply") content = <LiveApplyScreen job={selectedJob} navigate={navigate} user={user} onLogout={logout} />;
   else if (["dashboard", "companies", "profile", "interviews", "notifications"].includes(route)) content = <StudentExtraScreen route={route} navigate={navigate} user={user} onLogout={logout} />;
   else content = <LiveJobsScreen navigate={navigate} user={user} onLogout={logout} />;

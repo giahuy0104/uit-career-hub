@@ -19,6 +19,9 @@ import { createHealthRouter } from "./modules/health/health.routes.js";
 import { JobRepository, type JobDatabase } from "./modules/jobs/job.repository.js";
 import { createJobRouter } from "./modules/jobs/job.routes.js";
 import { JobService } from "./modules/jobs/job.service.js";
+import { NotificationRepository, type NotificationDatabase } from "./modules/notifications/notification.repository.js";
+import { createNotificationRouter } from "./modules/notifications/notification.routes.js";
+import { NotificationService } from "./modules/notifications/notification.service.js";
 import { AppError } from "./shared/app-error.js";
 
 type AppDependencies = {
@@ -30,6 +33,8 @@ type AppDependencies = {
   jobService?: JobService;
   applicationDatabase?: ApplicationDatabase;
   applicationService?: ApplicationService;
+  notificationDatabase?: NotificationDatabase;
+  notificationService?: NotificationService;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -54,14 +59,20 @@ export function createApp(dependencies: AppDependencies = {}) {
     new ApplicationService(
       new ApplicationRepository(dependencies.applicationDatabase ?? databasePool),
     );
+  const notificationService =
+    dependencies.notificationService ??
+    new NotificationService(
+      new NotificationRepository(dependencies.notificationDatabase ?? databasePool),
+    );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.6.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.7.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
   app.use("/api/v1", createJobRouter(jobService, tokenService));
   app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
+  app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

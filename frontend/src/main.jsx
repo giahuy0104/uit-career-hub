@@ -7,12 +7,15 @@ import "@fontsource/inter/700.css";
 import "@fontsource/inter/800.css";
 import { App } from "./App.jsx";
 import { AuthProvider } from "./auth/AuthContext.jsx";
+import { NotificationProvider } from "./notifications/NotificationContext.jsx";
 import "./styles.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <NotificationProvider>
+        <App />
+      </NotificationProvider>
     </AuthProvider>
   </React.StrictMode>,
 );
