@@ -1099,6 +1099,48 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /students/me/dashboard:
+    get:
+      tags: [Students]
+      operationId: getStudentDashboard
+      summary: Số liệu và việc cần làm của sinh viên hiện tại
+      responses:
+        '200':
+          description: Dashboard sinh viên được tổng hợp từ hồ sơ, đơn, lịch phỏng vấn và tin đang tuyển
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDashboardEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /uit/dashboard:
+    get:
+      tags: [UIT]
+      operationId: getUitDashboard
+      summary: Số liệu vận hành toàn trường dành cho UIT
+      responses:
+        '200':
+          description: Dashboard hàng đợi, SLA, phễu ứng tuyển và doanh nghiệp hoạt động
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminDashboardEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /companies/me/dashboard:
+    get:
+      tags: [Companies]
+      operationId: getCompanyDashboard
+      summary: Số liệu tuyển dụng của doanh nghiệp hiện tại
+      responses:
+        '200':
+          description: Dashboard tin tuyển dụng, ứng viên và lịch phỏng vấn theo doanh nghiệp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyDashboardEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /cron/daily-pending-notifications:
     get:
       tags: [Scheduler]
@@ -1387,6 +1429,170 @@ components:
       required: [data]
       properties:
         data: { $ref: '#/components/schemas/StudentDocument' }
+    DashboardMetricValue:
+      type: integer
+      minimum: 0
+    StudentDashboardEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [metrics, profile, tasks, latestApplication, opportunities]
+          properties:
+            metrics:
+              type: object
+              required: [profileCompleteness, activeApplications, upcomingInterviews, pendingOffers]
+              properties:
+                profileCompleteness: { type: integer, minimum: 0, maximum: 100 }
+                activeApplications: { $ref: '#/components/schemas/DashboardMetricValue' }
+                upcomingInterviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                pendingOffers: { $ref: '#/components/schemas/DashboardMetricValue' }
+            profile:
+              type: object
+              required: [missingItems]
+              properties:
+                missingItems: { type: array, items: { type: string } }
+            tasks:
+              type: array
+              items:
+                type: object
+                required: [type, applicationId, title, description, dueAt]
+                properties:
+                  type: { type: string, enum: [SUPPLEMENT_DOCUMENTS, RESPOND_OFFER, UPCOMING_INTERVIEW] }
+                  applicationId: { type: string, format: uuid }
+                  title: { type: string }
+                  description: { type: string }
+                  dueAt: { type: [string, 'null'], format: date-time }
+            latestApplication:
+              type: [object, 'null']
+              required: [applicationId, status, jobTitle, companyName, lastTransitionAt]
+              properties:
+                applicationId: { type: string, format: uuid }
+                status: { $ref: '#/components/schemas/ApplicationStatus' }
+                jobTitle: { type: string }
+                companyName: { type: string }
+                lastTransitionAt: { type: string, format: date-time }
+            opportunities:
+              type: array
+              items:
+                type: object
+                required: [jobId, title, companyName, workMode, deadline]
+                properties:
+                  jobId: { type: string, format: uuid }
+                  title: { type: string }
+                  companyName: { type: string }
+                  workMode: { $ref: '#/components/schemas/WorkMode' }
+                  deadline: { type: string, format: date }
+    AdminDashboardEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [metrics, queues, handledToday, applicationFunnel, topCompanies]
+          properties:
+            metrics:
+              type: object
+              required: [pendingJobReviews, pendingUitApplications, awaitingCompany, hiresThisMonth]
+              properties:
+                pendingJobReviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                pendingUitApplications: { $ref: '#/components/schemas/DashboardMetricValue' }
+                awaitingCompany: { $ref: '#/components/schemas/DashboardMetricValue' }
+                hiresThisMonth: { $ref: '#/components/schemas/DashboardMetricValue' }
+            queues:
+              type: object
+              required: [uitApplications, jobReviews, placementConfirmations]
+              properties:
+                uitApplications: { $ref: '#/components/schemas/DashboardQueue' }
+                jobReviews:
+                  allOf:
+                    - { $ref: '#/components/schemas/DashboardQueue' }
+                    - type: object
+                      required: [companyCount]
+                      properties:
+                        companyCount: { $ref: '#/components/schemas/DashboardMetricValue' }
+                placementConfirmations: { $ref: '#/components/schemas/DashboardQueue' }
+            handledToday:
+              type: object
+              required: [completed, incoming, completionRate]
+              properties:
+                completed: { $ref: '#/components/schemas/DashboardMetricValue' }
+                incoming: { $ref: '#/components/schemas/DashboardMetricValue' }
+                completionRate: { type: integer, minimum: 0, maximum: 100 }
+            applicationFunnel:
+              type: array
+              items:
+                type: object
+                required: [status, count]
+                properties:
+                  status: { type: string }
+                  count: { $ref: '#/components/schemas/DashboardMetricValue' }
+            topCompanies:
+              type: array
+              items:
+                type: object
+                required: [companyId, companyName, recruitingJobs, applications]
+                properties:
+                  companyId: { type: string, format: uuid }
+                  companyName: { type: string }
+                  recruitingJobs: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  applications: { $ref: '#/components/schemas/DashboardMetricValue' }
+    DashboardQueue:
+      type: object
+      required: [total, overdue, oldestWaitingHours]
+      properties:
+        total: { $ref: '#/components/schemas/DashboardMetricValue' }
+        overdue: { $ref: '#/components/schemas/DashboardMetricValue' }
+        oldestWaitingHours: { type: [integer, 'null'], minimum: 0 }
+    CompanyDashboardEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [metrics, actionQueue, recentCandidates, jobPerformance]
+          properties:
+            metrics:
+              type: object
+              required: [recruitingJobs, pendingJobReviews, newCandidates, interviewsThisWeek, hiresThisMonth]
+              properties:
+                recruitingJobs: { $ref: '#/components/schemas/DashboardMetricValue' }
+                pendingJobReviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                newCandidates: { $ref: '#/components/schemas/DashboardMetricValue' }
+                interviewsThisWeek: { $ref: '#/components/schemas/DashboardMetricValue' }
+                hiresThisMonth: { $ref: '#/components/schemas/DashboardMetricValue' }
+            actionQueue:
+              type: object
+              required: [overdueCandidates, revisionRequiredJobs]
+              properties:
+                overdueCandidates: { $ref: '#/components/schemas/DashboardMetricValue' }
+                revisionRequiredJobs: { $ref: '#/components/schemas/DashboardMetricValue' }
+            recentCandidates:
+              type: array
+              items:
+                type: object
+                required: [applicationId, studentName, studentCode, gpa, jobTitle, status, lastTransitionAt]
+                properties:
+                  applicationId: { type: string, format: uuid }
+                  studentName: { type: string }
+                  studentCode: { type: string }
+                  gpa: { type: [number, 'null'], minimum: 0, maximum: 4 }
+                  jobTitle: { type: string }
+                  status: { $ref: '#/components/schemas/ApplicationStatus' }
+                  lastTransitionAt: { type: string, format: date-time }
+            jobPerformance:
+              type: array
+              items:
+                type: object
+                required: [jobId, title, applications, forwarded, interviews, hires]
+                properties:
+                  jobId: { type: string, format: uuid }
+                  title: { type: string }
+                  applications: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  forwarded: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  interviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  hires: { $ref: '#/components/schemas/DashboardMetricValue' }
     Company:
       type: object
       required: [id, code, name, partnerStatus]

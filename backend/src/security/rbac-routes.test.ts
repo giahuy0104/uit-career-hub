@@ -7,6 +7,7 @@ import type { ApplicationService } from "../modules/applications/application.ser
 import type { AuthUser, UserRole } from "../modules/auth/auth.types.js";
 import { TokenService } from "../modules/auth/token.service.js";
 import type { CompanyService } from "../modules/companies/company.service.js";
+import type { DashboardService } from "../modules/dashboard/dashboard.service.js";
 import type { JobService } from "../modules/jobs/job.service.js";
 import type { NotificationService } from "../modules/notifications/notification.service.js";
 
@@ -16,6 +17,7 @@ type RestrictedEndpoint = { method: HttpMethod; path: string; role: UserRole };
 const resourceId = randomUUID();
 const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "get", path: "/api/v1/students/me", role: "STUDENT" },
+  { method: "get", path: "/api/v1/students/me/dashboard", role: "STUDENT" },
   { method: "get", path: "/api/v1/students/me/documents", role: "STUDENT" },
   { method: "get", path: "/api/v1/applications", role: "STUDENT" },
   { method: "post", path: "/api/v1/applications", role: "STUDENT" },
@@ -27,6 +29,7 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "post", path: `/api/v1/applications/${resourceId}/offer/decline`, role: "STUDENT" },
 
   { method: "get", path: "/api/v1/uit/jobs/review-queue", role: "UIT_ADMIN" },
+  { method: "get", path: "/api/v1/uit/dashboard", role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/jobs/${resourceId}/approve`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/jobs/${resourceId}/request-revision`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/jobs/${resourceId}/reject`, role: "UIT_ADMIN" },
@@ -48,6 +51,7 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/activation-link`, role: "UIT_ADMIN" },
 
   { method: "get", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
+  { method: "get", path: "/api/v1/companies/me/dashboard", role: "COMPANY" },
   { method: "post", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
   { method: "get", path: `/api/v1/companies/me/jobs/${resourceId}`, role: "COMPANY" },
   { method: "patch", path: `/api/v1/companies/me/jobs/${resourceId}`, role: "COMPANY" },
@@ -90,7 +94,15 @@ describe("HTTP RBAC matrix", () => {
   } as unknown as NotificationService;
   const applicationService = {} as ApplicationService;
   const companyService = {} as CompanyService;
-  const app = createApp({ tokenService, jobService, applicationService, notificationService, companyService });
+  const dashboardService = {} as DashboardService;
+  const app = createApp({
+    tokenService,
+    jobService,
+    applicationService,
+    notificationService,
+    companyService,
+    dashboardService,
+  });
   const tokens = new Map<UserRole, string>();
 
   beforeAll(async () => {

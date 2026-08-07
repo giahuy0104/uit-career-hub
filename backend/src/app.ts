@@ -18,6 +18,9 @@ import { ApplicationService } from "./modules/applications/application.service.j
 import { CompanyRepository, type CompanyDatabase } from "./modules/companies/company.repository.js";
 import { createCompanyRouter } from "./modules/companies/company.routes.js";
 import { CompanyService } from "./modules/companies/company.service.js";
+import { DashboardRepository, type DashboardDatabase } from "./modules/dashboard/dashboard.repository.js";
+import { createDashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { DashboardService } from "./modules/dashboard/dashboard.service.js";
 import { EmailDeliveryRepository, type EmailDeliveryDatabase } from "./modules/email/email-delivery.repository.js";
 import { EmailDeliveryService } from "./modules/email/email-delivery.service.js";
 import { ResendEmailProvider } from "./modules/email/resend-email.provider.js";
@@ -44,6 +47,8 @@ type AppDependencies = {
   applicationService?: ApplicationService;
   companyDatabase?: CompanyDatabase;
   companyService?: CompanyService;
+  dashboardDatabase?: DashboardDatabase;
+  dashboardService?: DashboardService;
   notificationDatabase?: NotificationDatabase;
   notificationService?: NotificationService;
   emailDeliveryDatabase?: EmailDeliveryDatabase;
@@ -83,6 +88,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       new CompanyRepository(dependencies.companyDatabase ?? databasePool),
       tokenService,
     );
+  const dashboardService =
+    dependencies.dashboardService ??
+    new DashboardService(
+      new DashboardRepository(dependencies.dashboardDatabase ?? dependencies.database ?? databasePool),
+    );
   const emailDeliveryService =
     dependencies.emailDeliveryService ??
     new EmailDeliveryService(
@@ -117,7 +127,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.10.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.11.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
@@ -127,6 +137,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
   app.use("/api/v1", createJobRouter(jobService, tokenService));
   app.use("/api/v1", createCompanyRouter(companyService, tokenService));
+  app.use("/api/v1", createDashboardRouter(dashboardService, tokenService));
   app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
   app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
 

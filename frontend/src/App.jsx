@@ -103,9 +103,9 @@ const otherApplications = [
   { role: "Thực tập sinh Frontend", company: "Tiki", date: "22/07/2026", status: "Đã nộp", tone: "neutral", next: "Chờ UIT tiếp nhận" },
 ];
 
-function AppLogo({ compact = false }) {
+function AppLogo({ compact = false, onClick }) {
   return (
-    <button className={`brand ${compact ? "brand-compact" : ""}`} onClick={() => window.dispatchEvent(new CustomEvent("navigate-home"))}>
+    <button className={`brand ${compact ? "brand-compact" : ""}`} onClick={onClick}>
       <span className="brand-symbol"><SealCheck size={compact ? 26 : 34} weight="duotone" /></span>
       <span><strong>UIT Career Hub</strong><small>Kết nối tri thức · Dẫn lối sự nghiệp</small></span>
     </button>
@@ -132,8 +132,9 @@ function TopHeader({ route, navigate, user, onLogout }) {
   const { unreadCount } = useNotifications();
   return (
     <header className="top-header">
-      <AppLogo />
+      <AppLogo onClick={() => navigate("dashboard")} />
       <nav className="top-nav" aria-label="Điều hướng chính">
+        <button className={route === "dashboard" ? "active" : ""} onClick={() => navigate("dashboard")}><House size={19} />Tổng quan</button>
         <button className={route === "jobs" ? "active" : ""} onClick={() => navigate("jobs")}><Briefcase size={19} />Việc làm</button>
         <button className={route === "companies" ? "active" : ""} onClick={() => navigate("companies")}><Buildings size={19} />Doanh nghiệp</button>
         <button className={route === "applications" ? "active" : ""} onClick={() => navigate("applications")}><FileText size={19} />Đơn ứng tuyển</button>
@@ -214,7 +215,7 @@ function Sidebar({ navigate, user, onLogout }) {
   const items = [
     ["Tổng quan", House, "dashboard"], ["Việc làm", Briefcase, "jobs"], ["Đơn ứng tuyển", FileText, "applications"], ["Hồ sơ & CV", User, "profile"], ["Lịch phỏng vấn", CalendarBlank, "interviews"], ["Thông báo", Bell, "notifications"],
   ];
-  return <aside className="sidebar"><AppLogo compact /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && unreadCount > 0 && <span className="side-count">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse user={user} /><button title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div></aside>;
+  return <aside className="sidebar"><AppLogo compact onClick={() => navigate("dashboard")} /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && unreadCount > 0 && <span className="side-count">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse user={user} /><button title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div></aside>;
 }
 
 function ApplicationsScreen({ navigate, user, onLogout }) {
@@ -685,7 +686,7 @@ export function App() {
   useEffect(() => {
     if (!user) return;
     setNavigationPayload(null);
-    setRoute(role === "admin" ? "admin-dashboard" : role === "company" ? "company-dashboard" : "jobs");
+    setRoute(role === "admin" ? "admin-dashboard" : role === "company" ? "company-dashboard" : "dashboard");
   }, [user?.id, role]);
 
   if (loading) return <SessionLoadingScreen />;
