@@ -229,6 +229,44 @@ describeWithDatabase("student job application flow", () => {
       .set("Idempotency-Key", commandId);
   }
 
+  function scheduleInterview(token: string, applicationId: string, commandId = randomUUID()) {
+    return request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/interviews`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId)
+      .send({
+        scheduledAt: "2099-12-20T09:30:00+07:00",
+        timeZone: "Asia/Ho_Chi_Minh",
+        mode: "ONLINE",
+        meetingUrl: "https://meet.example/interview-result-test",
+        interviewerName: "Trần Minh Anh",
+      });
+  }
+
+  function recordResult(
+    token: string,
+    applicationId: string,
+    body: Record<string, unknown>,
+    commandId = randomUUID(),
+  ) {
+    return request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/results`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("Idempotency-Key", commandId)
+      .send(body);
+  }
+
+  async function prepareInterview() {
+    const scenario = await createScenario();
+    const created = await submit(scenario.student.token, scenario.jobId, [scenario.student.cvId]);
+    const applicationId = created.body.data.id as string;
+    await forward(scenario.admin.token, applicationId);
+    await startCompanyReview(scenario.recruiter.token, applicationId);
+    const interview = await scheduleInterview(scenario.recruiter.token, applicationId);
+    expect(interview.status).toBe(201);
+    return { ...scenario, applicationId };
+  }
+
   it("lists only active recruiting jobs and returns their details", async () => {
     const { jobId, unavailableJobId, student } = await createScenario();
 
@@ -619,5 +657,171 @@ describeWithDatabase("student job application flow", () => {
     expect([rejected.status, interviewed.status]).toContain(409);
     const finalState = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [applicationId]);
     expect(["NOT_SUITABLE", "INTERVIEW_INVITED"]).toContain(finalState.rows[0]?.status);
+  });
+
+  it("records a PASS result idempotently, creates an offer and notifies student and UIT", async () => {
+    const scenario = await prepareInterview();
+    const commandId = randomUUID();
+    const body = {
+      outcome: "PASS",
+      startDate: "2099-12-28",
+      offerStorageKey: "offers/offer-result-test.pdf",
+      internalNote: "Mức phụ cấp theo chính sách thực tập sinh.",
+    };
+
+    const passed = await recordResult(scenario.recruiter.token, scenario.applicationId, body, commandId);
+    expect(passed.status).toBe(200);
+    expect(passed.body.data).toMatchObject({
+      status: "OFFER_PENDING_STUDENT",
+      version: 5,
+      recruitmentResult: {
+        outcome: "PASS",
+        studentDecision: null,
+        startDate: body.startDate,
+        offerStorageKey: body.offerStorageKey,
+      },
+    });
+    expect(passed.body.data.timeline.at(-1)).toMatchObject({
+      fromStatus: "INTERVIEW_INVITED",
+      toStatus: "OFFER_PENDING_STUDENT",
+      metadata: { outcome: "PASS", startDate: body.startDate, hasOfferDocument: true },
+    });
+
+    const repeated = await recordResult(scenario.recruiter.token, scenario.applicationId, body, commandId);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.version).toBe(5);
+
+    const interview = await client.query<{ status: string }>(
+      "SELECT status FROM interviews WHERE application_id = $1",
+      [scenario.applicationId],
+    );
+    expect(interview.rows[0]?.status).toBe("COMPLETED");
+    const notifications = await client.query<{ type: string; role: string }>(
+      `SELECT n.type, u.role FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+       WHERE n.resource_id = $1 AND n.type IN ('OFFER_AVAILABLE', 'INTERVIEW_RESULT_RECORDED')`,
+      [scenario.applicationId],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      { type: "OFFER_AVAILABLE", role: "STUDENT" },
+      { type: "INTERVIEW_RESULT_RECORDED", role: "UIT_ADMIN" },
+    ]));
+  });
+
+  it("records a FAIL result with a required reason and closes the interview step", async () => {
+    const scenario = await prepareInterview();
+    const failed = await recordResult(scenario.recruiter.token, scenario.applicationId, {
+      outcome: "FAIL",
+      reasonCode: "INTERVIEW_SKILL_GAP",
+      note: "Kỹ năng thực hành hiện chưa đáp ứng yêu cầu của vị trí.",
+    });
+
+    expect(failed.status).toBe(200);
+    expect(failed.body.data).toMatchObject({
+      status: "INTERVIEW_FAILED",
+      version: 5,
+      recruitmentResult: { outcome: "FAIL", studentDecision: null, offeredAt: null },
+    });
+    expect(failed.body.data.timeline.at(-1)).toMatchObject({
+      toStatus: "INTERVIEW_FAILED",
+      reasonCode: "INTERVIEW_SKILL_GAP",
+    });
+
+    const invalidSecondResult = await recordResult(scenario.recruiter.token, scenario.applicationId, {
+      outcome: "PASS",
+      startDate: "2099-12-28",
+    });
+    expect(invalidSecondResult.status).toBe(409);
+    expect(invalidSecondResult.body.error.code).toBe("APPLICATION_STATE_CONFLICT");
+  });
+
+  it("lets the owning student accept an offer idempotently and requests UIT confirmation", async () => {
+    const scenario = await prepareInterview();
+    await recordResult(scenario.recruiter.token, scenario.applicationId, {
+      outcome: "PASS",
+      startDate: "2099-12-28",
+    });
+    const commandId = randomUUID();
+
+    const accepted = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer/accept`)
+      .set("Authorization", `Bearer ${scenario.student.token}`)
+      .set("Idempotency-Key", commandId);
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.data).toMatchObject({
+      status: "ACCEPTED_PENDING_UIT_CONFIRMATION",
+      version: 6,
+      recruitmentResult: { outcome: "PASS", studentDecision: "ACCEPTED" },
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer/accept`)
+      .set("Authorization", `Bearer ${scenario.student.token}`)
+      .set("Idempotency-Key", commandId);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.version).toBe(6);
+
+    const notifications = await client.query<{ type: string; role: string }>(
+      `SELECT n.type, u.role FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+       WHERE n.resource_id = $1 AND n.type IN ('OFFER_ACCEPTED', 'PLACEMENT_CONFIRMATION_REQUIRED')`,
+      [scenario.applicationId],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      { type: "OFFER_ACCEPTED", role: "COMPANY" },
+      { type: "PLACEMENT_CONFIRMATION_REQUIRED", role: "UIT_ADMIN" },
+    ]));
+  });
+
+  it("requires a reason when the owning student declines an offer", async () => {
+    const scenario = await prepareInterview();
+    await recordResult(scenario.recruiter.token, scenario.applicationId, {
+      outcome: "PASS",
+      startDate: "2099-12-28",
+    });
+
+    const missingReason = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer/decline`)
+      .set("Authorization", `Bearer ${scenario.student.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({});
+    expect(missingReason.status).toBe(400);
+
+    const declined = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer/decline`)
+      .set("Authorization", `Bearer ${scenario.student.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ reasonCode: "ACCEPTED_OTHER_OFFER", note: "Tôi đã lựa chọn một cơ hội phù hợp hơn." });
+    expect(declined.status).toBe(200);
+    expect(declined.body.data).toMatchObject({
+      status: "OFFER_DECLINED",
+      recruitmentResult: { studentDecision: "DECLINED" },
+    });
+    expect(declined.body.data.timeline.at(-1)).toMatchObject({
+      toStatus: "OFFER_DECLINED",
+      reasonCode: "ACCEPTED_OTHER_OFFER",
+    });
+  });
+
+  it("allows only one student decision when accept and decline race", async () => {
+    const scenario = await prepareInterview();
+    await recordResult(scenario.recruiter.token, scenario.applicationId, {
+      outcome: "PASS",
+      startDate: "2099-12-28",
+    });
+
+    const [accepted, declined] = await Promise.all([
+      request(app)
+        .post(`/api/v1/applications/${scenario.applicationId}/offer/accept`)
+        .set("Authorization", `Bearer ${scenario.student.token}`)
+        .set("Idempotency-Key", randomUUID()),
+      request(app)
+        .post(`/api/v1/applications/${scenario.applicationId}/offer/decline`)
+        .set("Authorization", `Bearer ${scenario.student.token}`)
+        .set("Idempotency-Key", randomUUID())
+        .send({ reasonCode: "OTHER_REASON", note: "Tôi chưa thể bắt đầu trong thời gian đề xuất." }),
+    ]);
+
+    expect([accepted.status, declined.status].sort()).toEqual([200, 409]);
+    const finalState = await client.query<{ status: string }>("SELECT status FROM applications WHERE id = $1", [scenario.applicationId]);
+    expect(["ACCEPTED_PENDING_UIT_CONFIRMATION", "OFFER_DECLINED"]).toContain(finalState.rows[0]?.status);
   });
 });

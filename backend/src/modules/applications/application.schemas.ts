@@ -69,3 +69,19 @@ export const interviewRequestSchema = z
       context.addIssue({ code: "custom", path: ["location"], message: "Phá»ng váº¥n táº¡i chá»— cáº§n Ä‘á»‹a Ä‘iá»ƒm." });
     }
   });
+
+const recruitmentPassSchema = z.object({
+  outcome: z.literal("PASS"),
+  startDate: z.iso.date(),
+  offerStorageKey: z.string().trim().min(3).max(2_000).optional(),
+  internalNote: z.string().trim().max(2_000).optional(),
+});
+
+const recruitmentFailSchema = applicationReviewReasonSchema.extend({
+  outcome: z.literal("FAIL"),
+});
+
+export const recruitmentResultSchema = z.discriminatedUnion("outcome", [
+  recruitmentPassSchema,
+  recruitmentFailSchema,
+]);

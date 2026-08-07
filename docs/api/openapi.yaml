@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 0.6.0
+  version: 0.7.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -612,6 +612,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /uit/companies:
     get:
@@ -1305,7 +1313,7 @@ components:
         consentToShare: { type: boolean, const: true }
     Application:
       type: object
-      required: [id, studentProfileId, status, version, submittedAt, lastTransitionAt, availableActions, student, job, documents, timeline]
+      required: [id, studentProfileId, status, version, submittedAt, lastTransitionAt, availableActions, student, job, documents, recruitmentResult, timeline]
       properties:
         id: { type: string, format: uuid }
         studentProfileId: { type: string, format: uuid }
@@ -1361,6 +1369,10 @@ components:
               mimeType: { type: string }
               fileSizeBytes: { type: integer, minimum: 1 }
               sourceVersion: { type: integer, minimum: 1 }
+        recruitmentResult:
+          oneOf:
+            - $ref: '#/components/schemas/RecruitmentResult'
+            - type: 'null'
         timeline:
           type: array
           items:
@@ -1395,7 +1407,7 @@ components:
       required: [reasonCode, note]
       properties:
         reasonCode: { type: string, minLength: 2, maxLength: 100 }
-        note: { type: string, minLength: 3, maxLength: 500 }
+        note: { type: string, minLength: 5, maxLength: 2000 }
     SupplementRequest:
       allOf:
         - $ref: '#/components/schemas/ReasonRequest'
@@ -1439,13 +1451,42 @@ components:
       properties:
         data: { $ref: '#/components/schemas/Interview' }
     RecruitmentResultRequest:
+      oneOf:
+        - $ref: '#/components/schemas/RecruitmentPassRequest'
+        - $ref: '#/components/schemas/RecruitmentFailRequest'
+      discriminator:
+        propertyName: outcome
+        mapping:
+          PASS: '#/components/schemas/RecruitmentPassRequest'
+          FAIL: '#/components/schemas/RecruitmentFailRequest'
+    RecruitmentPassRequest:
       type: object
-      required: [outcome]
+      required: [outcome, startDate]
       properties:
-        outcome: { type: string, enum: [PASS, FAIL] }
+        outcome: { type: string, const: PASS }
         startDate: { type: string, format: date }
-        offerStorageKey: { type: string }
+        offerStorageKey: { type: string, minLength: 3, maxLength: 2000 }
         internalNote: { type: string, maxLength: 2000 }
+    RecruitmentFailRequest:
+      type: object
+      required: [outcome, reasonCode, note]
+      properties:
+        outcome: { type: string, const: FAIL }
+        reasonCode: { type: string, minLength: 2, maxLength: 80 }
+        note: { type: string, minLength: 5, maxLength: 2000 }
+    RecruitmentResult:
+      type: object
+      required: [id, outcome, studentDecision, offeredAt, respondedAt, startDate, offerStorageKey]
+      properties:
+        id: { type: string, format: uuid }
+        outcome: { type: string, enum: [PASS, FAIL] }
+        studentDecision:
+          type: [string, 'null']
+          enum: [ACCEPTED, DECLINED, null]
+        offeredAt: { type: [string, 'null'], format: date-time }
+        respondedAt: { type: [string, 'null'], format: date-time }
+        startDate: { type: [string, 'null'], format: date }
+        offerStorageKey: { type: [string, 'null'] }
     PlacementConfirmationRequest:
       type: object
       required: [startDate]

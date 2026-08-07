@@ -415,6 +415,11 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
   const [loadingApplications, setLoadingApplications] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [documentsOpen, setDocumentsOpen] = useState(false);
+  const [offerDecision, setOfferDecision] = useState("");
+  const [offerNote, setOfferNote] = useState("");
+  const [offerBusy, setOfferBusy] = useState(false);
+  const [offerError, setOfferError] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -437,23 +442,51 @@ function LiveApplicationsScreen({ navigate, user, onLogout }) {
   const stage = selected ? applicationStage(selected.status) : 0;
   const terminal = selected && ["NOT_SUITABLE", "INTERVIEW_FAILED", "OFFER_DECLINED", "UIT_REJECTED", "WITHDRAWN"].includes(selected.status);
   const journeyLabels = ["Đã nộp", "UIT kiểm duyệt", "Doanh nghiệp xử lý", "Phỏng vấn", "Kết quả"];
+  const openOfferDecision = (decision) => {
+    setOfferDecision(decision);
+    setOfferNote("");
+    setOfferError("");
+  };
+  const respondToOffer = async () => {
+    if (!selected || !offerDecision) return;
+    setOfferBusy(true);
+    setOfferError("");
+    try {
+      const response = await authorizedRequest(`/applications/${selected.id}/offer/${offerDecision}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        ...(offerDecision === "decline" ? { body: JSON.stringify({ reasonCode: "STUDENT_DECLINED_OFFER", note: offerNote.trim() }) } : {}),
+      });
+      setItems(current => current.map(application => application.id === response.data.id ? response.data : application));
+      setMessage(offerDecision === "accept" ? "Bạn đã nhận offer. UIT sẽ xác nhận nơi thực tập ở bước tiếp theo." : "Đã ghi nhận từ chối offer và lưu lý do trong lịch sử.");
+      setOfferDecision("");
+      setOfferNote("");
+    } catch (error) {
+      setOfferError(error.message);
+    } finally {
+      setOfferBusy(false);
+    }
+  };
 
   return (
     <div className="screen applications-screen">
       <Sidebar navigate={navigate} user={user} onLogout={onLogout} />
       <main className="applications-content">
+        {message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}
         <header className="applications-header"><div><h1>Đơn ứng tuyển của tôi</h1><p>Theo dõi người đang xử lý và lịch sử của từng đơn.</p></div><div className="applications-tools"><label className="search-field compact"><MagnifyingGlass size={20} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty..." /></label><label className="select-control"><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(applicationStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><CaretDown size={15} /></label></div></header>
         {loadingApplications ? <div className="portal-loading"><CircleNotch className="spin" size={22} />Đang tải đơn ứng tuyển...</div> : loadError ? <div className="portal-error"><Warning size={21} />{loadError}</div> : !items.length ? <div className="active-application empty-state"><FileText size={36} /><strong>Bạn chưa có đơn ứng tuyển</strong><span>Hãy chọn một cơ hội phù hợp để bắt đầu.</span><button className="primary-button" onClick={() => navigate("jobs")}>Xem việc làm</button></div> : selected && <>
           <section className="active-application">
             <div className="application-title"><LiveCompanyMark company={selected.job.company} size="lg" /><span><h2>{selected.job.title}</h2><p>{selected.job.company.name}</p><small><CalendarBlank size={15} />Đã nộp: {formatDate(selected.submittedAt)}</small></span><span className={`status-pill ${terminal ? "neutral" : "pending"}`}>{applicationStatusLabels[selected.status]}</span></div>
             <div className="journey">{journeyLabels.map((label, index) => <div className={`journey-step ${index < stage ? "done" : index === stage && !terminal ? "current" : ""}`} key={label}><span>{index < stage ? <Check size={18} /> : index + 1}</span><strong>{label}</strong><small>{index === 0 ? formatDate(selected.submittedAt) : index === stage && !terminal ? "Đang thực hiện" : index < stage ? "Đã hoàn tất" : "Chưa bắt đầu"}</small></div>)}</div>
-            <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="primary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ đã nộp</button></div></div>
+            <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : selected.status === "OFFER_PENDING_STUDENT" ? "Doanh nghiệp đang chờ quyết định của bạn. Hãy kiểm tra ngày bắt đầu trước khi phản hồi." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="secondary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ</button>{selected.status === "OFFER_PENDING_STUDENT" && <><button className="secondary-button danger" onClick={() => openOfferDecision("decline")}><X size={18} />Từ chối</button><button className="primary-button" onClick={() => openOfferDecision("accept")}><CheckCircle size={19} />Nhận offer</button></>}</div></div>
+            {selected.status === "OFFER_PENDING_STUDENT" && selected.recruitmentResult && <div className="offer-summary"><span className="offer-summary-icon"><Briefcase size={25} /></span><span><small>LỜI MỜI NHẬN VIỆC</small><strong>Ngày bắt đầu dự kiến: {formatDate(selected.recruitmentResult.startDate)}</strong><p>{selected.recruitmentResult.offerStorageKey ? "Doanh nghiệp đã đính kèm tài liệu offer." : "Offer được xác nhận trực tiếp trên hệ thống."}</p></span><i className="status-tag pending">Chờ bạn phản hồi</i></div>}
             {selected.status === "UIT_REVIEWING" && <p className="info-banner"><Info size={22} />Doanh nghiệp chưa thể xem CV cho đến khi UIT phê duyệt và chuyển hồ sơ.</p>}
           </section>
           <section className="application-table-section live-applications-table"><h3>Tất cả đơn ứng tuyển ({filtered.length})</h3><div className="application-table"><div className="application-table-head"><span>Vị trí ứng tuyển</span><span>Công ty</span><span>Ngày nộp</span><span>Trạng thái hiện tại</span><span>Bước tiếp theo</span></div>{filtered.map((application) => <button className={`application-row ${application.id === selected.id ? "selected" : ""}`} key={application.id} onClick={() => setSelectedId(application.id)}><strong>{application.job.title}</strong><span>{application.job.company.name}</span><span>{formatDate(application.submittedAt)}</span><span><i className="status-tag pending">{applicationStatusLabels[application.status]}</i></span><span>Xem chi tiết <CaretRight size={15} /></span></button>)}</div></section>
         </>}
       </main>
       {documentsOpen && selected && <div className="modal-backdrop" onMouseDown={() => setDocumentsOpen(false)}><div className="modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setDocumentsOpen(false)}><X size={20} /></button><span className="modal-icon"><FileText size={26} /></span><h2>Hồ sơ đã nộp</h2><p>Đây là bản chụp tài liệu tại thời điểm gửi đơn.</p><div className="modal-list">{selected.documents.map((document) => <span key={document.id}><CheckCircle size={18} />{document.fileName} · {formatBytes(document.fileSizeBytes)}</span>)}</div><button className="primary-button full" onClick={() => setDocumentsOpen(false)}>Đóng</button></div></div>}
+      {offerDecision && selected && <div className="modal-backdrop" onMouseDown={() => !offerBusy && setOfferDecision("")}><div className="modal offer-decision-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={offerBusy} onClick={() => setOfferDecision("")}><X size={20} /></button><span className={`modal-icon ${offerDecision === "decline" ? "danger" : ""}`}>{offerDecision === "accept" ? <CheckCircle size={26} /> : <Warning size={26} />}</span><h2>{offerDecision === "accept" ? "Xác nhận nhận offer" : "Từ chối offer"}</h2><p>{offerDecision === "accept" ? <>Bạn chọn <strong>{selected.job.company.name}</strong> cho vị trí <strong>{selected.job.title}</strong>. UIT sẽ xác nhận trước khi đóng các đơn còn lại.</> : <>Lý do từ chối sẽ được lưu trong lịch sử và gửi đến doanh nghiệp.</>}</p>{offerDecision === "decline" && <label className="offer-decline-note"><span>Lý do *</span><textarea value={offerNote} onChange={(event) => setOfferNote(event.target.value)} placeholder="Ví dụ: Tôi đã chọn một cơ hội phù hợp hơn..." maxLength={2000} /></label>}{offerError && <p className="form-error"><Warning size={18} />{offerError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={offerBusy} onClick={() => setOfferDecision("")}>Hủy</button><button className={offerDecision === "accept" ? "primary-button" : "secondary-button danger"} disabled={offerBusy || (offerDecision === "decline" && offerNote.trim().length < 5)} onClick={() => void respondToOffer()}>{offerBusy ? <CircleNotch className="spin" size={18} /> : offerDecision === "accept" ? <CheckCircle size={18} /> : <X size={18} />}{offerDecision === "accept" ? "Xác nhận nhận offer" : "Xác nhận từ chối"}</button></div></div></div>}
     </div>
   );
 }

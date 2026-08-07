@@ -59,6 +59,15 @@ export type ApplicationDto = {
     fileSizeBytes: number;
     sourceVersion: number;
   }>;
+  recruitmentResult: {
+    id: string;
+    outcome: "PASS" | "FAIL";
+    studentDecision: "ACCEPTED" | "DECLINED" | null;
+    offeredAt: string | null;
+    respondedAt: string | null;
+    startDate: string | null;
+    offerStorageKey: string | null;
+  } | null;
   timeline: Array<{
     fromStatus: ApplicationStatus | null;
     toStatus: ApplicationStatus;

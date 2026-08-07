@@ -14,6 +14,7 @@ import {
   applicationSupplementRequestSchema,
   companyCandidateListQuerySchema,
   interviewRequestSchema,
+  recruitmentResultSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
 
@@ -68,6 +69,34 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
       data: await service.getApplication(
         principal(request).studentProfileId,
         applicationIdSchema.parse(request.params.applicationId),
+      ),
+    });
+  });
+
+  router.post("/applications/:applicationId/offer/accept", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.respondToOffer(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "accept",
+        {},
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/applications/:applicationId/offer/decline", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.respondToOffer(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        "decline",
+        applicationReviewReasonSchema.parse(request.body),
+        metadata(request),
       ),
     });
   });
@@ -165,6 +194,19 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
         applicationIdSchema.parse(request.params.applicationId),
         applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
         interviewRequestSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/companies/me/applications/:applicationId/results", companyOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.recordInterviewResult(
+        { userId: auth.userId, companyId: auth.companyId },
+        applicationIdSchema.parse(request.params.applicationId),
+        applicationIdempotencyKeySchema.parse(request.header("idempotency-key")),
+        recruitmentResultSchema.parse(request.body),
         metadata(request),
       ),
     });

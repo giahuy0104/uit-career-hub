@@ -693,15 +693,32 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
   const [location, setLocation] = useState("");
   const [meetingUrl, setMeetingUrl] = useState("");
   const [interviewer, setInterviewer] = useState(interviewerName || "");
-  const isReject = mode === "reject";
-  const valid = isReject
-    ? note.trim().length >= 5
-    : Boolean(date && time && interviewer.trim().length >= 2 && (
-      interviewMode === "PHONE" || (interviewMode === "ONLINE" ? meetingUrl.trim() : location.trim().length >= 3)
-    ));
+  const [offerStorageKey, setOfferStorageKey] = useState("");
+  const isInterview = mode === "interview";
+  const isPass = mode === "result-pass";
+  const isFail = mode === "result-fail";
+  const isDanger = mode === "reject" || isFail;
+  const valid = isInterview
+    ? Boolean(date && time && interviewer.trim().length >= 2 && (
+        interviewMode === "PHONE" || (interviewMode === "ONLINE" ? meetingUrl.trim() : location.trim().length >= 3)
+      ))
+    : isPass ? Boolean(date) : note.trim().length >= 5;
   const send = () => {
-    if (isReject) {
+    if (mode === "reject") {
       submit({ reasonCode: "COMPANY_NOT_SUITABLE", note: note.trim() });
+      return;
+    }
+    if (isFail) {
+      submit({ outcome: "FAIL", reasonCode: "INTERVIEW_SKILL_GAP", note: note.trim() });
+      return;
+    }
+    if (isPass) {
+      submit({
+        outcome: "PASS",
+        startDate: date,
+        ...(offerStorageKey.trim() ? { offerStorageKey: offerStorageKey.trim() } : {}),
+        ...(note.trim() ? { internalNote: note.trim() } : {}),
+      });
       return;
     }
     submit({
@@ -717,12 +734,10 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
     <div className="modal-backdrop" onMouseDown={() => !busy && close()}>
       <div className="modal portal-modal candidate-decision-modal" onMouseDown={event => event.stopPropagation()}>
         <button className="modal-close" disabled={busy} onClick={close}><X /></button>
-        <span className={`modal-icon ${isReject ? "danger" : ""}`}>{isReject ? <Warning /> : <CalendarCheck />}</span>
-        <h2>{isReject ? "Chọn Không phù hợp" : "Mời ứng viên phỏng vấn"}</h2>
-        <p>{isReject ? `Lý do sẽ được lưu và thông báo cho ${application.student.fullName}.` : `Tạo lịch cho ${application.student.fullName} · ${application.job.title}.`}</p>
-        {isReject ? (
-          <label className="review-note"><span>Lý do chi tiết *</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Nêu lý do ngắn gọn, chuyên nghiệp..." maxLength={2000} /></label>
-        ) : (
+        <span className={`modal-icon ${isDanger ? "danger" : ""}`}>{isDanger ? <Warning /> : isPass ? <CheckCircle /> : <CalendarCheck />}</span>
+        <h2>{mode === "reject" ? "Chọn Không phù hợp" : isFail ? "Ghi nhận chưa đạt phỏng vấn" : isPass ? "Gửi offer cho ứng viên" : "Mời ứng viên phỏng vấn"}</h2>
+        <p>{isInterview ? `Tạo lịch cho ${application.student.fullName} · ${application.job.title}.` : isPass ? `Xác nhận đạt và gửi offer cho ${application.student.fullName}.` : `Lý do sẽ được lưu và thông báo cho ${application.student.fullName}.`}</p>
+        {isInterview ? (
           <div className="modal-form two-cols interview-form">
             <label><span>Ngày *</span><input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
             <label><span>Giờ *</span><input type="time" value={time} onChange={event => setTime(event.target.value)} /></label>
@@ -731,9 +746,17 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
             {interviewMode === "ONLINE" && <label className="full"><span>Đường dẫn tham gia *</span><input value={meetingUrl} onChange={event => setMeetingUrl(event.target.value)} placeholder="https://meet.google.com/..." /></label>}
             {interviewMode === "ONSITE" && <label className="full"><span>Địa điểm *</span><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Văn phòng, tầng, phòng..." /></label>}
           </div>
+        ) : isPass ? (
+          <div className="modal-form two-cols interview-form">
+            <label><span>Ngày bắt đầu dự kiến *</span><input type="date" value={date} min={new Date().toISOString().slice(0, 10)} onChange={event => setDate(event.target.value)} /></label>
+            <label><span>Đường dẫn / mã tệp offer</span><input value={offerStorageKey} onChange={event => setOfferStorageKey(event.target.value)} placeholder="offers/offer.pdf hoặc https://..." /></label>
+            <label className="full"><span>Ghi chú nội bộ</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Thông tin chỉ doanh nghiệp lưu nội bộ..." maxLength={2000} /></label>
+          </div>
+        ) : (
+          <label className="review-note"><span>Lý do chi tiết *</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Nêu lý do ngắn gọn, chuyên nghiệp..." maxLength={2000} /></label>
         )}
         {error && <p className="form-error"><Warning />{error}</p>}
-        <div className="modal-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><button className={isReject ? "secondary-button danger" : "primary-button"} disabled={busy || !valid} onClick={send}>{busy ? <CircleNotch className="spin" /> : isReject ? <X /> : <PaperPlaneTilt />}{isReject ? "Xác nhận không phù hợp" : "Gửi lời mời"}</button></div>
+        <div className="modal-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><button className={isDanger ? "secondary-button danger" : "primary-button"} disabled={busy || !valid} onClick={send}>{busy ? <CircleNotch className="spin" /> : isDanger ? <X /> : <PaperPlaneTilt />}{mode === "reject" ? "Xác nhận không phù hợp" : isFail ? "Xác nhận chưa đạt" : isPass ? "Gửi offer" : "Gửi lời mời"}</button></div>
       </div>
     </div>
   );
@@ -791,10 +814,14 @@ function CompanyCandidates() {
         const response = await authorizedRequest(`/companies/me/applications/${application.id}/reject`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
         replace(response.data);
         setMessage("Đã ghi nhận ứng viên không phù hợp.");
-      } else {
+      } else if (decision.mode === "interview") {
         await authorizedRequest(`/companies/me/applications/${application.id}/interviews`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
         await load();
         setMessage("Đã tạo lịch và gửi lời mời phỏng vấn.");
+      } else {
+        const response = await authorizedRequest(`/companies/me/applications/${application.id}/results`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
+        replace(response.data);
+        setMessage(decision.mode === "result-pass" ? "Đã gửi offer và chờ sinh viên phản hồi." : "Đã ghi nhận kết quả chưa đạt.");
       }
       setDecision(null);
     } catch (requestError) {
@@ -820,7 +847,7 @@ function CompanyCandidates() {
             return <section key={column.key}><header><h2>{column.label}</h2><span>{candidatesInStage.length}</span></header><div>{!candidatesInStage.length && <p className="candidate-empty">Chưa có hồ sơ</p>}{candidatesInStage.map(application => {
               const status = companyCandidateStatusCopy[application.status] || [application.status, "neutral"];
               const busy = busyId === application.id;
-              return <article key={application.id}><div className="candidate-card-heading"><span className="candidate-initials">{userInitials(application.student.fullName)}</span><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.student.major}</small></div></div><p>{application.job.title}</p><div className="candidate-meta"><span>GPA <b>{application.student.gpa ?? "—"}</b></span><Status tone={status[1]}>{status[0]}</Status></div><small className="candidate-received">Cập nhật {formatSubmitted(application.lastTransitionAt)}</small><div className="candidate-card-actions"><button onClick={() => setDetail(application)}><Eye />Xem</button>{application.status === "FORWARDED_TO_COMPANY" && <button className="primary wide" disabled={busy} onClick={() => void startReview(application)}>{busy ? <CircleNotch className="spin" /> : <ArrowRight />}Bắt đầu xem</button>}{application.status === "COMPANY_REVIEWING" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "reject", application }); }}>Không phù hợp</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "interview", application }); }}><CalendarCheck />Mời PV</button></>}</div></article>;
+              return <article key={application.id}><div className="candidate-card-heading"><span className="candidate-initials">{userInitials(application.student.fullName)}</span><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.student.major}</small></div></div><p>{application.job.title}</p><div className="candidate-meta"><span>GPA <b>{application.student.gpa ?? "—"}</b></span><Status tone={status[1]}>{status[0]}</Status></div><small className="candidate-received">Cập nhật {formatSubmitted(application.lastTransitionAt)}</small><div className={`candidate-card-actions ${application.status === "INTERVIEW_INVITED" ? "result-actions" : ""}`}><button onClick={() => setDetail(application)}><Eye />Xem</button>{application.status === "FORWARDED_TO_COMPANY" && <button className="primary wide" disabled={busy} onClick={() => void startReview(application)}>{busy ? <CircleNotch className="spin" /> : <ArrowRight />}Bắt đầu xem</button>}{application.status === "COMPANY_REVIEWING" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "reject", application }); }}>Không phù hợp</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "interview", application }); }}><CalendarCheck />Mời PV</button></>}{application.status === "INTERVIEW_INVITED" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "result-fail", application }); }}>Không đạt</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "result-pass", application }); }}><CheckCircle />Đạt & offer</button></>}</div></article>;
             })}</div></section>;
           })}
         </div>

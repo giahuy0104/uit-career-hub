@@ -423,6 +423,300 @@ export class ApplicationService {
     });
   }
 
+  async recordInterviewResult(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    commandId: string,
+    input:
+      | { outcome: "PASS"; startDate: string; offerStorageKey?: string; internalNote?: string }
+      | { outcome: "FAIL"; reasonCode: string; note: string },
+    request: RequestMetadata,
+  ) {
+    if (!actor.companyId) throw applicationNotFound();
+    if (input.outcome === "PASS" && input.startDate < new Date().toISOString().slice(0, 10)) {
+      throw new AppError(400, "OFFER_START_DATE_INVALID", "Ngày bắt đầu làm việc không được nằm trong quá khứ.");
+    }
+
+    const companyId = actor.companyId;
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application || application.companyId !== companyId) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        return (await this.repository.findByIdForCompany(applicationId, companyId, client))!;
+      }
+      if (application.status !== "INTERVIEW_INVITED") {
+        throw new AppError(
+          409,
+          "APPLICATION_STATE_CONFLICT",
+          "Chỉ có thể cập nhật kết quả khi ứng viên đang ở bước phỏng vấn.",
+        );
+      }
+
+      const interview = await client.query<{ id: string }>(
+        `UPDATE interviews
+         SET status = 'COMPLETED', version = version + 1, updated_at = now()
+         WHERE id = (
+           SELECT id FROM interviews
+           WHERE application_id = $1 AND status <> 'CANCELLED'
+           ORDER BY scheduled_at DESC, created_at DESC LIMIT 1
+         )
+         RETURNING id`,
+        [applicationId],
+      );
+      const interviewId = interview.rows[0]?.id;
+      if (!interviewId) {
+        throw new AppError(409, "INTERVIEW_NOT_FOUND", "Không tìm thấy lịch phỏng vấn hợp lệ của ứng viên.");
+      }
+
+      const resultId = randomUUID();
+      const toStatus: ApplicationStatus = input.outcome === "PASS" ? "OFFER_PENDING_STUDENT" : "INTERVIEW_FAILED";
+      await client.query(
+        `INSERT INTO recruitment_results
+         (id, application_id, command_id, decided_by_user_id, outcome, offered_at,
+          start_date, offer_storage_key, internal_note)
+         VALUES ($1, $2, $3, $4, $5,
+                 CASE WHEN $5 = 'PASS' THEN now() ELSE NULL END,
+                 $6, $7, $8)`,
+        [
+          resultId,
+          applicationId,
+          commandId,
+          actor.userId,
+          input.outcome,
+          input.outcome === "PASS" ? input.startDate : null,
+          input.outcome === "PASS" ? input.offerStorageKey ?? null : null,
+          input.outcome === "PASS" ? input.internalNote ?? null : input.note,
+        ],
+      );
+      await client.query(
+        `UPDATE applications
+         SET status = $2, version = version + 1, last_transition_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [applicationId, toStatus],
+      );
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id,
+          reason_code, note, metadata)
+         VALUES ($1, $2, 'INTERVIEW_INVITED', $3, 'COMPANY', $4, $5, $6, $7::jsonb)`,
+        [
+          applicationId,
+          commandId,
+          toStatus,
+          actor.userId,
+          input.outcome === "FAIL" ? input.reasonCode : null,
+          input.outcome === "FAIL" ? input.note : null,
+          JSON.stringify({
+            interviewId,
+            resultId,
+            outcome: input.outcome,
+            startDate: input.outcome === "PASS" ? input.startDate : null,
+            hasOfferDocument: input.outcome === "PASS" && Boolean(input.offerStorageKey),
+          }),
+        ],
+      );
+
+      const studentNotification = input.outcome === "PASS"
+        ? {
+            type: "OFFER_AVAILABLE",
+            title: "Bạn có lời mời nhận việc mới",
+            body: `${application.companyName} đã gửi offer cho vị trí “${application.jobTitle}”.`,
+          }
+        : {
+            type: "INTERVIEW_FAILED",
+            title: "Doanh nghiệp đã cập nhật kết quả phỏng vấn",
+            body: `Bạn chưa phù hợp với vị trí “${application.jobTitle}” tại ${application.companyName}.`,
+          };
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         VALUES ($1, $2, $3, $4, 'APPLICATION', $5::uuid, '/applications/' || $5::text,
+                 'application:' || $5::text || ':' || $6::text || ':result:student',
+                 jsonb_build_object('applicationId', $5::text, 'commandId', $6::text,
+                                    'outcome', $7::text, 'status', $8::text))
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          application.studentUserId,
+          studentNotification.type,
+          studentNotification.title,
+          studentNotification.body,
+          applicationId,
+          commandId,
+          input.outcome,
+          toStatus,
+        ],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, 'INTERVIEW_RESULT_RECORDED', 'Doanh nghiệp đã cập nhật kết quả phỏng vấn',
+                $3 || ' đã cập nhật kết quả ' || $4 || ' cho hồ sơ vị trí “' || $5 || '”.',
+                'APPLICATION', $1::uuid, '/uit/applications/' || $1::text,
+                'application:' || $1::text || ':' || $2::text || ':result:uit:' || u.id::text,
+                jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                   'outcome', $4::text, 'status', $6::text)
+         FROM users u WHERE u.role = 'UIT_ADMIN' AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [applicationId, commandId, application.companyName, input.outcome, application.jobTitle, toStatus],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'INTERVIEW_RESULT_RECORDED', 'APPLICATION', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          applicationId,
+          JSON.stringify({ commandId, interviewId, resultId, outcome: input.outcome, toStatus }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findByIdForCompany(applicationId, companyId, client))!;
+    });
+  }
+
+  async respondToOffer(
+    actor: { userId: string; studentProfileId: string | null },
+    applicationId: string,
+    commandId: string,
+    decision: "accept" | "decline",
+    payload: { reasonCode?: string; note?: string },
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+
+    return this.repository.withTransaction(async (client) => {
+      const application = await this.repository.lockApplication(client, applicationId);
+      if (!application || application.studentProfileId !== studentProfileId) throw applicationNotFound();
+
+      if (await this.repository.commandExists(client, applicationId, commandId)) {
+        return (await this.repository.findById(applicationId, studentProfileId, client))!;
+      }
+      if (application.status !== "OFFER_PENDING_STUDENT") {
+        throw new AppError(409, "APPLICATION_STATE_CONFLICT", "Offer này không còn chờ bạn phản hồi.");
+      }
+
+      if (decision === "accept") {
+        await client.query("SELECT id FROM student_profiles WHERE id = $1 FOR UPDATE", [studentProfileId]);
+        const selected = await client.query(
+          `SELECT 1 FROM applications
+           WHERE student_profile_id = $1 AND id <> $2
+             AND status IN ('ACCEPTED_PENDING_UIT_CONFIRMATION', 'HIRED')
+           LIMIT 1`,
+          [studentProfileId, applicationId],
+        );
+        if ((selected.rowCount ?? 0) > 0) {
+          throw new AppError(
+            409,
+            "STUDENT_PLACEMENT_ALREADY_SELECTED",
+            "Bạn đã chọn một nơi làm việc khác và đang chờ UIT xác nhận.",
+          );
+        }
+      }
+
+      const studentDecision = decision === "accept" ? "ACCEPTED" : "DECLINED";
+      const result = await client.query(
+        `UPDATE recruitment_results
+         SET student_decision = $2, responded_at = now(), updated_at = now()
+         WHERE application_id = $1 AND outcome = 'PASS' AND student_decision IS NULL`,
+        [applicationId, studentDecision],
+      );
+      if ((result.rowCount ?? 0) !== 1) {
+        throw new AppError(409, "OFFER_RESULT_CONFLICT", "Không tìm thấy offer hợp lệ để phản hồi.");
+      }
+
+      const toStatus: ApplicationStatus = decision === "accept"
+        ? "ACCEPTED_PENDING_UIT_CONFIRMATION"
+        : "OFFER_DECLINED";
+      await client.query(
+        `UPDATE applications
+         SET status = $2,
+             accepted_at = CASE WHEN $2 = 'ACCEPTED_PENDING_UIT_CONFIRMATION' THEN now() ELSE accepted_at END,
+             version = version + 1, last_transition_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [applicationId, toStatus],
+      );
+      await client.query(
+        `INSERT INTO application_status_history
+         (application_id, command_id, from_status, to_status, actor_type, actor_user_id,
+          reason_code, note, metadata)
+         VALUES ($1, $2, 'OFFER_PENDING_STUDENT', $3, 'STUDENT', $4, $5, $6, $7::jsonb)`,
+        [
+          applicationId,
+          commandId,
+          toStatus,
+          actor.userId,
+          decision === "decline" ? payload.reasonCode : null,
+          decision === "decline" ? payload.note : null,
+          JSON.stringify({ decision: studentDecision }),
+        ],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, $3, $4,
+                $5 || ' đã ' || $6 || ' offer cho vị trí “' || $7 || '”.',
+                'APPLICATION', $1::uuid, '/company/candidates/' || $1::text,
+                'application:' || $1::text || ':' || $2::text || ':offer:company:' || u.id::text,
+                jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                   'decision', $8::text, 'status', $9::text)
+         FROM company_users cu JOIN users u ON u.id = cu.user_id
+         WHERE cu.company_id = $10 AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          applicationId,
+          commandId,
+          decision === "accept" ? "OFFER_ACCEPTED" : "OFFER_DECLINED",
+          decision === "accept" ? "Sinh viên đã nhận offer" : "Sinh viên đã từ chối offer",
+          application.studentFullName,
+          decision === "accept" ? "nhận" : "từ chối",
+          application.jobTitle,
+          studentDecision,
+          toStatus,
+          application.companyId,
+        ],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, $3, $4, $5,
+                'APPLICATION', $1::uuid, '/uit/applications/' || $1::text,
+                'application:' || $1::text || ':' || $2::text || ':offer:uit:' || u.id::text,
+                jsonb_build_object('applicationId', $1::text, 'commandId', $2::text,
+                                   'decision', $6::text, 'status', $7::text)
+         FROM users u WHERE u.role = 'UIT_ADMIN' AND u.status = 'ACTIVE'
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [
+          applicationId,
+          commandId,
+          decision === "accept" ? "PLACEMENT_CONFIRMATION_REQUIRED" : "OFFER_DECLINED_RECORDED",
+          decision === "accept" ? "Có nơi thực tập cần UIT xác nhận" : "Sinh viên đã từ chối offer",
+          decision === "accept"
+            ? `${application.studentFullName} đã nhận offer tại ${application.companyName}.`
+            : `${application.studentFullName} đã từ chối offer tại ${application.companyName}.`,
+          studentDecision,
+          toStatus,
+        ],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, $2, 'APPLICATION', $3, $4::jsonb, $5, $6)`,
+        [
+          actor.userId,
+          decision === "accept" ? "OFFER_ACCEPTED" : "OFFER_DECLINED",
+          applicationId,
+          JSON.stringify({ commandId, decision: studentDecision, toStatus, reasonCode: payload.reasonCode ?? null }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return (await this.repository.findById(applicationId, studentProfileId, client))!;
+    });
+  }
+
   async submit(
     actor: { userId: string; studentProfileId: string | null },
     input: { jobId: string; documents: Array<{ documentId: string }>; consentToShare: true },

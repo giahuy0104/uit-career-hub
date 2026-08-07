@@ -36,6 +36,7 @@ type ApplicationRow = QueryResultRow & {
   company_code: string;
   company_name: string;
   documents: ApplicationDto["documents"] | null;
+  recruitment_result: ApplicationDto["recruitmentResult"];
   timeline: ApplicationDto["timeline"] | null;
 };
 
@@ -88,6 +89,18 @@ const applicationSelect = `
       ) ORDER BY ad.created_at)
       FROM application_documents ad WHERE ad.application_id = a.id
     ), '[]'::jsonb) AS documents,
+    (
+      SELECT jsonb_build_object(
+        'id', rr.id,
+        'outcome', rr.outcome,
+        'studentDecision', rr.student_decision,
+        'offeredAt', rr.offered_at,
+        'respondedAt', rr.responded_at,
+        'startDate', rr.start_date,
+        'offerStorageKey', rr.offer_storage_key
+      )
+      FROM recruitment_results rr WHERE rr.application_id = a.id
+    ) AS recruitment_result,
     COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'fromStatus', ah.from_status,
@@ -152,6 +165,7 @@ function mapApplication(row: ApplicationRow): ApplicationDto {
       ...document,
       fileSizeBytes: Number(document.fileSizeBytes),
     })),
+    recruitmentResult: row.recruitment_result ?? null,
     timeline: row.timeline ?? [],
   };
 }

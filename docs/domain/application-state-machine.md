@@ -77,6 +77,8 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 - Ba quyết định UIT tại `UIT_REVIEWING` khóa application bằng `SELECT ... FOR UPDATE`; chỉ quyết định đầu tiên được ghi nhận khi hai quản trị viên xử lý đồng thời.
 - Các quyết định của doanh nghiệp tại `FORWARDED_TO_COMPANY` và `COMPANY_REVIEWING` cũng khóa application bằng `SELECT ... FOR UPDATE`; recruiter của doanh nghiệp khác luôn nhận 404 để không lộ hồ sơ.
 - “Không phù hợp” và “Mời phỏng vấn” chỉ hợp lệ sau khi hồ sơ đã sang `COMPANY_REVIEWING`. Tạo lịch phỏng vấn dùng `command_id` duy nhất để retry không tạo trùng lịch.
+- Kết quả `PASS/FAIL` chỉ hợp lệ tại `INTERVIEW_INVITED`; thao tác đồng thời được tuần tự hóa bằng khóa application và kết quả có `command_id` để retry không tạo trùng offer.
+- Student accept/decline chỉ hợp lệ tại `OFFER_PENDING_STUDENT`. Hai thao tác cạnh tranh chỉ có một thao tác thành công; accept còn khóa student để ngăn chọn hai nơi thực tập.
 - Khi chuyển `FORWARDED_TO_COMPANY`, thông báo doanh nghiệp được chọn theo `company_id` của chính tin tuyển dụng, không lấy doanh nghiệp từ dữ liệu phía client.
 - Transition xác nhận nơi nhận việc dùng transaction và `SELECT ... FOR UPDATE` khi được hiện thực ở service.
 - Mỗi command có idempotency key; history có `command_id` để retry không ghi trùng.
