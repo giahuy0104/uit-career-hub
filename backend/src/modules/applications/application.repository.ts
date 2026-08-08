@@ -790,6 +790,67 @@ export class ApplicationRepository {
     return result.rows[0] ? mapApplication(result.rows[0]) : null;
   }
 
+  async findApplicationDocumentForUit(applicationId: string, documentId: string) {
+    const result = await this.database.query<{
+      id: string;
+      storage_key: string;
+      file_name: string;
+    }>(
+      `SELECT ad.id, ad.storage_key, ad.file_name
+       FROM application_documents ad
+       WHERE ad.application_id = $1 AND ad.id = $2`,
+      [applicationId, documentId],
+    );
+    const row = result.rows[0];
+    return row ? { id: row.id, storageKey: row.storage_key, fileName: row.file_name } : null;
+  }
+
+  async findApplicationDocumentForCompany(applicationId: string, documentId: string, companyId: string) {
+    const result = await this.database.query<{
+      id: string;
+      storage_key: string;
+      file_name: string;
+    }>(
+      `SELECT ad.id, ad.storage_key, ad.file_name
+       FROM application_documents ad
+       JOIN applications a ON a.id = ad.application_id
+       JOIN job_posts j ON j.id = a.job_post_id
+       WHERE ad.application_id = $1 AND ad.id = $2 AND j.company_id = $3
+         AND EXISTS (
+           SELECT 1 FROM application_status_history company_visibility
+           WHERE company_visibility.application_id = a.id
+             AND company_visibility.to_status = 'FORWARDED_TO_COMPANY'
+         )`,
+      [applicationId, documentId, companyId],
+    );
+    const row = result.rows[0];
+    return row ? { id: row.id, storageKey: row.storage_key, fileName: row.file_name } : null;
+  }
+
+  async recordApplicationDocumentDownload(input: {
+    actorUserId: string;
+    actorType: "UIT_ADMIN" | "COMPANY";
+    applicationId: string;
+    documentId: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+  }) {
+    await this.database.query(
+      `INSERT INTO audit_logs
+       (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+       VALUES ($1, 'APPLICATION_DOCUMENT_DOWNLOAD_URL_CREATED', 'APPLICATION_DOCUMENT', $2,
+               jsonb_build_object('applicationId', $3::uuid::text, 'actorType', $4::text), $5, $6)`,
+      [
+        input.actorUserId,
+        input.documentId,
+        input.applicationId,
+        input.actorType,
+        input.ipAddress,
+        input.userAgent,
+      ],
+    );
+  }
+
   async findByCommand(client: PoolClient, studentProfileId: string, commandId: string) {
     const result = await client.query<ApplicationRow>(
       `${applicationSelect}

@@ -1126,6 +1126,64 @@ describeWithDatabase("student job application flow", () => {
     expect(forbidden.status).toBe(403);
   });
 
+  it("creates short-lived application document URLs only for UIT and the owning company after forwarding", async () => {
+    const { admin, recruiter, student, jobId } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    expect(created.status).toBe(201);
+    const applicationId = created.body.data.id as string;
+    const documentId = created.body.data.documents[0].id as string;
+
+    const uitDownload = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(uitDownload.status).toBe(200);
+    expect(uitDownload.body.data).toMatchObject({ downloadUrl: "https://r2.example.test/signed-download" });
+    expect(createDownloadUrl).toHaveBeenLastCalledWith({
+      key: `test/${student.cvId}`,
+      fileName: "cv.pdf",
+      expiresInSeconds: 300,
+    });
+
+    const companyBeforeForward = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${recruiter.token}`);
+    expect(companyBeforeForward.status).toBe(404);
+
+    await forward(admin.token, applicationId);
+    const companyDownload = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${recruiter.token}`);
+    expect(companyDownload.status).toBe(200);
+    expect(companyDownload.body.data.downloadUrl).toBe("https://r2.example.test/signed-download");
+
+    const otherCompanyId = randomUUID();
+    companyIds.push(otherCompanyId);
+    await client.query(
+      `INSERT INTO companies (id, code, name, industry, partner_status, created_by_user_id)
+       VALUES ($1, $2, 'Doanh nghiệp không sở hữu hồ sơ', 'Công nghệ', 'ACTIVE', $3)`,
+      [otherCompanyId, `TEST-${randomUUID()}`, admin.id],
+    );
+    const otherRecruiter = await createUser("COMPANY", null, otherCompanyId);
+    const crossCompanyDownload = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${otherRecruiter.token}`);
+    expect(crossCompanyDownload.status).toBe(404);
+
+    const mismatchedDocument = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/documents/${randomUUID()}/download`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(mismatchedDocument.status).toBe(404);
+
+    const audit = await client.query<{ actor_type: string }>(
+      `SELECT metadata->>'actorType' AS actor_type
+       FROM audit_logs
+       WHERE target_id = $1 AND action = 'APPLICATION_DOCUMENT_DOWNLOAD_URL_CREATED'
+       ORDER BY created_at`,
+      [documentId],
+    );
+    expect(audit.rows.map((row) => row.actor_type)).toEqual(["UIT_ADMIN", "COMPANY"]);
+  });
+
   it("starts company review idempotently and hides applications owned by another company", async () => {
     const scenario = await createScenario();
     const otherCompany = await createScenario();

@@ -884,20 +884,32 @@ function LiveAdminApplicationReview({ targetApplicationId = null }) {
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [busyDocumentId, setBusyDocumentId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [decisionMode, setDecisionMode] = useState(null);
-  const selected = applications.find(application => application.id === selectedId) || applications[0] || null;
+  const selected =
+    applications.find((application) => application.id === selectedId) ||
+    applications[0] ||
+    null;
 
   const loadQueue = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await authorizedRequest("/uit/applications/review-queue?page=1&pageSize=100");
+      const response = await authorizedRequest(
+        "/uit/applications/review-queue?page=1&pageSize=100",
+      );
       setApplications(response.data);
-      setSelectedId(current => response.data.some(application => application.id === targetApplicationId)
-        ? targetApplicationId
-        : response.data.some(application => application.id === current) ? current : response.data[0]?.id ?? null);
+      setSelectedId((current) =>
+        response.data.some(
+          (application) => application.id === targetApplicationId,
+        )
+          ? targetApplicationId
+          : response.data.some((application) => application.id === current)
+            ? current
+            : (response.data[0]?.id ?? null),
+      );
     } catch (requestError) {
       setError(getApiError(requestError));
     } finally {
@@ -905,21 +917,53 @@ function LiveAdminApplicationReview({ targetApplicationId = null }) {
     }
   };
 
-  useEffect(() => { void loadQueue(); }, [authorizedRequest, targetApplicationId]);
+  useEffect(() => {
+    void loadQueue();
+  }, [authorizedRequest, targetApplicationId]);
 
-  const decide = async payload => {
+  const downloadApplicationDocument = async (document) => {
+    if (!selected || busyDocumentId) return;
+    setBusyDocumentId(document.id);
+    setError("");
+    try {
+      const response = await authorizedRequest(
+        `/uit/applications/${selected.id}/documents/${document.id}/download`,
+        { method: "POST" },
+      );
+      window.location.assign(response.data.downloadUrl);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyDocumentId("");
+    }
+  };
+
+  const decide = async (payload) => {
     if (!selected || !decisionMode || busy) return;
     setBusy(true);
     setError("");
     try {
-      await authorizedRequest(`/uit/applications/${selected.id}/${decisionMode}`, {
-        method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-        ...(decisionMode === "forward" ? {} : { body: JSON.stringify(payload) }),
-      });
-      setApplications(current => current.filter(application => application.id !== selected.id));
+      await authorizedRequest(
+        `/uit/applications/${selected.id}/${decisionMode}`,
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+          ...(decisionMode === "forward"
+            ? {}
+            : { body: JSON.stringify(payload) }),
+        },
+      );
+      setApplications((current) =>
+        current.filter((application) => application.id !== selected.id),
+      );
       setDecisionMode(null);
-      setMessage(decisionMode === "forward" ? "Hồ sơ đã được chuyển đến đúng doanh nghiệp." : decisionMode === "reject" ? "Hồ sơ đã bị từ chối và sinh viên đã nhận thông báo." : "Yêu cầu bổ sung đã được gửi đến sinh viên.");
+      setMessage(
+        decisionMode === "forward"
+          ? "Hồ sơ đã được chuyển đến đúng doanh nghiệp."
+          : decisionMode === "reject"
+            ? "Hồ sơ đã bị từ chối và sinh viên đã nhận thông báo."
+            : "Yêu cầu bổ sung đã được gửi đến sinh viên.",
+      );
       window.setTimeout(() => setMessage(""), 3500);
     } catch (requestError) {
       setError(getApiError(requestError));
@@ -928,13 +972,252 @@ function LiveAdminApplicationReview({ targetApplicationId = null }) {
     }
   };
 
-  if (loading) return <Panel title="Hồ sơ chờ xử lý"><div className="portal-loading"><CircleNotch className="spin" />Đang tải hồ sơ chờ kiểm duyệt...</div></Panel>;
-  if (error && !selected) return <Panel title="Hồ sơ chờ xử lý"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={loadQueue}>Thử lại</button></div></Panel>;
-  if (!selected) return <Panel title="Hồ sơ chờ xử lý" action={<Status tone="success">0 cần xử lý</Status>}><EmptyHint title="Đã xử lý hết hàng đợi" text="Hiện không có hồ sơ sinh viên nào đang chờ UIT kiểm duyệt." />{message && <div className="inline-success"><CheckCircle />{message}</div>}</Panel>;
+  if (loading)
+    return (
+      <Panel title="Hồ sơ chờ xử lý">
+        <div className="portal-loading">
+          <CircleNotch className="spin" />
+          Đang tải hồ sơ chờ kiểm duyệt...
+        </div>
+      </Panel>
+    );
+  if (error && !selected)
+    return (
+      <Panel title="Hồ sơ chờ xử lý">
+        <div className="portal-error">
+          <Warning />
+          {error}
+          <button className="secondary-button small" onClick={loadQueue}>
+            Thử lại
+          </button>
+        </div>
+      </Panel>
+    );
+  if (!selected)
+    return (
+      <Panel
+        title="Hồ sơ chờ xử lý"
+        action={<Status tone="success">0 cần xử lý</Status>}
+      >
+        <EmptyHint
+          title="Đã xử lý hết hàng đợi"
+          text="Hiện không có hồ sơ sinh viên nào đang chờ UIT kiểm duyệt."
+        />
+        {message && (
+          <div className="inline-success">
+            <CheckCircle />
+            {message}
+          </div>
+        )}
+      </Panel>
+    );
 
-  const initials = selected.student.fullName.split(" ").filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase();
-  const hasCv = selected.documents.some(document => document.documentType === "CV");
-  return <><div className="review-workspace"><Panel title="Hồ sơ chờ xử lý" action={<Status tone="urgent">{applications.length} hồ sơ</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Cũ nhất trước</button><button onClick={loadQueue}>Làm mới</button></div><div className="review-list application-review-list">{applications.map(application => { const itemInitials = application.student.fullName.split(" ").filter(Boolean).slice(-2).map(part => part[0]).join("").toUpperCase(); return <button key={application.id} className={selected.id === application.id ? "selected" : ""} onClick={() => { setSelectedId(application.id); setError(""); }}><div className="candidate-initials">{itemInitials}</div><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.job.title}</small><p>{application.job.company.name} · Nộp {formatDate(application.submittedAt)}</p></div><Status tone="warning">Chờ UIT</Status></button>; })}</div></Panel><Panel title="Hồ sơ ứng tuyển" action={<Status tone="warning">UIT đang kiểm duyệt</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{initials}</div><div><h2>{selected.student.fullName}</h2><p>MSSV {selected.student.studentCode} · {selected.student.faculty}</p><span>Ứng tuyển <strong>{selected.job.title}</strong> tại {selected.job.company.name}</span></div><span className="version-label">Phiên bản {selected.version}</span></div><div className="eligibility-grid"><article><small>Tình trạng sinh viên</small><strong><CheckCircle />{selected.student.academicStatus === "ACTIVE" ? "Đang hoạt động" : selected.student.academicStatus}</strong></article><article><small>GPA tích lũy</small><strong>{selected.student.gpa ?? "—"} / 4.0</strong></article><article><small>Khóa / Ngành</small><strong>{selected.student.cohort} · {selected.student.major}</strong></article><article><small>Email UIT</small><strong>{selected.student.email}</strong></article></div><section className="document-verification"><h3>Kiểm tra tài liệu đã nộp ({selected.documents.length})</h3>{selected.documents.map(document => <div key={document.id}><span><CheckCircle /><div><strong>{document.fileName}</strong><small>{document.documentType} · Phiên bản {document.sourceVersion} · {Math.max(1, Math.round(document.fileSizeBytes / 1024))} KB</small></div></span><Status tone="success">Đã xác minh</Status></div>)}</section><div className="review-checks"><span className="done"><CheckCircle />Tài khoản sinh viên hợp lệ</span><span className={hasCv ? "done" : "warning"}>{hasCv ? <CheckCircle /> : <Warning />}{hasCv ? "Có CV ứng tuyển" : "Thiếu CV"}</span><span className="done"><CheckCircle />Đã đồng ý chia sẻ dữ liệu</span></div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button danger" disabled={busy} onClick={() => setDecisionMode("reject")}>Từ chối</button><button className="secondary-button" disabled={busy} onClick={() => setDecisionMode("request-supplement")}><FileText />Yêu cầu bổ sung</button><button className="primary-button" disabled={busy || !hasCv || selected.student.academicStatus !== "ACTIVE"} onClick={() => setDecisionMode("forward")}><PaperPlaneTilt />Duyệt & chuyển doanh nghiệp</button></div></Panel></div>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{decisionMode && <ApplicationDecisionModal mode={decisionMode} application={selected} busy={busy} error={error} onClose={() => { if (!busy) { setDecisionMode(null); setError(""); } }} onSubmit={payload => void decide(payload)} />}</>;
+  const initials = selected.student.fullName
+    .split(" ")
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+  const hasCv = selected.documents.some(
+    (document) => document.documentType === "CV",
+  );
+  return (
+    <>
+      <div className="review-workspace">
+        <Panel
+          title="Hồ sơ chờ xử lý"
+          action={<Status tone="urgent">{applications.length} hồ sơ</Status>}
+          className="review-list-panel"
+        >
+          <div className="review-filter">
+            <button className="active">Cũ nhất trước</button>
+            <button onClick={loadQueue}>Làm mới</button>
+          </div>
+          <div className="review-list application-review-list">
+            {applications.map((application) => {
+              const itemInitials = application.student.fullName
+                .split(" ")
+                .filter(Boolean)
+                .slice(-2)
+                .map((part) => part[0])
+                .join("")
+                .toUpperCase();
+              return (
+                <button
+                  key={application.id}
+                  className={selected.id === application.id ? "selected" : ""}
+                  onClick={() => {
+                    setSelectedId(application.id);
+                    setError("");
+                  }}
+                >
+                  <div className="candidate-initials">{itemInitials}</div>
+                  <div>
+                    <strong>{application.student.fullName}</strong>
+                    <small>
+                      {application.student.studentCode} ·{" "}
+                      {application.job.title}
+                    </small>
+                    <p>
+                      {application.job.company.name} · Nộp{" "}
+                      {formatDate(application.submittedAt)}
+                    </p>
+                  </div>
+                  <Status tone="warning">Chờ UIT</Status>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+        <Panel
+          title="Hồ sơ ứng tuyển"
+          action={<Status tone="warning">UIT đang kiểm duyệt</Status>}
+          className="review-detail-panel"
+        >
+          <div className="student-review-heading">
+            <div className="large-avatar small">{initials}</div>
+            <div>
+              <h2>{selected.student.fullName}</h2>
+              <p>
+                MSSV {selected.student.studentCode} · {selected.student.faculty}
+              </p>
+              <span>
+                Ứng tuyển <strong>{selected.job.title}</strong> tại{" "}
+                {selected.job.company.name}
+              </span>
+            </div>
+            <span className="version-label">Phiên bản {selected.version}</span>
+          </div>
+          <div className="eligibility-grid">
+            <article>
+              <small>Tình trạng sinh viên</small>
+              <strong>
+                <CheckCircle />
+                {selected.student.academicStatus === "ACTIVE"
+                  ? "Đang hoạt động"
+                  : selected.student.academicStatus}
+              </strong>
+            </article>
+            <article>
+              <small>GPA tích lũy</small>
+              <strong>{selected.student.gpa ?? "—"} / 4.0</strong>
+            </article>
+            <article>
+              <small>Khóa / Ngành</small>
+              <strong>
+                {selected.student.cohort} · {selected.student.major}
+              </strong>
+            </article>
+            <article>
+              <small>Email UIT</small>
+              <strong>{selected.student.email}</strong>
+            </article>
+          </div>
+          <section className="document-verification">
+            <h3>Kiểm tra tài liệu đã nộp ({selected.documents.length})</h3>
+            {selected.documents.map((document) => (
+              <div key={document.id}>
+                <span>
+                  <CheckCircle />
+                  <div>
+                    <strong>{document.fileName}</strong>
+                    <small>
+                      {document.documentType} · Phiên bản{" "}
+                      {document.sourceVersion} ·{" "}
+                      {Math.max(1, Math.round(document.fileSizeBytes / 1024))}{" "}
+                      KB
+                    </small>
+                  </div>
+                </span>
+                <Status tone="success">Đã xác minh</Status>
+                <button
+                  title={`Mở ${document.fileName}`}
+                  aria-label={`Mở ${document.fileName}`}
+                  disabled={Boolean(busyDocumentId)}
+                  onClick={() => void downloadApplicationDocument(document)}
+                >
+                  {busyDocumentId === document.id ? (
+                    <CircleNotch className="spin" />
+                  ) : (
+                    <DownloadSimple />
+                  )}
+                </button>
+              </div>
+            ))}
+          </section>
+          <div className="review-checks">
+            <span className="done">
+              <CheckCircle />
+              Tài khoản sinh viên hợp lệ
+            </span>
+            <span className={hasCv ? "done" : "warning"}>
+              {hasCv ? <CheckCircle /> : <Warning />}
+              {hasCv ? "Có CV ứng tuyển" : "Thiếu CV"}
+            </span>
+            <span className="done">
+              <CheckCircle />
+              Đã đồng ý chia sẻ dữ liệu
+            </span>
+          </div>
+          {error && (
+            <p className="review-error">
+              <Warning />
+              {error}
+            </p>
+          )}
+          <div className="review-actions">
+            <button
+              className="secondary-button danger"
+              disabled={busy}
+              onClick={() => setDecisionMode("reject")}
+            >
+              Từ chối
+            </button>
+            <button
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => setDecisionMode("request-supplement")}
+            >
+              <FileText />
+              Yêu cầu bổ sung
+            </button>
+            <button
+              className="primary-button"
+              disabled={
+                busy || !hasCv || selected.student.academicStatus !== "ACTIVE"
+              }
+              onClick={() => setDecisionMode("forward")}
+            >
+              <PaperPlaneTilt />
+              Duyệt & chuyển doanh nghiệp
+            </button>
+          </div>
+        </Panel>
+      </div>
+      {message && (
+        <div className="toast">
+          <CheckCircle weight="fill" />
+          {message}
+        </div>
+      )}
+      {decisionMode && (
+        <ApplicationDecisionModal
+          mode={decisionMode}
+          application={selected}
+          busy={busy}
+          error={error}
+          onClose={() => {
+            if (!busy) {
+              setDecisionMode(null);
+              setError("");
+            }
+          }}
+          onSubmit={(payload) => void decide(payload)}
+        />
+      )}
+    </>
+  );
 }
 
 function AdminJobReview({ selected, setSelected, states, setStates }) {
@@ -1178,35 +1461,113 @@ function companyCandidateStage(status) {
   return "result";
 }
 
-function CompanyCandidateDetailModal({ application, close }) {
-  const status = companyCandidateStatusCopy[application.status] || [application.status, "neutral"];
+function CompanyCandidateDetailModal({
+  application,
+  busyDocumentId,
+  documentError,
+  close,
+  downloadDocument,
+}) {
+  const status = companyCandidateStatusCopy[application.status] || [
+    application.status,
+    "neutral",
+  ];
   return (
     <div className="modal-backdrop" onMouseDown={close}>
-      <div className="modal portal-modal candidate-detail-modal" onMouseDown={event => event.stopPropagation()}>
-        <button className="modal-close" onClick={close}><X /></button>
+      <div
+        className="modal portal-modal candidate-detail-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button className="modal-close" onClick={close}>
+          <X />
+        </button>
         <div className="candidate-modal-heading">
-          <span className="large-avatar small">{userInitials(application.student.fullName)}</span>
-          <div><h2>{application.student.fullName}</h2><p>{application.student.studentCode} · {application.student.major}</p></div>
+          <span className="large-avatar small">
+            {userInitials(application.student.fullName)}
+          </span>
+          <div>
+            <h2>{application.student.fullName}</h2>
+            <p>
+              {application.student.studentCode} · {application.student.major}
+            </p>
+          </div>
           <Status tone={status[1]}>{status[0]}</Status>
         </div>
         <div className="eligibility-grid candidate-detail-grid">
-          <article><small>Vị trí</small><strong>{application.job.title}</strong></article>
-          <article><small>GPA</small><strong>{application.student.gpa ?? "—"} / 4.0</strong></article>
-          <article><small>Email UIT</small><strong>{application.student.email}</strong></article>
-          <article><small>Nhận từ UIT</small><strong>{formatSubmitted(application.submittedAt)}</strong></article>
+          <article>
+            <small>Vị trí</small>
+            <strong>{application.job.title}</strong>
+          </article>
+          <article>
+            <small>GPA</small>
+            <strong>{application.student.gpa ?? "—"} / 4.0</strong>
+          </article>
+          <article>
+            <small>Email UIT</small>
+            <strong>{application.student.email}</strong>
+          </article>
+          <article>
+            <small>Nhận từ UIT</small>
+            <strong>{formatSubmitted(application.submittedAt)}</strong>
+          </article>
         </div>
         <section className="candidate-documents">
           <h3>Hồ sơ được UIT chuyển ({application.documents.length})</h3>
-          {application.documents.map(document => <div key={document.id}><FileText /><span><strong>{document.fileName}</strong><small>{document.documentType} · Phiên bản {document.sourceVersion} · {Math.max(1, Math.round(document.fileSizeBytes / 1024))} KB</small></span><Status tone="success">Đã xác minh</Status></div>)}
+          {application.documents.map((document) => (
+            <div key={document.id}>
+              <FileText />
+              <span>
+                <strong>{document.fileName}</strong>
+                <small>
+                  {document.documentType} · Phiên bản {document.sourceVersion} ·{" "}
+                  {Math.max(1, Math.round(document.fileSizeBytes / 1024))} KB
+                </small>
+              </span>
+              <Status tone="success">Đã xác minh</Status>
+              <button
+                className="document-download-button"
+                title={`Mở ${document.fileName}`}
+                aria-label={`Mở ${document.fileName}`}
+                disabled={Boolean(busyDocumentId)}
+                onClick={() => void downloadDocument(document)}
+              >
+                {busyDocumentId === document.id ? (
+                  <CircleNotch className="spin" />
+                ) : (
+                  <DownloadSimple />
+                )}
+              </button>
+            </div>
+          ))}
+          {documentError && (
+            <p className="review-error">
+              <Warning />
+              {documentError}
+            </p>
+          )}
         </section>
         <section className="candidate-timeline">
           <h3>Lịch sử xử lý</h3>
           {application.timeline.map((event, index) => {
-            const copy = companyCandidateStatusCopy[event.toStatus]?.[0] || event.toStatus;
-            return <div key={`${event.createdAt}-${index}`}><span /><div><strong>{copy}</strong><small>{formatSubmitted(event.createdAt)} · {event.actorType}</small>{event.note && <p>{event.note}</p>}</div></div>;
+            const copy =
+              companyCandidateStatusCopy[event.toStatus]?.[0] || event.toStatus;
+            return (
+              <div key={`${event.createdAt}-${index}`}>
+                <span />
+                <div>
+                  <strong>{copy}</strong>
+                  <small>
+                    {formatSubmitted(event.createdAt)} · {event.actorType}
+                  </small>
+                  {event.note && <p>{event.note}</p>}
+                </div>
+              </div>
+            );
           })}
         </section>
-        <button className="primary-button full" onClick={close}>Đóng</button>
+        <button className="primary-button full" onClick={close}>
+          Đóng
+        </button>
       </div>
     </div>
   );
@@ -1300,6 +1661,8 @@ function CompanyCandidates({ targetApplicationId = null }) {
   const [search, setSearch] = useState("");
   const [jobId, setJobId] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [busyDocumentId, setBusyDocumentId] = useState("");
+  const [documentError, setDocumentError] = useState("");
   const [detail, setDetail] = useState(null);
   const [decision, setDecision] = useState(null);
   const load = async () => {
@@ -1323,6 +1686,22 @@ function CompanyCandidates({ targetApplicationId = null }) {
     return items.filter(item => (!jobId || item.job.id === jobId) && (!keyword || `${item.student.fullName} ${item.student.studentCode} ${item.job.title}`.toLowerCase().includes(keyword)));
   }, [items, jobId, search]);
   const replace = application => setItems(current => current.map(item => item.id === application.id ? application : item));
+  const downloadApplicationDocument = async document => {
+    if (!detail || busyDocumentId) return;
+    setBusyDocumentId(document.id);
+    setDocumentError("");
+    try {
+      const response = await authorizedRequest(
+        `/companies/me/applications/${detail.id}/documents/${document.id}/download`,
+        { method: "POST" },
+      );
+      window.location.assign(response.data.downloadUrl);
+    } catch (requestError) {
+      setDocumentError(getApiError(requestError));
+    } finally {
+      setBusyDocumentId("");
+    }
+  };
   const startReview = async application => {
     setBusyId(application.id);
     setError("");
@@ -1383,7 +1762,7 @@ function CompanyCandidates({ targetApplicationId = null }) {
           })}
         </div>
       )}
-      {detail && <CompanyCandidateDetailModal application={detail} close={() => setDetail(null)} />}
+      {detail && <CompanyCandidateDetailModal application={detail} busyDocumentId={busyDocumentId} documentError={documentError} downloadDocument={downloadApplicationDocument} close={() => { if (!busyDocumentId) { setDetail(null); setDocumentError(""); } }} />}
       {decision && <CompanyCandidateDecisionModal mode={decision.mode} application={decision.application} interviewerName={user?.displayName} busy={busyId === decision.application.id} error={error} close={() => { if (!busyId) { setDecision(null); setError(""); } }} submit={payload => void decide(payload)} />}
     </>
   );

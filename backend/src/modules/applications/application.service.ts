@@ -504,6 +504,32 @@ export class ApplicationService {
     return this.repository.listUitReviewQueue(input);
   }
 
+  async createUitApplicationDocumentDownload(
+    actorUserId: string,
+    applicationId: string,
+    documentId: string,
+    request: RequestMetadata,
+  ): Promise<StudentDocumentDownloadDto> {
+    const objectStorage = this.requireObjectStorage();
+    const document = await this.repository.findApplicationDocumentForUit(applicationId, documentId);
+    if (!document) throw applicationNotFound();
+
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.downloadUrlTtlSeconds * 1_000);
+    const downloadUrl = await objectStorage.createDownloadUrl({
+      key: document.storageKey,
+      fileName: document.fileName,
+      expiresInSeconds: this.objectStorageOptions.downloadUrlTtlSeconds,
+    });
+    await this.repository.recordApplicationDocumentDownload({
+      actorUserId,
+      actorType: "UIT_ADMIN",
+      applicationId,
+      documentId,
+      ...request,
+    });
+    return { downloadUrl, expiresAt: expiresAt.toISOString() };
+  }
+
   async listPlacementQueue(input: { page: number; pageSize: number }) {
     return this.repository.listUitPlacementQueue(input);
   }
@@ -660,6 +686,37 @@ export class ApplicationService {
   ) {
     if (!companyId) throw applicationNotFound();
     return this.repository.listCompanyCandidates(companyId, input);
+  }
+
+  async createCompanyApplicationDocumentDownload(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    documentId: string,
+    request: RequestMetadata,
+  ): Promise<StudentDocumentDownloadDto> {
+    if (!actor.companyId) throw applicationNotFound();
+    const objectStorage = this.requireObjectStorage();
+    const document = await this.repository.findApplicationDocumentForCompany(
+      applicationId,
+      documentId,
+      actor.companyId,
+    );
+    if (!document) throw applicationNotFound();
+
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.downloadUrlTtlSeconds * 1_000);
+    const downloadUrl = await objectStorage.createDownloadUrl({
+      key: document.storageKey,
+      fileName: document.fileName,
+      expiresInSeconds: this.objectStorageOptions.downloadUrlTtlSeconds,
+    });
+    await this.repository.recordApplicationDocumentDownload({
+      actorUserId: actor.userId,
+      actorType: "COMPANY",
+      applicationId,
+      documentId,
+      ...request,
+    });
+    return { downloadUrl, expiresAt: expiresAt.toISOString() };
   }
 
   async startCompanyReview(
