@@ -13,6 +13,7 @@ import {
   recruiterCreateSchema,
   recruiterStateChangeSchema,
   recruiterUserIdSchema,
+  partnerDirectoryQuerySchema,
   stateChangeSchema,
 } from "./company.schemas.js";
 import { CompanyService } from "./company.service.js";
@@ -37,6 +38,12 @@ function pageMeta(page: number, pageSize: number, totalItems: number) {
 export function createCompanyRouter(service: CompanyService, tokenService = new TokenService()) {
   const router = Router();
   router.use(createAuthenticate(tokenService));
+
+  router.get("/companies", requireRoles("STUDENT"), async (request, response) => {
+    const query = partnerDirectoryQuerySchema.parse(request.query);
+    const result = await service.listPartnerDirectory(query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
 
   router.get("/uit/companies", requireRoles("UIT_ADMIN"), async (request, response) => {
     const query = companyListQuerySchema.parse(request.query);
@@ -173,6 +180,10 @@ export function createCompanyRouter(service: CompanyService, tokenService = new 
         metadata(request),
       ),
     });
+  });
+
+  router.get("/companies/:companyId", requireRoles("STUDENT"), async (request, response) => {
+    response.json({ data: await service.getPartnerDirectory(companyIdSchema.parse(request.params.companyId)) });
   });
 
   return router;

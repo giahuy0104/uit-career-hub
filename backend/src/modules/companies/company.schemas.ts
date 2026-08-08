@@ -33,6 +33,17 @@ export const companyListQuerySchema = z.object({
   status: z.enum(partnerStatuses).optional(),
 });
 
+export const partnerDirectoryQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  query: z.string().trim().max(100).optional(),
+  industry: z.string().trim().max(120).optional(),
+  hasRecruitingJobs: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
+});
+
 export const companyCreateSchema = z.object({
   ...companyFields,
   primaryRecruiter: z.object(recruiterFields),

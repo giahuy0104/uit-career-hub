@@ -162,6 +162,8 @@ Doanh nghiệp hiện đã có hàng đợi hồ sơ thật, chỉ thấy hồ s
 
 Màn “Hồ sơ & CV” của sinh viên dùng dữ liệu thật từ API: hiển thị thông tin UIT, tính độ hoàn thiện, liệt kê trạng thái xác minh tài liệu, cập nhật số điện thoại và chọn CV đã xác minh làm mặc định. Upload tệp chưa thuộc phase hiện tại; cần tích hợp Object Storage và URL ký trước trước khi mở thao tác này trên giao diện.
 
+Danh bạ doanh nghiệp dành cho sinh viên cũng dùng dữ liệu thật: chỉ công khai đối tác đang hoạt động, hỗ trợ tìm kiếm/lọc, xem hồ sơ công khai và mở danh sách tin còn hạn của đúng doanh nghiệp. API không trả tên pháp lý, mã số thuế, phiên bản quản trị hoặc tài khoản recruiter ra màn sinh viên.
+
 Happy flow và các nhánh ngoại lệ chính của hồ sơ đã chạy xuyên suốt. Hộp thông báo trong hệ thống cũng đã dùng dữ liệu thật cho cả ba vai trò: xem tất cả/chưa đọc, phân trang, đếm badge, đánh dấu một hoặc tất cả là đã đọc và mở đúng màn hình/bản ghi cần xử lý. API luôn giới hạn thông báo theo người dùng đang đăng nhập; không thể đọc hoặc cập nhật thông báo của tài khoản khác.
 
 Ma trận RBAC backend đã được kiểm tra tự động cho toàn bộ endpoint giới hạn vai trò. Middleware từ chối tài khoản thiếu context sinh viên/doanh nghiệp, ownership tiếp tục được bảo vệ ở service/repository và response API không được cache. Tài khoản/dữ liệu demo đã được chuẩn hóa thành checkpoint có lệnh reset an toàn, kiểm tra readiness chỉ đọc và kịch bản E2E bảo vệ 8–10 phút. Frontend, backend và Neon đã được triển khai public; Phase 2 hiện có cron tổng hợp hồ sơ chờ xử lý hằng ngày và email transactional qua Resend.

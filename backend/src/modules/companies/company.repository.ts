@@ -60,7 +60,8 @@ const companySelect = `
          (SELECT count(*)::text FROM company_users cu JOIN users u ON u.id = cu.user_id
           WHERE cu.company_id = c.id AND u.status IN ('ACTIVE', 'PENDING_ACTIVATION')) AS active_recruiter_count,
          (SELECT count(*)::text FROM job_posts j
-          WHERE j.company_id = c.id AND j.status = 'RECRUITING') AS recruiting_job_count,
+          WHERE j.company_id = c.id AND j.status = 'RECRUITING'
+            AND j.deadline >= current_date) AS recruiting_job_count,
          c.created_at, c.updated_at
   FROM companies c
 `;
@@ -147,6 +148,57 @@ export class CompanyRepository {
       values,
     );
     return { items: result.rows.map(mapCompany), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  async listActiveDirectory(input: {
+    page: number;
+    pageSize: number;
+    query?: string;
+    industry?: string;
+    hasRecruitingJobs?: boolean;
+  }) {
+    const filters = ["c.partner_status = 'ACTIVE'"];
+    const values: unknown[] = [];
+    if (input.query) {
+      values.push(`%${input.query}%`);
+      filters.push(`(c.name ILIKE $${values.length} OR c.code ILIKE $${values.length}
+        OR c.industry ILIKE $${values.length} OR c.address ILIKE $${values.length})`);
+    }
+    if (input.industry) {
+      values.push(input.industry);
+      filters.push(`c.industry = $${values.length}`);
+    }
+    if (input.hasRecruitingJobs) {
+      filters.push(`EXISTS (
+        SELECT 1 FROM job_posts j
+        WHERE j.company_id = c.id AND j.status = 'RECRUITING' AND j.deadline >= current_date
+      )`);
+    }
+    const where = `WHERE ${filters.join(" AND ")}`;
+    const count = await this.database.query<{ total: string }>(
+      `SELECT count(*)::text AS total FROM companies c ${where}`,
+      values,
+    );
+    const offset = (input.page - 1) * input.pageSize;
+    values.push(input.pageSize, offset);
+    const result = await this.database.query<CompanyRow>(
+      `${companySelect} ${where}
+       ORDER BY (SELECT count(*) FROM job_posts j
+                 WHERE j.company_id = c.id AND j.status = 'RECRUITING'
+                   AND j.deadline >= current_date) DESC,
+                c.name ASC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return { items: result.rows.map(mapCompany), total: Number(count.rows[0]?.total ?? 0) };
+  }
+
+  async findActiveDirectoryById(companyId: string) {
+    const result = await this.database.query<CompanyRow>(
+      `${companySelect} WHERE c.id = $1 AND c.partner_status = 'ACTIVE'`,
+      [companyId],
+    );
+    return result.rows[0] ? mapCompany(result.rows[0]) : null;
   }
 
   async findById(companyId: string, database: Pick<Pool, "query"> | PoolClient = this.database) {

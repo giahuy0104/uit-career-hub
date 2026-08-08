@@ -40,6 +40,19 @@ export type CompanyDto = CompanyFields & {
 
 export type CompanyDetailDto = CompanyDto & { recruiters: RecruiterDto[] };
 
+export type PartnerDirectoryDto = {
+  id: string;
+  code: string;
+  name: string;
+  industry: string | null;
+  companySize: string | null;
+  description: string | null;
+  website: string | null;
+  address: string | null;
+  verifiedAt: string | null;
+  recruitingJobCount: number;
+};
+
 export type CompanyCreateInput = CompanyFields & {
   primaryRecruiter: { email: string; fullName: string; title: string | null };
 };

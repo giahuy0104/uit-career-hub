@@ -8,6 +8,7 @@ import type {
   CompanyCreateInput,
   CompanyProfileUpdateInput,
   CompanyUpdateInput,
+  PartnerDirectoryDto,
   PartnerStatus,
   RecruiterCreateInput,
 } from "./company.types.js";
@@ -19,6 +20,32 @@ function notFound() {
 }
 function conflict(message: string, code = "COMPANY_STATE_CONFLICT") {
   return new AppError(409, code, message);
+}
+
+function toPartnerDirectory(company: {
+  id: string;
+  code: string;
+  name: string;
+  industry: string | null;
+  companySize: string | null;
+  description: string | null;
+  website: string | null;
+  address: string | null;
+  verifiedAt: string | null;
+  recruitingJobCount: number;
+}): PartnerDirectoryDto {
+  return {
+    id: company.id,
+    code: company.code,
+    name: company.name,
+    industry: company.industry,
+    companySize: company.companySize,
+    description: company.description,
+    website: company.website,
+    address: company.address,
+    verifiedAt: company.verifiedAt,
+    recruitingJobCount: company.recruitingJobCount,
+  };
 }
 
 function translateDatabaseError(error: unknown): never {
@@ -45,6 +72,23 @@ export class CompanyService {
 
   list(input: { page: number; pageSize: number; query?: string; status?: PartnerStatus }) {
     return this.repository.list(input);
+  }
+
+  async listPartnerDirectory(input: {
+    page: number;
+    pageSize: number;
+    query?: string;
+    industry?: string;
+    hasRecruitingJobs?: boolean;
+  }) {
+    const result = await this.repository.listActiveDirectory(input);
+    return { items: result.items.map(toPartnerDirectory), total: result.total };
+  }
+
+  async getPartnerDirectory(companyId: string) {
+    const company = await this.repository.findActiveDirectoryById(companyId);
+    if (!company) throw notFound();
+    return toPartnerDirectory(company);
   }
 
   async get(companyId: string) {
