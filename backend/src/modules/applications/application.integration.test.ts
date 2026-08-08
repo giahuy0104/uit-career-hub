@@ -502,6 +502,52 @@ describeWithDatabase("student job application flow", () => {
     }));
   });
 
+  it("deletes only unused non-default documents and preserves application history", async () => {
+    const { jobId, student } = await createScenario();
+    const uploadId = randomUUID();
+    await client.query(
+      `INSERT INTO student_document_uploads
+       (id, student_profile_id, student_document_id, document_type, file_name, mime_type,
+        file_size_bytes, storage_key, status, etag, expires_at, completed_at)
+       VALUES ($1, $2, $3, 'OTHER', 'chua-xac-minh.pdf', 'application/pdf', 512,
+               $4, 'COMPLETED', 'test-etag', now() + interval '10 minutes', now())`,
+      [uploadId, student.studentProfileId, student.pendingDocumentId, `test/${student.pendingDocumentId}`],
+    );
+
+    const deleted = await request(app)
+      .delete(`/api/v1/students/me/documents/${student.pendingDocumentId}`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data.map((document: { id: string }) => document.id)).not.toContain(student.pendingDocumentId);
+    expect(deleteObject).toHaveBeenCalledWith(`test/${student.pendingDocumentId}`);
+    const remainingUpload = await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM student_document_uploads WHERE id = $1",
+      [uploadId],
+    );
+    expect(Number(remainingUpload.rows[0]?.count)).toBe(0);
+
+    const defaultCv = await request(app)
+      .delete(`/api/v1/students/me/documents/${student.cvId}`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(defaultCv.status).toBe(409);
+    expect(defaultCv.body.error.code).toBe("STUDENT_DOCUMENT_DEFAULT_CV");
+
+    const submitted = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
+    expect(submitted.status).toBe(201);
+    const usedDocument = await request(app)
+      .delete(`/api/v1/students/me/documents/${student.transcriptId}`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(usedDocument.status).toBe(409);
+    expect(usedDocument.body.error.code).toBe("STUDENT_DOCUMENT_IN_USE");
+    expect(deleteObject).toHaveBeenCalledTimes(1);
+
+    const audit = await client.query<{ action: string }>(
+      "SELECT action FROM audit_logs WHERE actor_user_id = $1 AND target_id = $2",
+      [student.id, student.pendingDocumentId],
+    );
+    expect(audit.rows).toEqual([{ action: "STUDENT_DOCUMENT_DELETED" }]);
+  });
+
   it("rejects an R2 object whose actual size does not match the upload intent", async () => {
     const { student } = await createScenario();
     const intent = await request(app)

@@ -95,6 +95,17 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     });
   });
 
+  router.delete("/students/me/documents/:documentId", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.deleteStudentDocument(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentIdSchema.parse(request.params.documentId),
+        metadata(request),
+      ),
+    });
+  });
+
   router.post("/students/me/documents/:documentId/default", studentOnly, async (request, response) => {
     const auth = principal(request);
     response.json({

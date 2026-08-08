@@ -193,6 +193,55 @@ export class ApplicationService {
     };
   }
 
+  async deleteStudentDocument(
+    actor: { userId: string; studentProfileId: string | null },
+    documentId: string,
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+    const objectStorage = this.requireObjectStorage();
+    return this.repository.withTransaction(async (client) => {
+      const document = await this.repository.lockStudentDocument(client, studentProfileId, documentId);
+      if (!document) {
+        throw new AppError(404, "STUDENT_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu của sinh viên.");
+      }
+      if (document.isDefault) {
+        throw new AppError(
+          409,
+          "STUDENT_DOCUMENT_DEFAULT_CV",
+          "Hãy chọn một CV khác làm mặc định trước khi xóa tài liệu này.",
+        );
+      }
+      if (document.usedByApplication) {
+        throw new AppError(
+          409,
+          "STUDENT_DOCUMENT_IN_USE",
+          "Tài liệu đã được dùng trong đơn ứng tuyển nên phải được giữ lại trong lịch sử hồ sơ.",
+        );
+      }
+
+      await objectStorage.deleteObject(document.storageKey);
+      const deleted = await this.repository.deleteStudentDocument(client, studentProfileId, documentId);
+      if (!deleted) {
+        throw new AppError(404, "STUDENT_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu của sinh viên.");
+      }
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'STUDENT_DOCUMENT_DELETED', 'STUDENT_DOCUMENT', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          documentId,
+          JSON.stringify({ studentProfileId, documentType: document.documentType }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return this.repository.listStudentDocuments(studentProfileId, client);
+    });
+  }
+
   async updateStudentProfile(
     actor: { userId: string; studentProfileId: string | null },
     input: { phone: string | null },

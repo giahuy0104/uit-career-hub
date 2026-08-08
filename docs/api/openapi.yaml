@@ -203,6 +203,28 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/{documentId}:
+    delete:
+      tags: [Students]
+      operationId: deleteMyDocument
+      description: Xóa vĩnh viễn tài liệu khỏi hồ sơ và R2. Không cho xóa CV mặc định hoặc tài liệu đã dùng trong đơn ứng tuyển.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách tài liệu còn lại sau khi xóa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentListEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /students/me/documents/{documentId}/download:
     post:
       tags: [Students]
