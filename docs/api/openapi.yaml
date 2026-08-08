@@ -492,6 +492,22 @@ paths:
                 $ref: '#/components/schemas/ApplicationEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
+  /applications/{applicationId}/offer-document/download:
+    post:
+      tags: [Applications]
+      operationId: createStudentOfferDocumentDownload
+      summary: Tạo URL tạm thời để sinh viên mở PDF offer của chính mình
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /applications/{applicationId}/resubmit:
     post:
       tags: [Applications]
@@ -824,6 +840,71 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
         - $ref: '#/components/parameters/ApplicationDocumentId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /companies/me/applications/{applicationId}/offer-document/uploads:
+    post:
+      tags: [Companies, Applications]
+      operationId: createOfferDocumentUploadIntent
+      summary: Tạo URL R2 ký trước để doanh nghiệp tải PDF offer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OfferDocumentUploadRequest' }
+      responses:
+        '201':
+          description: Phiên upload riêng tư có hạn dùng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentUploadIntentEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /companies/me/applications/{applicationId}/offer-document/uploads/{uploadId}/complete:
+    post:
+      tags: [Companies, Applications]
+      operationId: completeOfferDocumentUpload
+      summary: Xác minh PDF trên R2 trước khi gắn vào kết quả PASS
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - name: uploadId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: PDF offer đã được xác minh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OfferDocumentEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: Phiên upload đã hết hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /companies/me/applications/{applicationId}/offer-document/download:
+    post:
+      tags: [Companies, Applications]
+      operationId: createCompanyOfferDocumentDownload
+      summary: Tạo URL tạm thời để doanh nghiệp sở hữu mở lại PDF offer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
       responses:
         '200':
           description: URL ký trước có hiệu lực ngắn hạn
@@ -1205,6 +1286,22 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ApplicationId'
         - $ref: '#/components/parameters/ApplicationDocumentId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /uit/applications/{applicationId}/offer-document/download:
+    post:
+      tags: [UIT, Applications]
+      operationId: createUitOfferDocumentDownload
+      summary: Tạo URL tạm thời để UIT đối chiếu PDF offer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
       responses:
         '200':
           description: URL ký trước có hiệu lực ngắn hạn
@@ -1793,6 +1890,26 @@ components:
         fileName: { type: string, minLength: 1, maxLength: 255, pattern: '\\.[pP][dD][fF]$' }
         mimeType: { type: string, const: application/pdf }
         fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    OfferDocumentUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [fileName, mimeType, fileSizeBytes]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 255, pattern: '\\.[pP][dD][fF]$' }
+        mimeType: { type: string, const: application/pdf }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    OfferDocument:
+      type: object
+      required: [fileName, mimeType, fileSizeBytes]
+      properties:
+        fileName: { type: string }
+        mimeType: { type: string, const: application/pdf }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    OfferDocumentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OfferDocument' }
     StudentDocumentUploadIntentEnvelope:
       type: object
       required: [data]
@@ -2471,14 +2588,16 @@ components:
           FAIL: '#/components/schemas/RecruitmentFailRequest'
     RecruitmentPassRequest:
       type: object
+      additionalProperties: false
       required: [outcome, startDate]
       properties:
         outcome: { type: string, const: PASS }
         startDate: { type: string, format: date }
-        offerStorageKey: { type: string, minLength: 3, maxLength: 2000 }
+        offerUploadId: { type: string, format: uuid }
         internalNote: { type: string, maxLength: 2000 }
     RecruitmentFailRequest:
       type: object
+      additionalProperties: false
       required: [outcome, reasonCode, note]
       properties:
         outcome: { type: string, const: FAIL }
@@ -2486,7 +2605,7 @@ components:
         note: { type: string, minLength: 5, maxLength: 2000 }
     RecruitmentResult:
       type: object
-      required: [id, outcome, studentDecision, offeredAt, respondedAt, startDate, offerStorageKey]
+      required: [id, outcome, studentDecision, offeredAt, respondedAt, startDate, offerDocument]
       properties:
         id: { type: string, format: uuid }
         outcome: { type: string, enum: [PASS, FAIL] }
@@ -2496,7 +2615,15 @@ components:
         offeredAt: { type: [string, 'null'], format: date-time }
         respondedAt: { type: [string, 'null'], format: date-time }
         startDate: { type: [string, 'null'], format: date }
-        offerStorageKey: { type: [string, 'null'] }
+        offerDocument:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [fileName, mimeType, fileSizeBytes]
+              properties:
+                fileName: { type: string }
+                mimeType: { type: string, const: application/pdf }
+                fileSizeBytes: { type: [integer, 'null'], minimum: 1, maximum: 10485760 }
     PlacementConfirmationRequest:
       type: object
       required: [startDate]

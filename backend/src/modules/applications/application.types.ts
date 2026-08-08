@@ -69,7 +69,11 @@ export type ApplicationDto = {
     offeredAt: string | null;
     respondedAt: string | null;
     startDate: string | null;
-    offerStorageKey: string | null;
+    offerDocument: {
+      fileName: string;
+      mimeType: string;
+      fileSizeBytes: number | null;
+    } | null;
   } | null;
   timeline: Array<{
     fromStatus: ApplicationStatus | null;
@@ -163,6 +167,14 @@ export type StudentDocumentUploadIntentDto = {
   method: "PUT";
   headers: { "Content-Type": "application/pdf" };
   expiresAt: string;
+};
+
+export type OfferDocumentUploadIntentDto = StudentDocumentUploadIntentDto;
+
+export type OfferDocumentDto = {
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
 };
 
 export type StudentDocumentDownloadDto = {

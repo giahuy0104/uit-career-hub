@@ -13,6 +13,7 @@ import {
   CheckCircle,
   CircleNotch,
   Clock,
+  DownloadSimple,
   FilePdf,
   FileText,
   FunnelSimple,
@@ -432,6 +433,7 @@ function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId 
   const [offerNote, setOfferNote] = useState("");
   const [offerBusy, setOfferBusy] = useState(false);
   const [offerError, setOfferError] = useState("");
+  const [offerDocumentBusy, setOfferDocumentBusy] = useState(false);
   const [withdrawalAction, setWithdrawalAction] = useState("");
   const [withdrawalReasonCode, setWithdrawalReasonCode] = useState("STUDENT_CHANGED_PLAN");
   const [withdrawalNote, setWithdrawalNote] = useState("");
@@ -573,6 +575,21 @@ function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId 
       setOfferBusy(false);
     }
   };
+  const openOfferDocument = async () => {
+    if (!selected || offerDocumentBusy) return;
+    setOfferDocumentBusy(true);
+    setOfferError("");
+    try {
+      const response = await authorizedRequest(`/applications/${selected.id}/offer-document/download`, {
+        method: "POST",
+      });
+      window.location.assign(response.data.downloadUrl);
+    } catch (error) {
+      setOfferError(error.message);
+    } finally {
+      setOfferDocumentBusy(false);
+    }
+  };
 
   return (
     <div className="screen applications-screen">
@@ -585,7 +602,8 @@ function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId 
             <div className="application-title"><LiveCompanyMark company={selected.job.company} size="lg" /><span><h2>{selected.job.title}</h2><p>{selected.job.company.name}</p><small><CalendarBlank size={15} />Đã nộp: {formatDate(selected.submittedAt)}</small></span><span className={`status-pill ${terminal ? "neutral" : "pending"}`}>{applicationStatusLabels[selected.status]}</span></div>
             <div className="journey">{journeyLabels.map((label, index) => <div className={`journey-step ${index < stage ? "done" : index === stage && !terminal ? "current" : ""}`} key={label}><span>{index < stage ? <Check size={18} /> : index + 1}</span><strong>{label}</strong><small>{index === 0 ? formatDate(selected.submittedAt) : index === stage && !terminal ? "Đang thực hiện" : index < stage ? "Đã hoàn tất" : "Chưa bắt đầu"}</small></div>)}</div>
             <div className="owner-action"><div className="owner-block"><span className="owner-icon"><UserCircle size={31} /></span><span><strong>{applicationStatusLabels[selected.status]}</strong><p>{selected.status === "UIT_REVIEWING" ? "Bộ phận phụ trách UIT đang kiểm tra tư cách và tài liệu đã nộp." : selected.status === "NEEDS_SUPPLEMENT" ? "UIT đã ghi rõ tài liệu còn thiếu. Hãy bổ sung trước hạn để hồ sơ được kiểm duyệt lại." : selected.status === "OFFER_PENDING_STUDENT" ? "Doanh nghiệp đang chờ quyết định của bạn. Hãy kiểm tra ngày bắt đầu trước khi phản hồi." : selected.status === "ACCEPTED_PENDING_UIT_CONFIRMATION" ? "Bạn đã nhận offer. UIT đang đối chiếu thông tin trước khi xác nhận nơi thực tập." : selected.status === "HIRED" ? "UIT đã xác nhận nơi thực tập. Các đơn khác còn hoạt động đã được hệ thống đóng và lưu lịch sử." : terminal ? "Quy trình của đơn này đã dừng. Lịch sử vẫn được lưu trong hệ thống." : "Đơn đang được xử lý theo quy trình tuyển dụng của nhà trường."}</p></span></div><div className="owner-buttons"><button className="secondary-button" onClick={() => setDocumentsOpen(true)}><FileText size={19} />Xem hồ sơ</button>{selected.availableActions.includes("WITHDRAW") && <button className="secondary-button danger" onClick={() => openWithdrawal("WITHDRAW")}><Trash size={18} />Rút đơn</button>}{selected.availableActions.includes("CANCEL_INTERVIEW") && <button className="secondary-button danger" onClick={() => openWithdrawal("CANCEL_INTERVIEW")}><X size={18} />Hủy tham gia PV</button>}{selected.availableActions.includes("RESUBMIT") && <button className="primary-button" onClick={() => void openSupplement()}><UploadSimple size={18} />Bổ sung hồ sơ</button>}{selected.status === "OFFER_PENDING_STUDENT" && <><button className="secondary-button danger" onClick={() => openOfferDecision("decline")}><X size={18} />Từ chối</button><button className="primary-button" onClick={() => openOfferDecision("accept")}><CheckCircle size={19} />Nhận offer</button></>}</div></div>
-            {selected.status === "OFFER_PENDING_STUDENT" && selected.recruitmentResult && <div className="offer-summary"><span className="offer-summary-icon"><Briefcase size={25} /></span><span><small>LỜI MỜI NHẬN VIỆC</small><strong>Ngày bắt đầu dự kiến: {formatDate(selected.recruitmentResult.startDate)}</strong><p>{selected.recruitmentResult.offerStorageKey ? "Doanh nghiệp đã đính kèm tài liệu offer." : "Offer được xác nhận trực tiếp trên hệ thống."}</p></span><i className="status-tag pending">Chờ bạn phản hồi</i></div>}
+            {selected.recruitmentResult?.outcome === "PASS" && <div className="offer-summary"><span className="offer-summary-icon"><Briefcase size={25} /></span><span><small>LỜI MỜI NHẬN VIỆC</small><strong>Ngày bắt đầu dự kiến: {formatDate(selected.recruitmentResult.startDate)}</strong><p>{selected.recruitmentResult.offerDocument ? `Đính kèm: ${selected.recruitmentResult.offerDocument.fileName}` : "Offer được xác nhận trực tiếp trên hệ thống."}</p></span>{selected.recruitmentResult.offerDocument && <button className="secondary-button offer-download-button" disabled={offerDocumentBusy} onClick={() => void openOfferDocument()}>{offerDocumentBusy ? <CircleNotch className="spin" size={17} /> : <DownloadSimple size={17} />}Mở PDF</button>}<i className="status-tag pending">{selected.status === "OFFER_PENDING_STUDENT" ? "Chờ bạn phản hồi" : applicationStatusLabels[selected.status]}</i></div>}
+            {offerError && selected.recruitmentResult?.outcome === "PASS" && <p className="form-error offer-document-error"><Warning size={18} />{offerError}</p>}
             {selected.status === "NEEDS_SUPPLEMENT" && supplementRequest && <div className="supplement-request-card"><Warning size={24} /><span><small>YÊU CẦU BỔ SUNG TỪ UIT</small><strong>{supplementRequest.note}</strong><p>Cần nộp: {requiredSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")} · Hạn {formatDate(supplementRequest.metadata.dueAt)}</p></span><button className="primary-button" onClick={() => void openSupplement()}><UploadSimple size={18} />Chọn tài liệu</button></div>}
             {selected.status === "UIT_REVIEWING" && <p className="info-banner"><Info size={22} />Doanh nghiệp chưa thể xem CV cho đến khi UIT phê duyệt và chuyển hồ sơ.</p>}
             <section className="student-application-history"><h3>Lịch sử xử lý</h3><div>{selected.timeline.slice().reverse().slice(0, 6).map((event, index) => <article key={`${event.createdAt}-${index}`}><span className="history-dot"><Check size={12} /></span><div><strong>{applicationStatusLabels[event.toStatus] || event.toStatus}</strong><small>{formatDate(event.createdAt)} · {event.actorType}</small>{event.note && <p>{event.note}</p>}</div></article>)}</div></section>

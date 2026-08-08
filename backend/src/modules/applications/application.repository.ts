@@ -69,6 +69,19 @@ export type StudentDocumentUploadRecord = {
   expiresAt: Date;
 };
 
+export type OfferDocumentUploadRecord = {
+  id: string;
+  applicationId: string;
+  companyId: string;
+  createdByUserId: string;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  storageKey: string;
+  status: "PENDING" | "COMPLETED" | "REJECTED" | "EXPIRED" | "CONSUMED";
+  expiresAt: Date;
+};
+
 const applicationSelect = `
   SELECT
     a.id,
@@ -114,9 +127,18 @@ const applicationSelect = `
         'offeredAt', rr.offered_at,
         'respondedAt', rr.responded_at,
         'startDate', rr.start_date,
-        'offerStorageKey', rr.offer_storage_key
+        'offerDocument', CASE
+          WHEN rr.offer_storage_key IS NULL THEN NULL
+          ELSE jsonb_build_object(
+            'fileName', COALESCE(odu.file_name, regexp_replace(rr.offer_storage_key, '^.*/', '')),
+            'mimeType', COALESCE(odu.mime_type, 'application/pdf'),
+            'fileSizeBytes', odu.file_size_bytes
+          )
+        END
       )
-      FROM recruitment_results rr WHERE rr.application_id = a.id
+      FROM recruitment_results rr
+      LEFT JOIN offer_document_uploads odu ON odu.id = rr.offer_upload_id
+      WHERE rr.application_id = a.id
     ) AS recruitment_result,
     COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
@@ -182,7 +204,19 @@ function mapApplication(row: ApplicationRow): ApplicationDto {
       ...document,
       fileSizeBytes: Number(document.fileSizeBytes),
     })),
-    recruitmentResult: row.recruitment_result ?? null,
+    recruitmentResult: row.recruitment_result
+      ? {
+          ...row.recruitment_result,
+          offerDocument: row.recruitment_result.offerDocument
+            ? {
+                ...row.recruitment_result.offerDocument,
+                fileSizeBytes: row.recruitment_result.offerDocument.fileSizeBytes === null
+                  ? null
+                  : Number(row.recruitment_result.offerDocument.fileSizeBytes),
+              }
+            : null,
+        }
+      : null,
     timeline: row.timeline ?? [],
   };
 }
@@ -649,6 +683,106 @@ export class ApplicationRepository {
     );
   }
 
+  async createOfferDocumentUpload(input: {
+    id: string;
+    applicationId: string;
+    companyId: string;
+    createdByUserId: string;
+    fileName: string;
+    mimeType: string;
+    fileSizeBytes: number;
+    storageKey: string;
+    expiresAt: Date;
+  }) {
+    await this.database.query(
+      `INSERT INTO offer_document_uploads
+       (id, application_id, company_id, created_by_user_id, file_name, mime_type,
+        file_size_bytes, storage_key, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        input.id,
+        input.applicationId,
+        input.companyId,
+        input.createdByUserId,
+        input.fileName,
+        input.mimeType,
+        input.fileSizeBytes,
+        input.storageKey,
+        input.expiresAt,
+      ],
+    );
+  }
+
+  async findOfferDocumentUpload(
+    companyId: string,
+    applicationId: string,
+    uploadId: string,
+    client: Pick<PoolClient, "query"> = this.database,
+    lock = false,
+  ): Promise<OfferDocumentUploadRecord | null> {
+    const result = await client.query<{
+      id: string;
+      application_id: string;
+      company_id: string;
+      created_by_user_id: string;
+      file_name: string;
+      mime_type: string;
+      file_size_bytes: string;
+      storage_key: string;
+      status: OfferDocumentUploadRecord["status"];
+      expires_at: Date;
+    }>(
+      `SELECT id, application_id, company_id, created_by_user_id, file_name, mime_type,
+              file_size_bytes, storage_key, status, expires_at
+       FROM offer_document_uploads
+       WHERE id = $1 AND application_id = $2 AND company_id = $3${lock ? " FOR UPDATE" : ""}`,
+      [uploadId, applicationId, companyId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          id: row.id,
+          applicationId: row.application_id,
+          companyId: row.company_id,
+          createdByUserId: row.created_by_user_id,
+          fileName: row.file_name,
+          mimeType: row.mime_type,
+          fileSizeBytes: Number(row.file_size_bytes),
+          storageKey: row.storage_key,
+          status: row.status,
+          expiresAt: row.expires_at,
+        }
+      : null;
+  }
+
+  async completeOfferDocumentUpload(client: PoolClient, uploadId: string, etag: string | null) {
+    await client.query(
+      `UPDATE offer_document_uploads
+       SET status = 'COMPLETED', etag = $2, completed_at = now()
+       WHERE id = $1 AND status = 'PENDING'`,
+      [uploadId, etag],
+    );
+  }
+
+  async rejectOfferDocumentUpload(client: PoolClient, uploadId: string, status: "REJECTED" | "EXPIRED") {
+    await client.query(
+      `UPDATE offer_document_uploads SET status = $2
+       WHERE id = $1 AND status = 'PENDING'`,
+      [uploadId, status],
+    );
+  }
+
+  async consumeOfferDocumentUpload(client: PoolClient, uploadId: string) {
+    const result = await client.query<{ storage_key: string }>(
+      `UPDATE offer_document_uploads
+       SET status = 'CONSUMED', consumed_at = now()
+       WHERE id = $1 AND status = 'COMPLETED'
+       RETURNING storage_key`,
+      [uploadId],
+    );
+    return result.rows[0]?.storage_key ?? null;
+  }
+
   async findStudentDocumentStorage(studentProfileId: string, documentId: string) {
     const result = await this.database.query<{ storage_key: string; file_name: string }>(
       `SELECT storage_key, file_name FROM student_documents
@@ -843,6 +977,74 @@ export class ApplicationRepository {
       [
         input.actorUserId,
         input.documentId,
+        input.applicationId,
+        input.actorType,
+        input.ipAddress,
+        input.userAgent,
+      ],
+    );
+  }
+
+  async findStudentOfferDocumentStorage(studentProfileId: string, applicationId: string) {
+    return this.findOfferDocumentStorage(
+      `a.student_profile_id = $2`,
+      [applicationId, studentProfileId],
+    );
+  }
+
+  async findUitOfferDocumentStorage(applicationId: string) {
+    return this.findOfferDocumentStorage("TRUE", [applicationId]);
+  }
+
+  async findCompanyOfferDocumentStorage(companyId: string, applicationId: string) {
+    return this.findOfferDocumentStorage(
+      `j.company_id = $2 AND EXISTS (
+         SELECT 1 FROM application_status_history company_visibility
+         WHERE company_visibility.application_id = a.id
+           AND company_visibility.to_status = 'FORWARDED_TO_COMPANY'
+       )`,
+      [applicationId, companyId],
+    );
+  }
+
+  private async findOfferDocumentStorage(scopeSql: string, values: unknown[]) {
+    const result = await this.database.query<{
+      recruitment_result_id: string;
+      storage_key: string;
+      file_name: string;
+    }>(
+      `SELECT rr.id AS recruitment_result_id, rr.offer_storage_key AS storage_key,
+              COALESCE(odu.file_name, regexp_replace(rr.offer_storage_key, '^.*/', '')) AS file_name
+       FROM recruitment_results rr
+       JOIN applications a ON a.id = rr.application_id
+       JOIN job_posts j ON j.id = a.job_post_id
+       LEFT JOIN offer_document_uploads odu ON odu.id = rr.offer_upload_id
+       WHERE rr.application_id = $1 AND rr.outcome = 'PASS'
+         AND rr.offer_storage_key IS NOT NULL AND ${scopeSql}`,
+      values,
+    );
+    const row = result.rows[0];
+    return row
+      ? { resultId: row.recruitment_result_id, storageKey: row.storage_key, fileName: row.file_name }
+      : null;
+  }
+
+  async recordOfferDocumentDownload(input: {
+    actorUserId: string;
+    actorType: "STUDENT" | "UIT_ADMIN" | "COMPANY";
+    applicationId: string;
+    resultId: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+  }) {
+    await this.database.query(
+      `INSERT INTO audit_logs
+       (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+       VALUES ($1, 'OFFER_DOCUMENT_DOWNLOAD_URL_CREATED', 'RECRUITMENT_RESULT', $2,
+               jsonb_build_object('applicationId', $3::uuid::text, 'actorType', $4::text), $5, $6)`,
+      [
+        input.actorUserId,
+        input.resultId,
         input.applicationId,
         input.actorType,
         input.ipAddress,

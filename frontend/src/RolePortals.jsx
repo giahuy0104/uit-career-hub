@@ -1583,7 +1583,7 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
   const [location, setLocation] = useState("");
   const [meetingUrl, setMeetingUrl] = useState("");
   const [interviewer, setInterviewer] = useState(interviewerName || "");
-  const [offerStorageKey, setOfferStorageKey] = useState("");
+  const [offerFile, setOfferFile] = useState(null);
   const isInterview = mode === "interview";
   const isPass = mode === "result-pass";
   const isFail = mode === "result-fail";
@@ -1604,10 +1604,12 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
     }
     if (isPass) {
       submit({
-        outcome: "PASS",
-        startDate: date,
-        ...(offerStorageKey.trim() ? { offerStorageKey: offerStorageKey.trim() } : {}),
-        ...(note.trim() ? { internalNote: note.trim() } : {}),
+        payload: {
+          outcome: "PASS",
+          startDate: date,
+          ...(note.trim() ? { internalNote: note.trim() } : {}),
+        },
+        offerFile,
       });
       return;
     }
@@ -1639,7 +1641,7 @@ function CompanyCandidateDecisionModal({ mode, application, busy, error, close, 
         ) : isPass ? (
           <div className="modal-form two-cols interview-form">
             <label><span>Ngày bắt đầu dự kiến *</span><input type="date" value={date} min={new Date().toISOString().slice(0, 10)} onChange={event => setDate(event.target.value)} /></label>
-            <label><span>Đường dẫn / mã tệp offer</span><input value={offerStorageKey} onChange={event => setOfferStorageKey(event.target.value)} placeholder="offers/offer.pdf hoặc https://..." /></label>
+            <label className="offer-file-picker"><span>PDF offer (không bắt buộc)</span><input type="file" accept="application/pdf,.pdf" onChange={event => setOfferFile(event.target.files?.[0] || null)} /><small>{offerFile ? `${offerFile.name} · ${formatBytes(offerFile.size)}` : "Tối đa 10 MB. Tệp được lưu riêng tư trên Cloudflare R2."}</small></label>
             <label className="full"><span>Ghi chú nội bộ</span><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Thông tin chỉ doanh nghiệp lưu nội bộ..." maxLength={2000} /></label>
           </div>
         ) : (
@@ -1715,8 +1717,10 @@ function CompanyCandidates({ targetApplicationId = null }) {
       setBusyId("");
     }
   };
-  const decide = async payload => {
+  const decide = async submission => {
     const application = decision.application;
+    const payload = submission?.payload ?? submission;
+    const offerFile = submission?.offerFile ?? null;
     setBusyId(application.id);
     setError("");
     try {
@@ -1729,6 +1733,38 @@ function CompanyCandidates({ targetApplicationId = null }) {
         await load();
         setMessage("Đã tạo lịch và gửi lời mời phỏng vấn.");
       } else {
+        if (decision.mode === "result-pass" && offerFile) {
+          if (offerFile.type !== "application/pdf" || !offerFile.name.toLowerCase().endsWith(".pdf")) {
+            throw new Error("Chỉ chấp nhận tệp offer định dạng PDF.");
+          }
+          if (offerFile.size <= 0 || offerFile.size > 10 * 1024 * 1024) {
+            throw new Error("Tệp offer phải có dung lượng từ 1 byte đến 10 MB.");
+          }
+          const intent = await authorizedRequest(
+            `/companies/me/applications/${application.id}/offer-document/uploads`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                fileName: offerFile.name,
+                mimeType: "application/pdf",
+                fileSizeBytes: offerFile.size,
+              }),
+            },
+          );
+          const uploadResponse = await fetch(intent.data.uploadUrl, {
+            method: intent.data.method,
+            headers: intent.data.headers,
+            body: offerFile,
+          });
+          if (!uploadResponse.ok) {
+            throw new Error("Không thể tải PDF offer lên kho lưu trữ. Vui lòng thử lại.");
+          }
+          await authorizedRequest(
+            `/companies/me/applications/${application.id}/offer-document/uploads/${intent.data.uploadId}/complete`,
+            { method: "POST" },
+          );
+          payload.offerUploadId = intent.data.uploadId;
+        }
         const response = await authorizedRequest(`/companies/me/applications/${application.id}/results`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) });
         replace(response.data);
         setMessage(decision.mode === "result-pass" ? "Đã gửi offer và chờ sinh viên phản hồi." : "Đã ghi nhận kết quả chưa đạt.");
