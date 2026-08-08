@@ -10,6 +10,7 @@ import { createDatabasePool } from "../../db/pool.js";
 import type { AuthUser, UserRole } from "../auth/auth.types.js";
 import { TokenService } from "../auth/token.service.js";
 import type { EmailDeliveryService } from "../email/email-delivery.service.js";
+import type { ObjectStorage } from "../storage/object-storage.js";
 
 const { Client } = pg;
 const describeWithDatabase = env.databaseUrlTest ? describe : describe.skip;
@@ -22,6 +23,22 @@ describeWithDatabase("student job application flow", () => {
   });
   const tokenService = new TokenService();
   const dispatchPending = vi.fn(async () => ({ enabled: true, claimed: 1, sent: 1, failed: 0 }));
+  const createUploadUrl = vi.fn(async () => "https://r2.example.test/signed-upload");
+  const createDownloadUrl = vi.fn(async () => "https://r2.example.test/signed-download");
+  const headObject = vi.fn(async () => ({
+    contentLength: 4096,
+    contentType: "application/pdf",
+    etag: "test-etag",
+  }));
+  const readObjectPrefix = vi.fn(async () => new TextEncoder().encode("%PDF-"));
+  const deleteObject = vi.fn(async () => undefined);
+  const objectStorage = {
+    createUploadUrl,
+    createDownloadUrl,
+    headObject,
+    readObjectPrefix,
+    deleteObject,
+  } as ObjectStorage;
   const app = createApp({
     database,
     authDatabase: database,
@@ -29,6 +46,7 @@ describeWithDatabase("student job application flow", () => {
     applicationDatabase: database,
     tokenService,
     emailDeliveryService: { dispatchPending } as unknown as EmailDeliveryService,
+    objectStorage,
   });
   const userIds: string[] = [];
   const companyIds: string[] = [];
@@ -41,6 +59,13 @@ describeWithDatabase("student job application flow", () => {
 
   afterEach(async () => {
     dispatchPending.mockClear();
+    createUploadUrl.mockClear();
+    createDownloadUrl.mockClear();
+    headObject.mockClear();
+    readObjectPrefix.mockClear();
+    deleteObject.mockClear();
+    headObject.mockResolvedValue({ contentLength: 4096, contentType: "application/pdf", etag: "test-etag" });
+    readObjectPrefix.mockResolvedValue(new TextEncoder().encode("%PDF-"));
     if (!userIds.length) return;
     await client.query("DELETE FROM notifications WHERE recipient_user_id = ANY($1::uuid[])", [userIds]);
     await client.query(
@@ -66,6 +91,7 @@ describeWithDatabase("student job application flow", () => {
       [studentProfileIds],
     );
     await client.query("DELETE FROM applications WHERE student_profile_id = ANY($1::uuid[])", [studentProfileIds]);
+    await client.query("DELETE FROM student_document_uploads WHERE student_profile_id = ANY($1::uuid[])", [studentProfileIds]);
     await client.query("DELETE FROM student_documents WHERE student_profile_id = ANY($1::uuid[])", [studentProfileIds]);
     await client.query("DELETE FROM student_profiles WHERE id = ANY($1::uuid[])", [studentProfileIds]);
     if (companyIds.length) {
@@ -411,6 +437,111 @@ describeWithDatabase("student job application flow", () => {
       "STUDENT_PROFILE_UPDATED",
       "STUDENT_DEFAULT_CV_CHANGED",
     ]);
+  });
+
+  it("creates, verifies and downloads a private R2 student document", async () => {
+    const { student } = await createScenario();
+    const intent = await request(app)
+      .post("/api/v1/students/me/documents/uploads")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({
+        documentType: "CV",
+        fileName: "cv-thuc-tap-2026.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 4096,
+      });
+
+    expect(intent.status).toBe(201);
+    expect(intent.body.data).toMatchObject({
+      uploadId: expect.any(String),
+      uploadUrl: "https://r2.example.test/signed-upload",
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+    });
+    expect(createUploadUrl).toHaveBeenCalledWith(expect.objectContaining({
+      contentType: "application/pdf",
+      key: expect.stringMatching(new RegExp(`^students/${student.studentProfileId}/cv/.+\\.pdf$`)),
+    }));
+
+    const completed = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(completed.status).toBe(201);
+    const uploaded = completed.body.data.find(
+      (document: { fileName: string }) => document.fileName === "cv-thuc-tap-2026.pdf",
+    );
+    expect(uploaded).toMatchObject({
+      documentType: "CV",
+      mimeType: "application/pdf",
+      fileSizeBytes: 4096,
+      version: 2,
+      isDefault: false,
+      verificationStatus: "PENDING",
+    });
+    expect(headObject).toHaveBeenCalledOnce();
+    expect(readObjectPrefix).toHaveBeenCalledOnce();
+
+    const repeated = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(repeated.status).toBe(201);
+    expect(repeated.body.data.filter(
+      (document: { fileName: string }) => document.fileName === "cv-thuc-tap-2026.pdf",
+    )).toHaveLength(1);
+
+    const download = await request(app)
+      .post(`/api/v1/students/me/documents/${uploaded.id}/download`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(download.status).toBe(200);
+    expect(download.body.data).toMatchObject({
+      downloadUrl: "https://r2.example.test/signed-download",
+      expiresAt: expect.any(String),
+    });
+    expect(createDownloadUrl).toHaveBeenCalledWith(expect.objectContaining({
+      fileName: "cv-thuc-tap-2026.pdf",
+    }));
+  });
+
+  it("rejects an R2 object whose actual size does not match the upload intent", async () => {
+    const { student } = await createScenario();
+    const intent = await request(app)
+      .post("/api/v1/students/me/documents/uploads")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({
+        documentType: "TRANSCRIPT",
+        fileName: "bang-diem.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 2048,
+      });
+    expect(intent.status).toBe(201);
+
+    const completed = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(completed.status).toBe(409);
+    expect(completed.body.error.code).toBe("STUDENT_DOCUMENT_UPLOAD_MISMATCH");
+    expect(deleteObject).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an uploaded object without a PDF signature", async () => {
+    const { student } = await createScenario();
+    const intent = await request(app)
+      .post("/api/v1/students/me/documents/uploads")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({
+        documentType: "CV",
+        fileName: "fake.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 4096,
+      });
+    readObjectPrefix.mockResolvedValue(new TextEncoder().encode("hello"));
+
+    const completed = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(completed.status).toBe(409);
+    expect(completed.body.error.code).toBe("STUDENT_DOCUMENT_INVALID_PDF");
+    expect(deleteObject).toHaveBeenCalledOnce();
   });
 
   it("submits a two-step application idempotently and notifies UIT", async () => {

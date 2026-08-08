@@ -15,10 +15,10 @@ describe("loadMigrationFiles", () => {
     expect(migrations[0]?.checksum).toMatch(/^[a-f0-9]{64}$/);
     expect(migrations[0]?.sql).toContain("CREATE TABLE applications");
     expect(migrations.at(-1)).toMatchObject({
-      version: "0011",
-      name: "company_partner_management",
-      fileName: "0011_company_partner_management.sql",
+      version: "0012",
+      name: "student_document_uploads",
+      fileName: "0012_student_document_uploads.sql",
     });
-    expect(migrations.at(-1)?.sql).toContain("uq_companies_tax_code_normalized");
+    expect(migrations.at(-1)?.sql).toContain("CREATE TABLE student_document_uploads");
   });
 });

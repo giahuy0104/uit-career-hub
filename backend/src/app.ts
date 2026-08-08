@@ -34,6 +34,8 @@ import { NotificationService } from "./modules/notifications/notification.servic
 import { DailyPendingRepository, type DailyPendingDatabase } from "./modules/scheduler/daily-pending.repository.js";
 import { createDailyPendingRouter } from "./modules/scheduler/daily-pending.routes.js";
 import { DailyPendingService } from "./modules/scheduler/daily-pending.service.js";
+import type { ObjectStorage } from "./modules/storage/object-storage.js";
+import { R2ObjectStorage } from "./modules/storage/r2-object-storage.js";
 import { AppError } from "./shared/app-error.js";
 
 type AppDependencies = {
@@ -56,6 +58,7 @@ type AppDependencies = {
   dailyPendingDatabase?: DailyPendingDatabase;
   dailyPendingService?: DailyPendingService;
   cronSecret?: string;
+  objectStorage?: ObjectStorage;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -113,6 +116,19 @@ export function createApp(dependencies: AppDependencies = {}) {
     new ApplicationService(
       new ApplicationRepository(dependencies.applicationDatabase ?? databasePool),
       emailDeliveryService,
+      dependencies.objectStorage ??
+        (env.objectStorageEnabled
+          ? new R2ObjectStorage({
+              accountId: env.r2AccountId!,
+              accessKeyId: env.r2AccessKeyId!,
+              secretAccessKey: env.r2SecretAccessKey!,
+              bucket: env.r2Bucket!,
+            })
+          : undefined),
+      {
+        uploadUrlTtlSeconds: env.objectUploadUrlTtlSeconds,
+        downloadUrlTtlSeconds: env.objectDownloadUrlTtlSeconds,
+      },
     );
   const notificationService =
     dependencies.notificationService ??
@@ -127,7 +143,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.11.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.12.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(

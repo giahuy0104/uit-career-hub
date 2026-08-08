@@ -2,8 +2,16 @@ import { randomUUID } from "node:crypto";
 
 import { AppError } from "../../shared/app-error.js";
 import type { EmailDeliveryService } from "../email/email-delivery.service.js";
+import type { ObjectStorage } from "../storage/object-storage.js";
 import { ApplicationRepository } from "./application.repository.js";
-import type { ApplicationReviewDecision, ApplicationStatus, RequestMetadata } from "./application.types.js";
+import type {
+  ApplicationReviewDecision,
+  ApplicationStatus,
+  RequestMetadata,
+  StudentDocumentDownloadDto,
+  StudentDocumentType,
+  StudentDocumentUploadIntentDto,
+} from "./application.types.js";
 
 function studentNotFound() {
   return new AppError(404, "STUDENT_PROFILE_NOT_FOUND", "Không tìm thấy hồ sơ sinh viên.");
@@ -21,7 +29,20 @@ export class ApplicationService {
   constructor(
     private readonly repository: ApplicationRepository,
     private readonly emailDeliveryService?: Pick<EmailDeliveryService, "dispatchPending">,
+    private readonly objectStorage?: ObjectStorage,
+    private readonly objectStorageOptions = { uploadUrlTtlSeconds: 600, downloadUrlTtlSeconds: 300 },
   ) {}
+
+  private requireObjectStorage() {
+    if (!this.objectStorage) {
+      throw new AppError(
+        503,
+        "OBJECT_STORAGE_NOT_CONFIGURED",
+        "Chức năng tải tài liệu chưa được cấu hình trên môi trường này.",
+      );
+    }
+    return this.objectStorage;
+  }
 
   async getStudentProfile(studentProfileId: string | null) {
     if (!studentProfileId) throw studentNotFound();
@@ -33,6 +54,143 @@ export class ApplicationService {
   async listStudentDocuments(studentProfileId: string | null) {
     if (!studentProfileId) throw studentNotFound();
     return this.repository.listStudentDocuments(studentProfileId);
+  }
+
+  async createStudentDocumentUploadIntent(
+    actor: { userId: string; studentProfileId: string | null },
+    input: {
+      documentType: StudentDocumentType;
+      fileName: string;
+      mimeType: "application/pdf";
+      fileSizeBytes: number;
+    },
+  ): Promise<StudentDocumentUploadIntentDto> {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const objectStorage = this.requireObjectStorage();
+    const uploadId = randomUUID();
+    const storageKey = `students/${actor.studentProfileId}/${input.documentType.toLowerCase()}/${uploadId}.pdf`;
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.uploadUrlTtlSeconds * 1_000);
+    const uploadUrl = await objectStorage.createUploadUrl({
+      key: storageKey,
+      contentType: input.mimeType,
+      expiresInSeconds: this.objectStorageOptions.uploadUrlTtlSeconds,
+    });
+    await this.repository.createStudentDocumentUpload({
+      id: uploadId,
+      studentProfileId: actor.studentProfileId,
+      documentType: input.documentType,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      storageKey,
+      expiresAt,
+    });
+    return {
+      uploadId,
+      uploadUrl,
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  async completeStudentDocumentUpload(
+    actor: { userId: string; studentProfileId: string | null },
+    uploadId: string,
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    const studentProfileId = actor.studentProfileId;
+    const objectStorage = this.requireObjectStorage();
+    const initial = await this.repository.findStudentDocumentUpload(studentProfileId, uploadId);
+    if (!initial) {
+      throw new AppError(404, "STUDENT_DOCUMENT_UPLOAD_NOT_FOUND", "Không tìm thấy phiên tải tài liệu.");
+    }
+    if (initial.status === "COMPLETED") return this.repository.listStudentDocuments(studentProfileId);
+    if (initial.status !== "PENDING") {
+      throw new AppError(409, "STUDENT_DOCUMENT_UPLOAD_CLOSED", "Phiên tải tài liệu không còn hiệu lực.");
+    }
+    if (initial.expiresAt.getTime() <= Date.now()) {
+      await this.repository.withTransaction(async (client) => {
+        await this.repository.rejectStudentDocumentUpload(client, uploadId, "EXPIRED");
+      });
+      throw new AppError(410, "STUDENT_DOCUMENT_UPLOAD_EXPIRED", "URL tải tài liệu đã hết hạn.");
+    }
+
+    const storedObject = await objectStorage.headObject(initial.storageKey);
+    if (!storedObject) {
+      throw new AppError(409, "STUDENT_DOCUMENT_UPLOAD_MISSING", "R2 chưa nhận được tệp tải lên.");
+    }
+    const contentType = storedObject.contentType?.split(";")[0]?.trim().toLowerCase();
+    if (storedObject.contentLength !== initial.fileSizeBytes || contentType !== initial.mimeType) {
+      await objectStorage.deleteObject(initial.storageKey);
+      await this.repository.withTransaction(async (client) => {
+        await this.repository.rejectStudentDocumentUpload(client, uploadId, "REJECTED");
+      });
+      throw new AppError(
+        409,
+        "STUDENT_DOCUMENT_UPLOAD_MISMATCH",
+        "Tệp trên R2 không khớp dung lượng hoặc định dạng đã đăng ký.",
+      );
+    }
+    const signature = await objectStorage.readObjectPrefix(initial.storageKey, 5);
+    if (new TextDecoder().decode(signature) !== "%PDF-") {
+      await objectStorage.deleteObject(initial.storageKey);
+      await this.repository.withTransaction(async (client) => {
+        await this.repository.rejectStudentDocumentUpload(client, uploadId, "REJECTED");
+      });
+      throw new AppError(
+        409,
+        "STUDENT_DOCUMENT_INVALID_PDF",
+        "Nội dung tệp không phải là tài liệu PDF hợp lệ.",
+      );
+    }
+
+    return this.repository.withTransaction(async (client) => {
+      const upload = await this.repository.findStudentDocumentUpload(studentProfileId, uploadId, client, true);
+      if (!upload) {
+        throw new AppError(404, "STUDENT_DOCUMENT_UPLOAD_NOT_FOUND", "Không tìm thấy phiên tải tài liệu.");
+      }
+      if (upload.status === "COMPLETED") return this.repository.listStudentDocuments(studentProfileId, client);
+      if (upload.status !== "PENDING") {
+        throw new AppError(409, "STUDENT_DOCUMENT_UPLOAD_CLOSED", "Phiên tải tài liệu không còn hiệu lực.");
+      }
+      const documentId = await this.repository.completeStudentDocumentUpload(client, upload, storedObject.etag);
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'STUDENT_DOCUMENT_UPLOADED', 'STUDENT_DOCUMENT', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          documentId,
+          JSON.stringify({ uploadId, documentType: upload.documentType, fileSizeBytes: upload.fileSizeBytes }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return this.repository.listStudentDocuments(studentProfileId, client);
+    });
+  }
+
+  async createStudentDocumentDownload(
+    studentProfileId: string | null,
+    documentId: string,
+  ): Promise<StudentDocumentDownloadDto> {
+    if (!studentProfileId) throw studentNotFound();
+    const objectStorage = this.requireObjectStorage();
+    const document = await this.repository.findStudentDocumentStorage(studentProfileId, documentId);
+    if (!document) {
+      throw new AppError(404, "STUDENT_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu của sinh viên.");
+    }
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.downloadUrlTtlSeconds * 1_000);
+    return {
+      downloadUrl: await objectStorage.createDownloadUrl({
+        key: document.storageKey,
+        fileName: document.fileName,
+        expiresInSeconds: this.objectStorageOptions.downloadUrlTtlSeconds,
+      }),
+      expiresAt: expiresAt.toISOString(),
+    };
   }
 
   async updateStudentProfile(

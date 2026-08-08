@@ -346,10 +346,21 @@ function ProfilePhoneModal({ profile, busy, error, onClose, onSave }) {
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal profile-phone-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={onClose} disabled={busy}><X /></button><span className="modal-icon"><User /></span><h2>Cập nhật thông tin bổ sung</h2><p>Thông tin học tập do UIT quản lý. Sinh viên chỉ có thể bổ sung số điện thoại liên hệ ở giai đoạn hiện tại.</p><div className="modal-form"><label><span>Số điện thoại</span><input autoFocus value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} placeholder="Ví dụ: 0912 345 678" /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className="primary-button" onClick={() => onSave(phone.trim() || null)} disabled={busy}>{busy ? <><CircleNotch className="spin" />Đang lưu</> : "Lưu thay đổi"}</button></div></div></div>;
 }
 
-function ProfileDocumentCard({ document, busy, onSetDefault }) {
+function ProfileDocumentUploadModal({ initialType, busy, error, onClose, onUpload }) {
+  const [documentType, setDocumentType] = useState(initialType);
+  const [file, setFile] = useState(null);
+  const localError = file && (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf"))
+    ? "Chỉ chấp nhận tệp PDF."
+    : file?.size > 10 * 1024 * 1024
+      ? "Tệp không được vượt quá 10 MB."
+      : "";
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal profile-upload-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={onClose} disabled={busy}><X /></button><span className="modal-icon"><FileText /></span><h2>Tải tài liệu lên hồ sơ</h2><p>Tệp được tải trực tiếp vào Cloudflare R2 private. Hệ thống chỉ lưu hồ sơ sau khi kiểm tra đúng định dạng và dung lượng.</p><div className="modal-form"><label><span>Loại tài liệu</span><select value={documentType} onChange={event => setDocumentType(event.target.value)} disabled={busy}>{Object.entries(profileDocumentCopy).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="profile-file-picker"><span>Tệp PDF · tối đa 10 MB</span><input type="file" accept="application/pdf,.pdf" onChange={event => setFile(event.target.files?.[0] || null)} disabled={busy} /><small>{file ? `${file.name} · ${formatDocumentSize(file.size)}` : "Chưa chọn tệp"}</small></label></div>{(localError || error) && <p className="form-error"><Warning />{localError || error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className="primary-button" disabled={busy || !file || Boolean(localError)} onClick={() => onUpload({ documentType, file })}>{busy ? <><CircleNotch className="spin" />Đang tải lên</> : "Tải lên R2"}</button></div></div></div>;
+}
+
+function ProfileDocumentCard({ document, busy, onSetDefault, onDownload }) {
   const verification = documentVerificationCopy[document.verificationStatus] || [document.verificationStatus, "neutral"];
   const canSetDefault = document.documentType === "CV" && document.verificationStatus === "VERIFIED" && !document.isDefault;
-  return <article><FileText size={28} className={document.verificationStatus === "VERIFIED" ? "green" : ""} /><div><strong>{document.fileName}</strong><small>{profileDocumentCopy[document.documentType] || document.documentType} · Phiên bản {document.version} · {formatDocumentSize(document.fileSizeBytes)} · {formatSubmitted(document.createdAt)}</small></div>{document.isDefault ? <Status tone="info">Mặc định</Status> : <Status tone={verification[1]}>{verification[0]}</Status>}{canSetDefault ? <button className="document-default-button" disabled={busy} onClick={() => onSetDefault(document)}>{busy ? <CircleNotch className="spin" /> : <Check />}Đặt mặc định</button> : null}</article>;
+  return <article><FileText size={28} className={document.verificationStatus === "VERIFIED" ? "green" : ""} /><div><strong>{document.fileName}</strong><small>{profileDocumentCopy[document.documentType] || document.documentType} · Phiên bản {document.version} · {formatDocumentSize(document.fileSizeBytes)} · {formatSubmitted(document.createdAt)}</small></div>{document.isDefault ? <Status tone="info">Mặc định</Status> : <Status tone={verification[1]}>{verification[0]}</Status>}<div className="document-card-actions"><button className="document-download-button" title="Tải xuống" disabled={busy} onClick={() => onDownload(document)}>{busy ? <CircleNotch className="spin" /> : <DownloadSimple />}</button>{canSetDefault ? <button className="document-default-button" disabled={busy} onClick={() => onSetDefault(document)}>{busy ? <CircleNotch className="spin" /> : <Check />}Đặt mặc định</button> : null}</div></article>;
 }
 
 function MissingProfileDocument({ type }) {
@@ -366,6 +377,10 @@ function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyDocumentId, setBusyDocumentId] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadInitialType, setUploadInitialType] = useState("CV");
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -429,9 +444,64 @@ function ProfileScreen() {
     }
   };
 
+  const openUpload = documentType => {
+    setUploadInitialType(documentType);
+    setUploadError("");
+    setMessage("");
+    setUploadOpen(true);
+  };
+
+  const uploadDocument = async ({ documentType, file }) => {
+    setUploadBusy(true);
+    setUploadError("");
+    try {
+      const intentResponse = await authorizedRequest("/students/me/documents/uploads", {
+        method: "POST",
+        body: JSON.stringify({
+          documentType,
+          fileName: file.name,
+          mimeType: "application/pdf",
+          fileSizeBytes: file.size,
+        }),
+      });
+      const intent = intentResponse.data;
+      const uploadResponse = await fetch(intent.uploadUrl, {
+        method: intent.method,
+        headers: intent.headers,
+        body: file,
+      });
+      if (!uploadResponse.ok) {
+        throw new Error(`R2 từ chối tệp tải lên (${uploadResponse.status}).`);
+      }
+      const completed = await authorizedRequest(`/students/me/documents/uploads/${intent.uploadId}/complete`, {
+        method: "POST",
+      });
+      setDocuments(completed.data);
+      setUploadOpen(false);
+      setMessage(`Đã tải “${file.name}” lên hồ sơ và chuyển sang trạng thái chờ UIT xác minh.`);
+    } catch (requestError) {
+      setUploadError(getApiError(requestError));
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  const downloadDocument = async document => {
+    setBusyDocumentId(document.id);
+    setError("");
+    try {
+      const response = await authorizedRequest(`/students/me/documents/${document.id}/download`, { method: "POST" });
+      window.location.assign(response.data.downloadUrl);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyDocumentId("");
+    }
+  };
+
   if (loading) return <div className="portal-loading"><CircleNotch className="spin" />Đang tải hồ sơ sinh viên...</div>;
   if (!profile) return <div className="portal-error"><Warning />{error || "Không tìm thấy hồ sơ sinh viên."}<button className="secondary-button small" onClick={() => setRefreshKey(value => value + 1)}>Thử lại</button></div>;
-  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{error && !editing && <p className="review-error"><Warning />{error}</p>}<div className="profile-layout"><aside className="profile-summary-card"><div className="large-avatar">{userInitials(profile.fullName)}</div><h2>{profile.fullName}</h2><p>{profile.email}</p><div className="profile-progress"><div><span style={{ width: `${completion}%` }} /></div><strong>{completion}% hoàn thiện</strong></div><ul><li className="done"><CheckCircle />Thông tin UIT</li><li className={profile.phone ? "done" : "current"}>{profile.phone ? <CheckCircle /> : <Warning />}Số điện thoại</li><li className={hasDefaultCv ? "done" : "current"}>{hasDefaultCv ? <CheckCircle /> : <Warning />}CV mặc định đã xác minh</li><li className={verifiedTypes.has("TRANSCRIPT") ? "done" : "current"}>{verifiedTypes.has("TRANSCRIPT") ? <CheckCircle /> : <Warning />}Bảng điểm</li><li className={verifiedTypes.has("STUDENT_CONFIRMATION") ? "done" : "current"}>{verifiedTypes.has("STUDENT_CONFIRMATION") ? <CheckCircle /> : <Warning />}Giấy xác nhận</li></ul></aside><div className="profile-content"><Panel title="Thông tin học tập" action={<button className="secondary-button small" onClick={() => { setError(""); setEditing(true); }}><PencilSimple size={16} />Cập nhật bổ sung</button>}><div className="detail-grid"><div><small>Họ và tên</small><strong>{profile.fullName}</strong></div><div><small>Mã số sinh viên</small><strong>{profile.studentCode}</strong></div><div><small>Khoa</small><strong>{profile.faculty}</strong></div><div><small>Ngành</small><strong>{profile.major}</strong></div><div><small>Khóa</small><strong>{profile.cohort}</strong></div><div><small>GPA</small><strong>{profile.gpa === null ? "Chưa cập nhật" : `${profile.gpa} / 4.0`}</strong></div><div><small>Số điện thoại</small><strong>{profile.phone || "Chưa bổ sung"}</strong></div><div><small>Email UIT</small><strong>{profile.email}</strong></div><div><small>Tình trạng</small><Status tone={academicStatus[1]}>{academicStatus[0]}</Status></div></div></Panel><Panel title={`CV của tôi (${cvDocuments.length})`} action={<button className="secondary-button small" disabled title="Cần tích hợp Object Storage trước khi mở chức năng tải tệp"><Plus size={16} />Thêm CV · phase sau</button>}><div className="document-cards">{cvDocuments.length ? cvDocuments.map(document => <ProfileDocumentCard key={document.id} document={document} busy={busyDocumentId === document.id} onSetDefault={item => void setDefaultCv(item)} />) : <EmptyHint icon={FileText} title="Chưa có CV" text="Chức năng tải tệp sẽ được mở sau khi tích hợp Object Storage." />}</div></Panel><Panel title="Tài liệu xác minh"><div className="document-cards">{verificationDocuments.map(document => <ProfileDocumentCard key={document.id} document={document} busy={false} onSetDefault={() => undefined} />)}{!documents.some(document => document.documentType === "TRANSCRIPT") && <MissingProfileDocument type="TRANSCRIPT" />}{!documents.some(document => document.documentType === "STUDENT_CONFIRMATION") && <MissingProfileDocument type="STUDENT_CONFIRMATION" />}</div><div className="profile-storage-note"><Database size={18} /><span><strong>Upload file chưa mở ở phase hiện tại</strong><small>Cần kết nối Object Storage và cơ chế URL ký trước; giao diện không giả lập việc tải tệp thành công.</small></span><button className="secondary-button small" onClick={() => setRefreshKey(value => value + 1)}><ListBullets />Tải lại dữ liệu</button></div></Panel></div></div>{editing && <ProfilePhoneModal profile={profile} busy={busy} error={error} onClose={() => { if (!busy) { setEditing(false); setError(""); } }} onSave={phone => void savePhone(phone)} />}</>;
+  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{error && !editing && <p className="review-error"><Warning />{error}</p>}<div className="profile-layout"><aside className="profile-summary-card"><div className="large-avatar">{userInitials(profile.fullName)}</div><h2>{profile.fullName}</h2><p>{profile.email}</p><div className="profile-progress"><div><span style={{ width: `${completion}%` }} /></div><strong>{completion}% hoàn thiện</strong></div><ul><li className="done"><CheckCircle />Thông tin UIT</li><li className={profile.phone ? "done" : "current"}>{profile.phone ? <CheckCircle /> : <Warning />}Số điện thoại</li><li className={hasDefaultCv ? "done" : "current"}>{hasDefaultCv ? <CheckCircle /> : <Warning />}CV mặc định đã xác minh</li><li className={verifiedTypes.has("TRANSCRIPT") ? "done" : "current"}>{verifiedTypes.has("TRANSCRIPT") ? <CheckCircle /> : <Warning />}Bảng điểm</li><li className={verifiedTypes.has("STUDENT_CONFIRMATION") ? "done" : "current"}>{verifiedTypes.has("STUDENT_CONFIRMATION") ? <CheckCircle /> : <Warning />}Giấy xác nhận</li></ul></aside><div className="profile-content"><Panel title="Thông tin học tập" action={<button className="secondary-button small" onClick={() => { setError(""); setEditing(true); }}><PencilSimple size={16} />Cập nhật bổ sung</button>}><div className="detail-grid"><div><small>Họ và tên</small><strong>{profile.fullName}</strong></div><div><small>Mã số sinh viên</small><strong>{profile.studentCode}</strong></div><div><small>Khoa</small><strong>{profile.faculty}</strong></div><div><small>Ngành</small><strong>{profile.major}</strong></div><div><small>Khóa</small><strong>{profile.cohort}</strong></div><div><small>GPA</small><strong>{profile.gpa === null ? "Chưa cập nhật" : `${profile.gpa} / 4.0`}</strong></div><div><small>Số điện thoại</small><strong>{profile.phone || "Chưa bổ sung"}</strong></div><div><small>Email UIT</small><strong>{profile.email}</strong></div><div><small>Tình trạng</small><Status tone={academicStatus[1]}>{academicStatus[0]}</Status></div></div></Panel><Panel title={`CV của tôi (${cvDocuments.length})`} action={<button className="secondary-button small" onClick={() => openUpload("CV")}><Plus size={16} />Thêm CV</button>}><div className="document-cards">{cvDocuments.length ? cvDocuments.map(document => <ProfileDocumentCard key={document.id} document={document} busy={busyDocumentId === document.id} onSetDefault={item => void setDefaultCv(item)} onDownload={item => void downloadDocument(item)} />) : <EmptyHint icon={FileText} title="Chưa có CV" text="Tải CV PDF để UIT kiểm tra trước khi dùng ứng tuyển." />}</div></Panel><Panel title="Tài liệu xác minh" action={<button className="secondary-button small" onClick={() => openUpload("TRANSCRIPT")}><Plus size={16} />Thêm tài liệu</button>}><div className="document-cards">{verificationDocuments.map(document => <ProfileDocumentCard key={document.id} document={document} busy={busyDocumentId === document.id} onSetDefault={() => undefined} onDownload={item => void downloadDocument(item)} />)}{!documents.some(document => document.documentType === "TRANSCRIPT") && <MissingProfileDocument type="TRANSCRIPT" />}{!documents.some(document => document.documentType === "STUDENT_CONFIRMATION") && <MissingProfileDocument type="STUDENT_CONFIRMATION" />}</div><div className="profile-storage-note"><Database size={18} /><span><strong>Lưu trữ riêng tư trên Cloudflare R2</strong><small>Upload và tải xuống dùng URL ký trước có thời hạn; khóa R2 không bao giờ được gửi xuống trình duyệt.</small></span><button className="secondary-button small" onClick={() => setRefreshKey(value => value + 1)}><ListBullets />Tải lại dữ liệu</button></div></Panel></div></div>{editing && <ProfilePhoneModal profile={profile} busy={busy} error={error} onClose={() => { if (!busy) { setEditing(false); setError(""); } }} onSave={phone => void savePhone(phone)} />}{uploadOpen && <ProfileDocumentUploadModal key={uploadInitialType} initialType={uploadInitialType} busy={uploadBusy} error={uploadError} onClose={() => { if (!uploadBusy) { setUploadOpen(false); setUploadError(""); } }} onUpload={payload => void uploadDocument(payload)} />}</>;
 }
 
 const activeInterviewStatuses = new Set(["PENDING_STUDENT_CONFIRMATION", "CONFIRMED", "RESCHEDULE_REQUESTED"]);

@@ -156,6 +156,73 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/StudentDocument'
+  /students/me/documents/uploads:
+    post:
+      tags: [Students]
+      operationId: createMyDocumentUploadIntent
+      description: Tạo URL PUT ký trước để trình duyệt tải PDF trực tiếp vào Cloudflare R2 private.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StudentDocumentUploadRequest' }
+      responses:
+        '201':
+          description: Upload intent có thời hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentUploadIntentEnvelope' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/uploads/{uploadId}/complete:
+    post:
+      tags: [Students]
+      operationId: completeMyDocumentUpload
+      description: Kiểm tra object trên R2 bằng HEAD rồi mới tạo tài liệu ở trạng thái PENDING.
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Danh sách tài liệu sau khi xác nhận upload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentListEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: Upload intent đã hết hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/{documentId}/download:
+    post:
+      tags: [Students]
+      operationId: createMyDocumentDownloadUrl
+      description: Tạo URL GET ký trước ngắn hạn cho tài liệu thuộc sinh viên đang đăng nhập.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: URL tải xuống có thời hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /students/me/documents/{documentId}/default:
     post:
       tags: [Students]
@@ -1398,6 +1465,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ServiceUnavailable:
+      description: Tích hợp hạ tầng cần thiết chưa được cấu hình hoặc tạm thời không khả dụng
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
 
   schemas:
     UserRole:
@@ -1531,6 +1603,49 @@ components:
         isDefault: { type: boolean }
         verificationStatus: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
         createdAt: { type: string, format: date-time }
+    StudentDocumentListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/StudentDocument' }
+    StudentDocumentUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [documentType, fileName, mimeType, fileSizeBytes]
+      properties:
+        documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
+        fileName: { type: string, minLength: 1, maxLength: 255, pattern: '\\.[pP][dD][fF]$' }
+        mimeType: { type: string, const: application/pdf }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    StudentDocumentUploadIntentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [uploadId, uploadUrl, method, headers, expiresAt]
+          properties:
+            uploadId: { type: string, format: uuid }
+            uploadUrl: { type: string, format: uri }
+            method: { type: string, const: PUT }
+            headers:
+              type: object
+              required: [Content-Type]
+              properties:
+                Content-Type: { type: string, const: application/pdf }
+            expiresAt: { type: string, format: date-time }
+    StudentDocumentDownloadEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [downloadUrl, expiresAt]
+          properties:
+            downloadUrl: { type: string, format: uri }
+            expiresAt: { type: string, format: date-time }
     DashboardMetricValue:
       type: integer
       minimum: 0

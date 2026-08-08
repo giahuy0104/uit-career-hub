@@ -18,6 +18,9 @@ describe("parseEnvironment", () => {
     expect(result.emailBatchSize).toBe(10);
     expect(result.emailMaxAttempts).toBe(5);
     expect(result.publicAppUrl).toBe("http://localhost:5173");
+    expect(result.objectStorageEnabled).toBe(false);
+    expect(result.objectUploadUrlTtlSeconds).toBe(600);
+    expect(result.objectDownloadUrlTtlSeconds).toBe(300);
   });
 
   it("should_accept_a_small_serverless_database_pool", () => {
@@ -72,6 +75,28 @@ describe("parseEnvironment", () => {
     expect(result.publicAppUrl).toBe("https://career.example.com");
     expect(result.emailBatchSize).toBe(10);
     expect(result.emailMaxAttempts).toBe(3);
+  });
+
+  it("should_require_complete_r2_configuration_when_object_storage_is_enabled", () => {
+    expect(() => parseEnvironment({ NODE_ENV: "test", OBJECT_STORAGE_ENABLED: "true" })).toThrow(
+      /R2_ACCOUNT_ID/,
+    );
+
+    const result = parseEnvironment({
+      NODE_ENV: "test",
+      OBJECT_STORAGE_ENABLED: "true",
+      R2_ACCOUNT_ID: "cloudflare-account-id",
+      R2_ACCESS_KEY_ID: "r2-access-key",
+      R2_SECRET_ACCESS_KEY: "r2-secret-key",
+      R2_BUCKET: "uit-career-hub-documents",
+      OBJECT_UPLOAD_URL_TTL_SECONDS: "300",
+      OBJECT_DOWNLOAD_URL_TTL_SECONDS: "120",
+    });
+
+    expect(result.objectStorageEnabled).toBe(true);
+    expect(result.r2Bucket).toBe("uit-career-hub-documents");
+    expect(result.objectUploadUrlTtlSeconds).toBe(300);
+    expect(result.objectDownloadUrlTtlSeconds).toBe(120);
   });
 
   it("should_accept_neon_urls_when_ssl_is_required", () => {

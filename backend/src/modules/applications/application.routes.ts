@@ -20,6 +20,8 @@ import {
   placementConfirmationSchema,
   recruitmentResultSchema,
   studentDocumentIdSchema,
+  studentDocumentUploadIdSchema,
+  studentDocumentUploadSchema,
   studentProfileUpdateSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
@@ -61,6 +63,36 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
 
   router.get("/students/me/documents", studentOnly, async (request, response) => {
     response.json({ data: await service.listStudentDocuments(principal(request).studentProfileId) });
+  });
+
+  router.post("/students/me/documents/uploads", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.status(201).json({
+      data: await service.createStudentDocumentUploadIntent(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentUploadSchema.parse(request.body),
+      ),
+    });
+  });
+
+  router.post("/students/me/documents/uploads/:uploadId/complete", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.status(201).json({
+      data: await service.completeStudentDocumentUpload(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentUploadIdSchema.parse(request.params.uploadId),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/students/me/documents/:documentId/download", studentOnly, async (request, response) => {
+    response.json({
+      data: await service.createStudentDocumentDownload(
+        principal(request).studentProfileId,
+        studentDocumentIdSchema.parse(request.params.documentId),
+      ),
+    });
   });
 
   router.post("/students/me/documents/:documentId/default", studentOnly, async (request, response) => {

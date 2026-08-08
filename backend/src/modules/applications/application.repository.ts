@@ -7,6 +7,7 @@ import type {
   InterviewDto,
   InterviewListItemDto,
   StudentDocumentDto,
+  StudentDocumentType,
   StudentProfileDto,
 } from "./application.types.js";
 
@@ -51,6 +52,19 @@ export type SourceDocument = {
   checksum: string | null;
   version: number;
   verificationStatus: string;
+};
+
+export type StudentDocumentUploadRecord = {
+  id: string;
+  studentProfileId: string;
+  studentDocumentId: string | null;
+  documentType: StudentDocumentType;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  storageKey: string;
+  status: "PENDING" | "COMPLETED" | "REJECTED" | "EXPIRED";
+  expiresAt: Date;
 };
 
 const applicationSelect = `
@@ -375,6 +389,131 @@ export class ApplicationRepository {
       verificationStatus: row.verification_status,
       createdAt: row.created_at.toISOString(),
     }));
+  }
+
+  async createStudentDocumentUpload(input: {
+    id: string;
+    studentProfileId: string;
+    documentType: StudentDocumentType;
+    fileName: string;
+    mimeType: string;
+    fileSizeBytes: number;
+    storageKey: string;
+    expiresAt: Date;
+  }) {
+    await this.database.query(
+      `INSERT INTO student_document_uploads
+       (id, student_profile_id, document_type, file_name, mime_type, file_size_bytes, storage_key, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        input.id,
+        input.studentProfileId,
+        input.documentType,
+        input.fileName,
+        input.mimeType,
+        input.fileSizeBytes,
+        input.storageKey,
+        input.expiresAt,
+      ],
+    );
+  }
+
+  async findStudentDocumentUpload(
+    studentProfileId: string,
+    uploadId: string,
+    client: Pick<PoolClient, "query"> = this.database,
+    lock = false,
+  ): Promise<StudentDocumentUploadRecord | null> {
+    const result = await client.query<{
+      id: string;
+      student_profile_id: string;
+      student_document_id: string | null;
+      document_type: StudentDocumentType;
+      file_name: string;
+      mime_type: string;
+      file_size_bytes: string;
+      storage_key: string;
+      status: StudentDocumentUploadRecord["status"];
+      expires_at: Date;
+    }>(
+      `SELECT id, student_profile_id, student_document_id, document_type, file_name, mime_type,
+              file_size_bytes, storage_key, status, expires_at
+       FROM student_document_uploads
+       WHERE id = $1 AND student_profile_id = $2${lock ? " FOR UPDATE" : ""}`,
+      [uploadId, studentProfileId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          id: row.id,
+          studentProfileId: row.student_profile_id,
+          studentDocumentId: row.student_document_id,
+          documentType: row.document_type,
+          fileName: row.file_name,
+          mimeType: row.mime_type,
+          fileSizeBytes: Number(row.file_size_bytes),
+          storageKey: row.storage_key,
+          status: row.status,
+          expiresAt: row.expires_at,
+        }
+      : null;
+  }
+
+  async completeStudentDocumentUpload(client: PoolClient, upload: StudentDocumentUploadRecord, etag: string | null) {
+    const existing = upload.studentDocumentId
+      ? await client.query<{ id: string }>("SELECT id FROM student_documents WHERE id = $1", [upload.studentDocumentId])
+      : null;
+    if (existing?.rows[0]) return upload.studentDocumentId!;
+
+    const versionResult = await client.query<{ next_version: number }>(
+      `SELECT COALESCE(max(version), 0) + 1 AS next_version
+       FROM student_documents
+       WHERE student_profile_id = $1 AND document_type = $2`,
+      [upload.studentProfileId, upload.documentType],
+    );
+    const documentResult = await client.query<{ id: string }>(
+      `INSERT INTO student_documents
+       (student_profile_id, document_type, file_name, mime_type, file_size_bytes,
+        storage_key, checksum, version, is_default, verification_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, 'PENDING')
+       RETURNING id`,
+      [
+        upload.studentProfileId,
+        upload.documentType,
+        upload.fileName,
+        upload.mimeType,
+        upload.fileSizeBytes,
+        upload.storageKey,
+        etag,
+        Number(versionResult.rows[0]?.next_version ?? 1),
+      ],
+    );
+    const documentId = documentResult.rows[0]!.id;
+    await client.query(
+      `UPDATE student_document_uploads
+       SET status = 'COMPLETED', student_document_id = $2, etag = $3, completed_at = now()
+       WHERE id = $1`,
+      [upload.id, documentId, etag],
+    );
+    return documentId;
+  }
+
+  async rejectStudentDocumentUpload(client: PoolClient, uploadId: string, status: "REJECTED" | "EXPIRED") {
+    await client.query(
+      `UPDATE student_document_uploads SET status = $2
+       WHERE id = $1 AND status = 'PENDING'`,
+      [uploadId, status],
+    );
+  }
+
+  async findStudentDocumentStorage(studentProfileId: string, documentId: string) {
+    const result = await this.database.query<{ storage_key: string; file_name: string }>(
+      `SELECT storage_key, file_name FROM student_documents
+       WHERE id = $1 AND student_profile_id = $2`,
+      [documentId, studentProfileId],
+    );
+    const row = result.rows[0];
+    return row ? { storageKey: row.storage_key, fileName: row.file_name } : null;
   }
 
   async updateStudentPhone(client: PoolClient, studentProfileId: string, phone: string | null) {
