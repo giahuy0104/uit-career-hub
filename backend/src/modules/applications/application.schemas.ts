@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { applicationStatuses, studentDocumentTypes } from "./application.types.js";
+import {
+  applicationStatuses,
+  studentDocumentTypes,
+  studentDocumentVerificationStatuses,
+} from "./application.types.js";
 
 export const applicationIdSchema = z.string().uuid();
 export const interviewIdSchema = z.string().uuid();
@@ -34,6 +38,24 @@ export const studentDocumentUploadSchema = z
     fileSizeBytes: z.coerce.number().int().positive().max(10 * 1024 * 1024),
   })
   .strict();
+
+export const studentDocumentReviewListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  status: z.enum(studentDocumentVerificationStatuses).optional().default("PENDING"),
+  query: z.string().trim().max(120).optional(),
+});
+
+export const studentDocumentReviewSchema = z.discriminatedUnion("decision", [
+  z.object({
+    decision: z.literal("VERIFY"),
+    note: z.string().trim().max(2_000).optional(),
+  }),
+  z.object({
+    decision: z.literal("REJECT"),
+    note: z.string().trim().min(5).max(2_000),
+  }),
+]);
 
 export const applicationSubmitSchema = z.object({
   jobId: z.string().uuid(),

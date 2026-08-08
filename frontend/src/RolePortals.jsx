@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Bell,
@@ -109,6 +109,7 @@ const adminNavigation = [
   ["admin-dashboard", "Tổng quan", House],
   ["admin-companies", "Doanh nghiệp đối tác", Buildings],
   ["admin-jobs", "Duyệt tin tuyển dụng", Briefcase],
+  ["admin-documents", "Xác minh tài liệu", ClipboardText],
   ["admin-applications", "Duyệt hồ sơ sinh viên", UserCheck],
   ["admin-placements", "Theo dõi kết quả", GraduationCap],
   ["admin-scheduler", "Nhắc việc & tác vụ", ClockCountdown],
@@ -644,6 +645,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     "admin-dashboard": ["Tổng quan vận hành", "Theo dõi khối lượng xử lý, hạn cam kết và hoạt động tuyển dụng toàn trường."],
     "admin-companies": ["Doanh nghiệp đối tác", "Tạo hồ sơ, cấp tài khoản và quản lý trạng thái hợp tác với UIT."],
     "admin-jobs": ["Duyệt tin tuyển dụng", "Kiểm tra nội dung, nhóm ngành, yêu cầu và thời hạn trước khi công khai."],
+    "admin-documents": ["Xác minh tài liệu sinh viên", "Kiểm tra tài liệu PDF mới tải lên trước khi sinh viên dùng trong hồ sơ ứng tuyển."],
     "admin-applications": ["Duyệt hồ sơ sinh viên", "Xác minh điều kiện và tài liệu trước khi chuyển hồ sơ đến doanh nghiệp."],
     "admin-placements": ["Theo dõi kết quả tuyển dụng", "Theo dõi từ phỏng vấn đến nhận việc, thực tập và hoàn thành."],
     "admin-scheduler": ["Nhắc việc & tác vụ hệ thống", "Giám sát tổng hợp hồ sơ tồn và các thông báo định kỳ mỗi ngày."],
@@ -657,6 +659,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     {route === "admin-dashboard" && <LiveAdminDashboard navigate={navigate} />}
     {route === "admin-companies" && <AdminCompanyManagement refreshKey={companiesVersion} onCreate={() => setModal("company")} />}
     {route === "admin-jobs" && <LiveAdminJobReview targetJobId={navigationPayload?.notification?.resourceId} />}
+    {route === "admin-documents" && <AdminStudentDocumentReview targetDocumentId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-placements" && <AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} />}
     {route === "admin-scheduler" && <AdminScheduler />}
@@ -774,6 +777,105 @@ function LiveAdminJobReview({ targetJobId = null }) {
   const categories = selected.categories.length ? selected.categories.map(item => item.name) : ["Doanh nghiệp chưa chọn nhóm ngành"];
   const skills = selected.skills.length ? selected.skills.map(item => item.name) : [];
   return <><div className="review-workspace"><Panel title="Hàng đợi" action={<Status tone="warning">{jobs.length} cần xử lý</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Cũ nhất trước</button><button onClick={loadQueue}>Làm mới</button></div><div className="review-list">{jobs.map(job => <button key={job.id} className={selected.id === job.id ? "selected" : ""} onClick={() => { setSelectedId(job.id); setError(""); }}><div><strong>{job.title}</strong><small>{job.company.name}</small></div><Status tone="warning">Chờ duyệt</Status><p><span>{job.categories[0]?.name || opportunityCopy[job.opportunityType]}</span><span>Hạn {formatDate(job.deadline)}</span></p><small>Gửi {formatSubmitted(job.submittedAt)}</small></button>)}</div></Panel><Panel title="Nội dung tin tuyển dụng" action={<span className="version-label">Phiên bản {selected.version}</span>} className="review-detail-panel"><div className="review-detail-heading"><div className="company-logo vng">{selected.company.code.slice(0, 3)}</div><div><h2>{selected.title}</h2><p>{selected.company.name} · Đối tác UIT đã xác thực</p></div><Status tone="warning">Chờ UIT duyệt</Status></div><div className="review-checks"><span className="done"><CheckCircle />Doanh nghiệp hợp lệ</span><span className="done"><CheckCircle />Thông tin bắt buộc đầy đủ</span><span className="warning"><Warning />UIT cần rà soát nội dung</span></div><div className="review-content-grid"><section><h3>Thông tin chung</h3><dl><div><dt>Loại hình</dt><dd>{opportunityCopy[selected.opportunityType]} · {workModeCopy[selected.workMode]}</dd></div><div><dt>Địa điểm</dt><dd>{selected.location}</dd></div><div><dt>Số lượng</dt><dd>{selected.positions} vị trí</dd></div><div><dt>Hạn ứng tuyển</dt><dd>{formatDate(selected.deadline)}</dd></div></dl></section><section><h3>Nhóm ngành & kỹ năng</h3><div className="tag-list">{[...categories, ...skills].map(item => <span key={item}>{item}</span>)}</div></section><section className="full"><h3>Mô tả công việc</h3><p className="preserve-lines">{selected.description}</p></section><section className="full"><h3>Yêu cầu ứng viên</h3><p className="preserve-lines">{selected.requirements}</p></section>{selected.benefits && <section className="full"><h3>Quyền lợi</h3><p className="preserve-lines">{selected.benefits}</p></section>}</div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button danger" disabled={busy} onClick={() => setReasonMode("reject")}>Từ chối</button><button className="secondary-button" disabled={busy} onClick={() => setReasonMode("request-revision")}><PencilSimple />Yêu cầu chỉnh sửa</button><button className="primary-button" disabled={busy} onClick={() => { if (window.confirm(`Phê duyệt và công khai tin “${selected.title}”?`)) void decide("approve"); }}>{busy ? <CircleNotch className="spin" /> : <Check />}Phê duyệt & công khai</button></div></Panel></div>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}{reasonMode && <ReviewReasonModal mode={reasonMode} busy={busy} error={error} onClose={() => { if (!busy) { setReasonMode(null); setError(""); } }} onSubmit={note => void decide(reasonMode, note)} />}</>;
+}
+
+function StudentDocumentReviewModal({ document, decision, busy, error, onClose, onSubmit }) {
+  const [note, setNote] = useState("");
+  const isReject = decision === "REJECT";
+  const canSubmit = !isReject || note.trim().length >= 5;
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal student-document-review-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={onClose} disabled={busy}><X /></button><span className={`modal-icon ${isReject ? "danger" : ""}`}>{isReject ? <Warning /> : <SealCheck />}</span><h2>{isReject ? "Từ chối tài liệu?" : "Xác minh tài liệu?"}</h2><p>{isReject ? <>Lý do sẽ được gửi đến <strong>{document.student.fullName}</strong> và lưu trong nhật ký hệ thống.</> : <>Xác nhận <strong>{document.fileName}</strong> hợp lệ để sinh viên có thể dùng khi ứng tuyển.</>}</p><div className="modal-form"><label><span>{isReject ? "Lý do từ chối *" : "Ghi chú nội bộ (không bắt buộc)"}</span><textarea autoFocus value={note} onChange={event => setNote(event.target.value)} maxLength={2000} placeholder={isReject ? "Ví dụ: Tệp bị mờ, thiếu trang hoặc thông tin không khớp..." : "Ví dụ: Đã đối chiếu thông tin trên tài liệu..."} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={onClose} disabled={busy}>Hủy</button><button className={`primary-button ${isReject ? "danger-fill" : ""}`} disabled={busy || !canSubmit} onClick={() => onSubmit(note.trim())}>{busy ? <><CircleNotch className="spin" />Đang xử lý</> : isReject ? "Xác nhận từ chối" : <><SealCheck />Xác minh tài liệu</>}</button></div></div></div>;
+}
+
+function AdminStudentDocumentReview({ targetDocumentId = null }) {
+  const { authorizedRequest } = useAuth();
+  const [documents, setDocuments] = useState([]);
+  const [meta, setMeta] = useState({ totalItems: 0 });
+  const [status, setStatus] = useState("PENDING");
+  const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState("");
+  const [decision, setDecision] = useState(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const selected = documents.find(document => document.id === selectedId) || documents[0] || null;
+
+  const loadDocuments = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const search = appliedQuery ? `&query=${encodeURIComponent(appliedQuery)}` : "";
+      const response = await authorizedRequest(`/uit/student-documents?status=${status}&page=1&pageSize=100${search}`);
+      setDocuments(response.data);
+      setMeta(response.meta);
+      setSelectedId(current => response.data.some(document => document.id === targetDocumentId)
+        ? targetDocumentId
+        : response.data.some(document => document.id === current) ? current : response.data[0]?.id ?? null);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [appliedQuery, authorizedRequest, status, targetDocumentId]);
+
+  useEffect(() => { void loadDocuments(); }, [loadDocuments]);
+
+  const applySearch = event => {
+    event.preventDefault();
+    const nextQuery = query.trim();
+    if (nextQuery === appliedQuery) void loadDocuments();
+    else setAppliedQuery(nextQuery);
+  };
+
+  const downloadDocument = async document => {
+    setBusyAction(`download:${document.id}`);
+    setError("");
+    try {
+      const response = await authorizedRequest(`/uit/student-documents/${document.id}/download`, { method: "POST" });
+      window.location.assign(response.data.downloadUrl);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const submitDecision = async note => {
+    if (!selected || !decision || busyAction) return;
+    setBusyAction(`review:${selected.id}`);
+    setError("");
+    try {
+      const response = await authorizedRequest(`/uit/student-documents/${selected.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ decision, ...(note ? { note } : {}) }),
+      });
+      setDocuments(current => status === "PENDING"
+        ? current.filter(document => document.id !== selected.id)
+        : current.map(document => document.id === selected.id ? response.data : document));
+      setMeta(current => status === "PENDING"
+        ? { ...current, totalItems: Math.max(0, current.totalItems - 1) }
+        : current);
+      setDecision(null);
+      setMessage(decision === "VERIFY"
+        ? "Tài liệu đã được xác minh. Sinh viên đã nhận thông báo."
+        : "Tài liệu đã bị từ chối và lý do đã được gửi cho sinh viên.");
+      window.setTimeout(() => setMessage(""), 3500);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const filters = [
+    ["PENDING", "Chờ xác minh"],
+    ["VERIFIED", "Đã xác minh"],
+    ["REJECTED", "Đã từ chối"],
+  ];
+  const statusCopy = documentVerificationCopy[status] || [status, "neutral"];
+
+  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}<Panel title="Bộ lọc tài liệu" action={<span className="panel-count">{meta.totalItems} tài liệu</span>}><div className="document-review-toolbar"><form className="portal-search" onSubmit={applySearch}><MagnifyingGlass size={18} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tên sinh viên, MSSV hoặc tên tệp..." /><button type="submit" aria-label="Tìm kiếm"><ArrowRight /></button></form><div className="document-status-filters" role="group" aria-label="Lọc trạng thái tài liệu">{filters.map(([value, label]) => <button key={value} aria-pressed={status === value} className={status === value ? "active" : ""} onClick={() => { setStatus(value); setSelectedId(null); }}>{label}</button>)}</div><button className="secondary-button small" onClick={() => void loadDocuments()}><ListBullets />Làm mới</button></div></Panel>{loading ? <Panel title="Hàng đợi xác minh"><div className="portal-loading"><CircleNotch className="spin" />Đang tải tài liệu...</div></Panel> : error && !selected ? <Panel title="Hàng đợi xác minh"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={() => void loadDocuments()}>Thử lại</button></div></Panel> : !selected ? <Panel title="Hàng đợi xác minh" action={<Status tone={statusCopy[1]}>0 tài liệu</Status>}><EmptyHint icon={ClipboardText} title={status === "PENDING" ? "Đã xử lý hết hàng đợi" : "Không có tài liệu trong bộ lọc"} text={appliedQuery ? "Thử từ khóa khác hoặc xóa bộ lọc tìm kiếm." : "Tài liệu phù hợp sẽ xuất hiện tại đây."} /></Panel> : <div className="review-workspace document-review-workspace"><Panel title="Danh sách tài liệu" action={<Status tone={statusCopy[1]}>{documents.length} hiển thị</Status>} className="review-list-panel"><div className="review-list application-review-list document-review-list">{documents.map(document => { const verification = documentVerificationCopy[document.verificationStatus] || [document.verificationStatus, "neutral"]; return <button key={document.id} className={selected.id === document.id ? "selected" : ""} onClick={() => { setSelectedId(document.id); setError(""); }}><div className="candidate-initials">{userInitials(document.student.fullName)}</div><div><strong>{document.student.fullName}</strong><small>{document.student.studentCode} · {profileDocumentCopy[document.documentType] || document.documentType}</small><p>{document.fileName} · {formatSubmitted(document.createdAt)}</p></div><Status tone={verification[1]}>{verification[0]}</Status></button>; })}</div></Panel><Panel title="Chi tiết tài liệu" action={<Status tone={(documentVerificationCopy[selected.verificationStatus] || ["", "neutral"])[1]}>{(documentVerificationCopy[selected.verificationStatus] || [selected.verificationStatus])[0]}</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{userInitials(selected.student.fullName)}</div><div><h2>{selected.student.fullName}</h2><p>MSSV {selected.student.studentCode} · {selected.student.faculty}</p><span>{selected.student.major} · {selected.student.email}</span></div><span className="version-label">Phiên bản {selected.version}</span></div><section className="document-inspection-card"><FileText /><div><small>{profileDocumentCopy[selected.documentType] || selected.documentType}</small><strong>{selected.fileName}</strong><span>PDF · {formatDocumentSize(selected.fileSizeBytes)} · Tải lên {formatSubmitted(selected.createdAt)}</span></div><button className="secondary-button" disabled={Boolean(busyAction)} onClick={() => void downloadDocument(selected)}>{busyAction === `download:${selected.id}` ? <CircleNotch className="spin" /> : <DownloadSimple />}Mở bản PDF</button></section><div className="review-checks"><span className="done"><CheckCircle />Tài khoản email UIT hợp lệ</span><span className="warning"><Warning />Cần đối chiếu nội dung PDF thủ công</span></div>{error && <p className="review-error"><Warning />{error}</p>}{selected.verificationStatus === "PENDING" ? <div className="review-actions"><button className="secondary-button danger" disabled={Boolean(busyAction)} onClick={() => { setError(""); setDecision("REJECT"); }}>Từ chối</button><button className="primary-button" disabled={Boolean(busyAction)} onClick={() => { setError(""); setDecision("VERIFY"); }}><SealCheck />Xác minh hợp lệ</button></div> : <div className="document-review-complete"><ShieldCheck /><span><strong>Quyết định đã hoàn tất</strong><small>Không thể đổi sang trạng thái khác. Chi tiết người xử lý và ghi chú được lưu trong nhật ký hệ thống.</small></span></div>}</Panel></div>}{decision && selected && <StudentDocumentReviewModal document={selected} decision={decision} busy={busyAction === `review:${selected.id}`} error={error} onClose={() => { if (!busyAction) { setDecision(null); setError(""); } }} onSubmit={note => void submitDecision(note)} />}</>;
 }
 
 function LiveAdminApplicationReview({ targetApplicationId = null }) {

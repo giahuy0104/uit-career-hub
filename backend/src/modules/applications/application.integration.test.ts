@@ -396,7 +396,7 @@ describeWithDatabase("student job application flow", () => {
   });
 
   it("updates the student phone and selects only a verified CV as default", async () => {
-    const { student } = await createScenario();
+    const { admin, student } = await createScenario();
     const replacementCvId = randomUUID();
     await client.query(
       `INSERT INTO student_documents
@@ -440,7 +440,7 @@ describeWithDatabase("student job application flow", () => {
   });
 
   it("creates, verifies and downloads a private R2 student document", async () => {
-    const { student } = await createScenario();
+    const { admin, student } = await createScenario();
     const intent = await request(app)
       .post("/api/v1/students/me/documents/uploads")
       .set("Authorization", `Bearer ${student.token}`)
@@ -480,6 +480,13 @@ describeWithDatabase("student job application flow", () => {
     });
     expect(headObject).toHaveBeenCalledOnce();
     expect(readObjectPrefix).toHaveBeenCalledOnce();
+    const pendingReviewNotification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2
+         AND type = 'STUDENT_DOCUMENT_PENDING_REVIEW'`,
+      [admin.id, uploaded.id],
+    );
+    expect(Number(pendingReviewNotification.rows[0]?.count)).toBe(1);
 
     const repeated = await request(app)
       .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
@@ -500,6 +507,90 @@ describeWithDatabase("student job application flow", () => {
     expect(createDownloadUrl).toHaveBeenCalledWith(expect.objectContaining({
       fileName: "cv-thuc-tap-2026.pdf",
     }));
+  });
+
+  it("lets UIT list, inspect and decide pending student documents with audit and notification", async () => {
+    const { admin, student } = await createScenario();
+    const rejectedStudent = await createStudent();
+
+    const queue = await request(app)
+      .get("/api/v1/uit/student-documents?status=PENDING&page=1&pageSize=100")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(queue.status).toBe(200);
+    expect(queue.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: student.pendingDocumentId,
+        verificationStatus: "PENDING",
+        student: expect.objectContaining({
+          id: student.studentProfileId,
+          fullName: "Sinh viên kiểm thử",
+        }),
+      }),
+    ]));
+
+    const forbidden = await request(app)
+      .get("/api/v1/uit/student-documents")
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(forbidden.status).toBe(403);
+
+    const download = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/download`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(download.status).toBe(200);
+    expect(download.body.data.downloadUrl).toBe("https://r2.example.test/signed-download");
+    expect(createDownloadUrl).toHaveBeenCalledWith(expect.objectContaining({
+      key: `test/${student.pendingDocumentId}`,
+      fileName: "chua-xac-minh.pdf",
+    }));
+
+    const verified = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "VERIFY", note: "Tài liệu rõ ràng và đúng thông tin sinh viên." });
+    expect(verified.status).toBe(200);
+    expect(verified.body.data).toMatchObject({
+      id: student.pendingDocumentId,
+      verificationStatus: "VERIFIED",
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "VERIFY" });
+    expect(repeated.status).toBe(200);
+
+    const conflicting = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "REJECT", note: "Không thể thay đổi quyết định đã hoàn tất." });
+    expect(conflicting.status).toBe(409);
+    expect(conflicting.body.error.code).toBe("STUDENT_DOCUMENT_REVIEW_CONFLICT");
+
+    const rejected = await request(app)
+      .post(`/api/v1/uit/student-documents/${rejectedStudent.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "REJECT", note: "Tệp mờ, chưa thể đối chiếu đầy đủ thông tin." });
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.data.verificationStatus).toBe("REJECTED");
+
+    const notifications = await client.query<{ type: string; recipient_user_id: string }>(
+      `SELECT type, recipient_user_id FROM notifications
+       WHERE resource_id = ANY($1::uuid[]) ORDER BY created_at`,
+      [[student.pendingDocumentId, rejectedStudent.pendingDocumentId]],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "STUDENT_DOCUMENT_VERIFIED", recipient_user_id: student.id }),
+      expect.objectContaining({ type: "STUDENT_DOCUMENT_REJECTED", recipient_user_id: rejectedStudent.id }),
+    ]));
+    const audits = await client.query<{ action: string }>(
+      `SELECT action FROM audit_logs
+       WHERE actor_user_id = $1 AND target_id = ANY($2::uuid[])`,
+      [admin.id, [student.pendingDocumentId, rejectedStudent.pendingDocumentId]],
+    );
+    expect(audits.rows.map((row) => row.action)).toEqual(expect.arrayContaining([
+      "STUDENT_DOCUMENT_VERIFIED_BY_UIT",
+      "STUDENT_DOCUMENT_REJECTED_BY_UIT",
+    ]));
   });
 
   it("deletes only unused non-default documents and preserves application history", async () => {

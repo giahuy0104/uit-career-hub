@@ -8,7 +8,9 @@ import type {
   InterviewListItemDto,
   StudentDocumentDto,
   StudentDocumentType,
+  StudentDocumentVerificationStatus,
   StudentProfileDto,
+  UitStudentDocumentReviewDto,
 } from "./application.types.js";
 
 export type ApplicationDatabase = Pick<Pool, "query" | "connect">;
@@ -389,6 +391,147 @@ export class ApplicationRepository {
       verificationStatus: row.verification_status,
       createdAt: row.created_at.toISOString(),
     }));
+  }
+
+  async listStudentDocumentsForReview(input: {
+    page: number;
+    pageSize: number;
+    status: StudentDocumentVerificationStatus;
+    query?: string;
+  }): Promise<{ items: UitStudentDocumentReviewDto[]; total: number }> {
+    const search = input.query?.trim() || null;
+    const result = await this.database.query<{
+      id: string;
+      document_type: string;
+      file_name: string;
+      mime_type: string;
+      file_size_bytes: string;
+      version: number;
+      is_default: boolean;
+      verification_status: StudentDocumentVerificationStatus;
+      created_at: Date;
+      student_profile_id: string;
+      student_code: string;
+      full_name: string;
+      email: string;
+      faculty: string;
+      major: string;
+      total_count: string;
+    }>(
+      `SELECT sd.id, sd.document_type, sd.file_name, sd.mime_type, sd.file_size_bytes,
+              sd.version, sd.is_default, sd.verification_status, sd.created_at,
+              sp.id AS student_profile_id, sp.student_code, sp.full_name, u.email,
+              sp.faculty, sp.major, count(*) OVER() AS total_count
+       FROM student_documents sd
+       JOIN student_profiles sp ON sp.id = sd.student_profile_id
+       JOIN users u ON u.id = sp.user_id
+       WHERE sd.verification_status = $1
+         AND ($2::text IS NULL OR sp.full_name ILIKE '%' || $2 || '%'
+              OR sp.student_code ILIKE '%' || $2 || '%'
+              OR sd.file_name ILIKE '%' || $2 || '%')
+       ORDER BY sd.created_at ASC, sd.id ASC
+       LIMIT $3 OFFSET $4`,
+      [input.status, search, input.pageSize, (input.page - 1) * input.pageSize],
+    );
+    return {
+      items: result.rows.map((row) => this.mapStudentDocumentForReview(row)),
+      total: Number(result.rows[0]?.total_count ?? 0),
+    };
+  }
+
+  async findStudentDocumentForUit(
+    documentId: string,
+    client: Pick<PoolClient, "query"> = this.database,
+    lock = false,
+  ) {
+    const result = await client.query<{
+      id: string;
+      document_type: string;
+      file_name: string;
+      mime_type: string;
+      file_size_bytes: string;
+      storage_key: string;
+      version: number;
+      is_default: boolean;
+      verification_status: StudentDocumentVerificationStatus;
+      created_at: Date;
+      student_profile_id: string;
+      student_user_id: string;
+      student_code: string;
+      full_name: string;
+      email: string;
+      faculty: string;
+      major: string;
+      total_count: string;
+    }>(
+      `SELECT sd.id, sd.document_type, sd.file_name, sd.mime_type, sd.file_size_bytes,
+              sd.storage_key, sd.version, sd.is_default, sd.verification_status, sd.created_at,
+              sp.id AS student_profile_id, sp.user_id AS student_user_id, sp.student_code,
+              sp.full_name, u.email, sp.faculty, sp.major, '1'::text AS total_count
+       FROM student_documents sd
+       JOIN student_profiles sp ON sp.id = sd.student_profile_id
+       JOIN users u ON u.id = sp.user_id
+       WHERE sd.id = $1${lock ? " FOR UPDATE OF sd" : ""}`,
+      [documentId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          dto: this.mapStudentDocumentForReview(row),
+          storageKey: row.storage_key,
+          studentUserId: row.student_user_id,
+          studentProfileId: row.student_profile_id,
+        }
+      : null;
+  }
+
+  async updateStudentDocumentVerification(
+    client: PoolClient,
+    documentId: string,
+    status: "VERIFIED" | "REJECTED",
+  ) {
+    await client.query(
+      `UPDATE student_documents SET verification_status = $2 WHERE id = $1`,
+      [documentId, status],
+    );
+  }
+
+  private mapStudentDocumentForReview(row: {
+    id: string;
+    document_type: string;
+    file_name: string;
+    mime_type: string;
+    file_size_bytes: string;
+    version: number;
+    is_default: boolean;
+    verification_status: StudentDocumentVerificationStatus;
+    created_at: Date;
+    student_profile_id: string;
+    student_code: string;
+    full_name: string;
+    email: string;
+    faculty: string;
+    major: string;
+  }): UitStudentDocumentReviewDto {
+    return {
+      id: row.id,
+      documentType: row.document_type,
+      fileName: row.file_name,
+      mimeType: row.mime_type,
+      fileSizeBytes: Number(row.file_size_bytes),
+      version: row.version,
+      isDefault: row.is_default,
+      verificationStatus: row.verification_status,
+      createdAt: row.created_at.toISOString(),
+      student: {
+        id: row.student_profile_id,
+        studentCode: row.student_code,
+        fullName: row.full_name,
+        email: row.email,
+        faculty: row.faculty,
+        major: row.major,
+      },
+    };
   }
 
   async createStudentDocumentUpload(input: {
