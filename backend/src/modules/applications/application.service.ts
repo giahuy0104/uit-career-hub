@@ -7,6 +7,8 @@ import { ApplicationRepository } from "./application.repository.js";
 import type {
   ApplicationReviewDecision,
   ApplicationStatus,
+  OfferDocumentDto,
+  OfferDocumentUploadIntentDto,
   RequestMetadata,
   StudentDocumentDownloadDto,
   StudentDocumentType,
@@ -276,6 +278,207 @@ export class ApplicationService {
       );
       return this.repository.listStudentDocuments(studentProfileId, client);
     });
+  }
+
+  async createOfferDocumentUploadIntent(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    input: {
+      fileName: string;
+      mimeType: "application/pdf";
+      fileSizeBytes: number;
+    },
+  ): Promise<OfferDocumentUploadIntentDto> {
+    if (!actor.companyId) throw applicationNotFound();
+    const application = await this.repository.findByIdForCompany(applicationId, actor.companyId);
+    if (!application) throw applicationNotFound();
+    if (application.status !== "INTERVIEW_INVITED" || application.recruitmentResult) {
+      throw new AppError(
+        409,
+        "OFFER_DOCUMENT_STATE_CONFLICT",
+        "Chỉ có thể tải offer khi ứng viên đang ở bước phỏng vấn và chưa có kết quả.",
+      );
+    }
+
+    const objectStorage = this.requireObjectStorage();
+    const uploadId = randomUUID();
+    const storageKey = `offers/${actor.companyId}/${applicationId}/${uploadId}.pdf`;
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.uploadUrlTtlSeconds * 1_000);
+    const uploadUrl = await objectStorage.createUploadUrl({
+      key: storageKey,
+      contentType: input.mimeType,
+      expiresInSeconds: this.objectStorageOptions.uploadUrlTtlSeconds,
+    });
+    await this.repository.createOfferDocumentUpload({
+      id: uploadId,
+      applicationId,
+      companyId: actor.companyId,
+      createdByUserId: actor.userId,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      fileSizeBytes: input.fileSizeBytes,
+      storageKey,
+      expiresAt,
+    });
+    return {
+      uploadId,
+      uploadUrl,
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  async completeOfferDocumentUpload(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    uploadId: string,
+    request: RequestMetadata,
+  ): Promise<OfferDocumentDto> {
+    if (!actor.companyId) throw applicationNotFound();
+    const companyId = actor.companyId;
+    const objectStorage = this.requireObjectStorage();
+    const initial = await this.repository.findOfferDocumentUpload(companyId, applicationId, uploadId);
+    if (!initial) {
+      throw new AppError(404, "OFFER_DOCUMENT_UPLOAD_NOT_FOUND", "Không tìm thấy phiên tải offer.");
+    }
+    const dto = {
+      fileName: initial.fileName,
+      mimeType: initial.mimeType,
+      fileSizeBytes: initial.fileSizeBytes,
+    };
+    if (["COMPLETED", "CONSUMED"].includes(initial.status)) return dto;
+    if (initial.status !== "PENDING") {
+      throw new AppError(409, "OFFER_DOCUMENT_UPLOAD_CLOSED", "Phiên tải offer không còn hiệu lực.");
+    }
+    if (initial.expiresAt.getTime() <= Date.now()) {
+      await this.repository.withTransaction(async (client) => {
+        await this.repository.rejectOfferDocumentUpload(client, uploadId, "EXPIRED");
+      });
+      throw new AppError(410, "OFFER_DOCUMENT_UPLOAD_EXPIRED", "URL tải offer đã hết hạn.");
+    }
+
+    const storedObject = await objectStorage.headObject(initial.storageKey);
+    if (!storedObject) {
+      throw new AppError(409, "OFFER_DOCUMENT_UPLOAD_MISSING", "R2 chưa nhận được tệp offer.");
+    }
+    const contentType = storedObject.contentType?.split(";")[0]?.trim().toLowerCase();
+    if (storedObject.contentLength !== initial.fileSizeBytes || contentType !== initial.mimeType) {
+      await objectStorage.deleteObject(initial.storageKey);
+      await this.repository.withTransaction(async (client) => {
+        await this.repository.rejectOfferDocumentUpload(client, uploadId, "REJECTED");
+      });
+      throw new AppError(
+        409,
+        "OFFER_DOCUMENT_UPLOAD_MISMATCH",
+        "Tệp offer trên R2 không khớp dung lượng hoặc định dạng đã đăng ký.",
+      );
+    }
+    const signature = await objectStorage.readObjectPrefix(initial.storageKey, 5);
+    if (new TextDecoder().decode(signature) !== "%PDF-") {
+      await objectStorage.deleteObject(initial.storageKey);
+      await this.repository.withTransaction(async (client) => {
+        await this.repository.rejectOfferDocumentUpload(client, uploadId, "REJECTED");
+      });
+      throw new AppError(409, "OFFER_DOCUMENT_INVALID_PDF", "Nội dung tệp offer không phải PDF hợp lệ.");
+    }
+
+    return this.repository.withTransaction(async (client) => {
+      const upload = await this.repository.findOfferDocumentUpload(
+        companyId,
+        applicationId,
+        uploadId,
+        client,
+        true,
+      );
+      if (!upload) {
+        throw new AppError(404, "OFFER_DOCUMENT_UPLOAD_NOT_FOUND", "Không tìm thấy phiên tải offer.");
+      }
+      if (["COMPLETED", "CONSUMED"].includes(upload.status)) {
+        return { fileName: upload.fileName, mimeType: upload.mimeType, fileSizeBytes: upload.fileSizeBytes };
+      }
+      if (upload.status !== "PENDING") {
+        throw new AppError(409, "OFFER_DOCUMENT_UPLOAD_CLOSED", "Phiên tải offer không còn hiệu lực.");
+      }
+      await this.repository.completeOfferDocumentUpload(client, uploadId, storedObject.etag);
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, 'OFFER_DOCUMENT_UPLOADED', 'APPLICATION', $2, $3::jsonb, $4, $5)`,
+        [
+          actor.userId,
+          applicationId,
+          JSON.stringify({ uploadId, fileName: upload.fileName, fileSizeBytes: upload.fileSizeBytes }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      return { fileName: upload.fileName, mimeType: upload.mimeType, fileSizeBytes: upload.fileSizeBytes };
+    });
+  }
+
+  private async createOfferDocumentDownload(
+    actor: { userId: string; actorType: "STUDENT" | "UIT_ADMIN" | "COMPANY" },
+    applicationId: string,
+    document: { resultId: string; storageKey: string; fileName: string } | null,
+    request: RequestMetadata,
+  ): Promise<StudentDocumentDownloadDto> {
+    if (!document) {
+      throw new AppError(404, "OFFER_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu offer của đơn ứng tuyển.");
+    }
+    const objectStorage = this.requireObjectStorage();
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.downloadUrlTtlSeconds * 1_000);
+    const downloadUrl = await objectStorage.createDownloadUrl({
+      key: document.storageKey,
+      fileName: document.fileName,
+      expiresInSeconds: this.objectStorageOptions.downloadUrlTtlSeconds,
+    });
+    await this.repository.recordOfferDocumentDownload({
+      actorUserId: actor.userId,
+      actorType: actor.actorType,
+      applicationId,
+      resultId: document.resultId,
+      ipAddress: request.ipAddress,
+      userAgent: request.userAgent,
+    });
+    return { downloadUrl, expiresAt: expiresAt.toISOString() };
+  }
+
+  async createStudentOfferDocumentDownload(
+    actor: { userId: string; studentProfileId: string | null },
+    applicationId: string,
+    request: RequestMetadata,
+  ) {
+    if (!actor.studentProfileId) throw studentNotFound();
+    return this.createOfferDocumentDownload(
+      { userId: actor.userId, actorType: "STUDENT" },
+      applicationId,
+      await this.repository.findStudentOfferDocumentStorage(actor.studentProfileId, applicationId),
+      request,
+    );
+  }
+
+  async createUitOfferDocumentDownload(actorUserId: string, applicationId: string, request: RequestMetadata) {
+    return this.createOfferDocumentDownload(
+      { userId: actorUserId, actorType: "UIT_ADMIN" },
+      applicationId,
+      await this.repository.findUitOfferDocumentStorage(applicationId),
+      request,
+    );
+  }
+
+  async createCompanyOfferDocumentDownload(
+    actor: { userId: string; companyId: string | null },
+    applicationId: string,
+    request: RequestMetadata,
+  ) {
+    if (!actor.companyId) throw applicationNotFound();
+    return this.createOfferDocumentDownload(
+      { userId: actor.userId, actorType: "COMPANY" },
+      applicationId,
+      await this.repository.findCompanyOfferDocumentStorage(actor.companyId, applicationId),
+      request,
+    );
   }
 
   async createStudentDocumentDownload(
@@ -959,7 +1162,7 @@ export class ApplicationService {
     applicationId: string,
     commandId: string,
     input:
-      | { outcome: "PASS"; startDate: string; offerStorageKey?: string; internalNote?: string }
+      | { outcome: "PASS"; startDate: string; offerUploadId?: string; internalNote?: string }
       | { outcome: "FAIL"; reasonCode: string; note: string },
     request: RequestMetadata,
   ) {
@@ -984,6 +1187,26 @@ export class ApplicationService {
         );
       }
 
+      const offerUpload = input.outcome === "PASS" && input.offerUploadId
+        ? await this.repository.findOfferDocumentUpload(
+            companyId,
+            applicationId,
+            input.offerUploadId,
+            client,
+            true,
+          )
+        : null;
+      if (input.outcome === "PASS" && input.offerUploadId && !offerUpload) {
+        throw new AppError(404, "OFFER_DOCUMENT_UPLOAD_NOT_FOUND", "Không tìm thấy phiên tải offer.");
+      }
+      if (offerUpload && offerUpload.status !== "COMPLETED") {
+        throw new AppError(
+          409,
+          "OFFER_DOCUMENT_UPLOAD_NOT_READY",
+          "Tệp offer chưa tải xong hoặc đã được sử dụng.",
+        );
+      }
+
       const interview = await client.query<{ id: string }>(
         `UPDATE interviews
          SET status = 'COMPLETED', version = version + 1, updated_at = now()
@@ -1005,10 +1228,10 @@ export class ApplicationService {
       await client.query(
         `INSERT INTO recruitment_results
          (id, application_id, command_id, decided_by_user_id, outcome, offered_at,
-          start_date, offer_storage_key, internal_note)
+          start_date, offer_storage_key, offer_upload_id, internal_note)
          VALUES ($1, $2, $3, $4, $5,
                  CASE WHEN $5 = 'PASS' THEN now() ELSE NULL END,
-                 $6, $7, $8)`,
+                 $6, $7, $8, $9)`,
         [
           resultId,
           applicationId,
@@ -1016,10 +1239,17 @@ export class ApplicationService {
           actor.userId,
           input.outcome,
           input.outcome === "PASS" ? input.startDate : null,
-          input.outcome === "PASS" ? input.offerStorageKey ?? null : null,
+          offerUpload?.storageKey ?? null,
+          offerUpload?.id ?? null,
           input.outcome === "PASS" ? input.internalNote ?? null : input.note,
         ],
       );
+      if (offerUpload) {
+        const storageKey = await this.repository.consumeOfferDocumentUpload(client, offerUpload.id);
+        if (!storageKey) {
+          throw new AppError(409, "OFFER_DOCUMENT_UPLOAD_NOT_READY", "Tệp offer đã được sử dụng.");
+        }
+      }
       await client.query(
         `UPDATE applications
          SET status = $2, version = version + 1, last_transition_at = now(), updated_at = now()
@@ -1043,7 +1273,7 @@ export class ApplicationService {
             resultId,
             outcome: input.outcome,
             startDate: input.outcome === "PASS" ? input.startDate : null,
-            hasOfferDocument: input.outcome === "PASS" && Boolean(input.offerStorageKey),
+            hasOfferDocument: Boolean(offerUpload),
           }),
         ],
       );

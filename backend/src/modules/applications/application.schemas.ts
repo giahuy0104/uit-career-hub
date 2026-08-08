@@ -11,6 +11,7 @@ export const applicationDocumentIdSchema = z.string().uuid();
 export const interviewIdSchema = z.string().uuid();
 export const studentDocumentIdSchema = z.string().uuid();
 export const studentDocumentUploadIdSchema = z.string().uuid();
+export const offerDocumentUploadIdSchema = z.string().uuid();
 export const applicationIdempotencyKeySchema = z.string().uuid("Idempotency-Key phải là UUID.");
 
 export const studentProfileUpdateSchema = z
@@ -148,16 +149,30 @@ export const interviewRequestSchema = z
     }
   });
 
+export const offerDocumentUploadSchema = z
+  .object({
+    fileName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .refine((value) => !/[\\/\r\n\0]/.test(value), "Tên tệp không hợp lệ.")
+      .refine((value) => value.toLowerCase().endsWith(".pdf"), "Tệp offer phải có phần mở rộng .pdf."),
+    mimeType: z.literal("application/pdf"),
+    fileSizeBytes: z.number().int().positive().max(10 * 1024 * 1024),
+  })
+  .strict();
+
 const recruitmentPassSchema = z.object({
   outcome: z.literal("PASS"),
   startDate: z.iso.date(),
-  offerStorageKey: z.string().trim().min(3).max(2_000).optional(),
+  offerUploadId: z.string().uuid().optional(),
   internalNote: z.string().trim().max(2_000).optional(),
-});
+}).strict();
 
 const recruitmentFailSchema = applicationReviewReasonSchema.extend({
   outcome: z.literal("FAIL"),
-});
+}).strict();
 
 export const recruitmentResultSchema = z.discriminatedUnion("outcome", [
   recruitmentPassSchema,

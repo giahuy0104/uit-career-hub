@@ -79,6 +79,10 @@ describeWithDatabase("student job application flow", () => {
       [studentProfileIds],
     );
     await client.query(
+      "DELETE FROM offer_document_uploads WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
+      [studentProfileIds],
+    );
+    await client.query(
       "DELETE FROM interviews WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
       [studentProfileIds],
     );
@@ -104,6 +108,7 @@ describeWithDatabase("student job application flow", () => {
       await client.query("DELETE FROM companies WHERE id = ANY($1::uuid[])", [companyIds]);
     }
     await client.query("DELETE FROM uit_staff WHERE user_id = ANY($1::uuid[])", [userIds]);
+    await client.query("DELETE FROM notifications WHERE recipient_user_id = ANY($1::uuid[])", [userIds]);
     await client.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [userIds]);
     userIds.length = 0;
     companyIds.length = 0;
@@ -345,6 +350,28 @@ describeWithDatabase("student job application flow", () => {
       .set("Authorization", `Bearer ${token}`)
       .set("Idempotency-Key", commandId)
       .send(body);
+  }
+
+  async function uploadOffer(token: string, applicationId: string) {
+    const intent = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/offer-document/uploads`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        fileName: "offer-thuc-tap-2026.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 4096,
+      });
+    expect(intent.status).toBe(201);
+    const completed = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/offer-document/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(completed.status).toBe(200);
+    expect(completed.body.data).toEqual({
+      fileName: "offer-thuc-tap-2026.pdf",
+      mimeType: "application/pdf",
+      fileSizeBytes: 4096,
+    });
+    return intent.body.data.uploadId as string;
   }
 
   async function prepareInterview() {
@@ -1393,10 +1420,11 @@ describeWithDatabase("student job application flow", () => {
   it("records a PASS result idempotently, creates an offer and notifies student and UIT", async () => {
     const scenario = await prepareInterview();
     const commandId = randomUUID();
+    const offerUploadId = await uploadOffer(scenario.recruiter.token, scenario.applicationId);
     const body = {
       outcome: "PASS",
       startDate: "2099-12-28",
-      offerStorageKey: "offers/offer-result-test.pdf",
+      offerUploadId,
       internalNote: "Mức phụ cấp theo chính sách thực tập sinh.",
     };
 
@@ -1409,9 +1437,14 @@ describeWithDatabase("student job application flow", () => {
         outcome: "PASS",
         studentDecision: null,
         startDate: body.startDate,
-        offerStorageKey: body.offerStorageKey,
+        offerDocument: {
+          fileName: "offer-thuc-tap-2026.pdf",
+          mimeType: "application/pdf",
+          fileSizeBytes: 4096,
+        },
       },
     });
+    expect(passed.body.data.recruitmentResult).not.toHaveProperty("offerStorageKey");
     expect(passed.body.data.timeline.at(-1)).toMatchObject({
       fromStatus: "INTERVIEW_INVITED",
       toStatus: "OFFER_PENDING_STUDENT",
@@ -1421,6 +1454,30 @@ describeWithDatabase("student job application flow", () => {
     const repeated = await recordResult(scenario.recruiter.token, scenario.applicationId, body, commandId);
     expect(repeated.status).toBe(200);
     expect(repeated.body.data.version).toBe(5);
+
+    for (const [token, path] of [
+      [scenario.student.token, `/api/v1/applications/${scenario.applicationId}/offer-document/download`],
+      [scenario.admin.token, `/api/v1/uit/applications/${scenario.applicationId}/offer-document/download`],
+      [scenario.recruiter.token, `/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/download`],
+    ]) {
+      const download = await request(app).post(path).set("Authorization", `Bearer ${token}`);
+      expect(download.status).toBe(200);
+      expect(download.body.data.downloadUrl).toBe("https://r2.example.test/signed-download");
+    }
+    expect(createDownloadUrl).toHaveBeenCalledTimes(3);
+
+    const otherStudent = await createStudent();
+    const hiddenFromStudent = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer-document/download`)
+      .set("Authorization", `Bearer ${otherStudent.token}`);
+    expect(hiddenFromStudent.status).toBe(404);
+
+    const otherCompany = await createScenario();
+    const hiddenFromCompany = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/download`)
+      .set("Authorization", `Bearer ${otherCompany.recruiter.token}`);
+    expect(hiddenFromCompany.status).toBe(404);
+    expect(createDownloadUrl).toHaveBeenCalledTimes(3);
 
     const interview = await client.query<{ status: string }>(
       "SELECT status FROM interviews WHERE application_id = $1",
@@ -1436,6 +1493,33 @@ describeWithDatabase("student job application flow", () => {
       { type: "OFFER_AVAILABLE", role: "STUDENT" },
       { type: "INTERVIEW_RESULT_RECORDED", role: "UIT_ADMIN" },
     ]));
+  });
+
+  it("rejects a foreign company and an invalid R2 object during offer upload", async () => {
+    const scenario = await prepareInterview();
+    const intent = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/uploads`)
+      .set("Authorization", `Bearer ${scenario.recruiter.token}`)
+      .send({ fileName: "offer.pdf", mimeType: "application/pdf", fileSizeBytes: 4096 });
+    expect(intent.status).toBe(201);
+
+    const otherCompany = await createScenario();
+    const foreignCompletion = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${otherCompany.recruiter.token}`);
+    expect(foreignCompletion.status).toBe(404);
+
+    headObject.mockResolvedValueOnce({
+      contentLength: 1024,
+      contentType: "application/pdf",
+      etag: "mismatched-offer",
+    });
+    const invalidCompletion = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${scenario.recruiter.token}`);
+    expect(invalidCompletion.status).toBe(409);
+    expect(invalidCompletion.body.error.code).toBe("OFFER_DOCUMENT_UPLOAD_MISMATCH");
+    expect(deleteObject).toHaveBeenCalledWith(expect.stringMatching(/^offers\//));
   });
 
   it("records a FAIL result with a required reason and closes the interview step", async () => {

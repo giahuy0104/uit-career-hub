@@ -18,6 +18,8 @@ import {
   interviewIdSchema,
   interviewListQuerySchema,
   interviewRequestSchema,
+  offerDocumentUploadIdSchema,
+  offerDocumentUploadSchema,
   placementConfirmationSchema,
   recruitmentResultSchema,
   studentDocumentIdSchema,
@@ -164,6 +166,17 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     });
   });
 
+  router.post("/applications/:applicationId/offer-document/download", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.createStudentOfferDocumentDownload(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        metadata(request),
+      ),
+    });
+  });
+
   router.post("/applications/:applicationId/resubmit", studentOnly, async (request, response) => {
     const auth = principal(request);
     response.json({
@@ -286,6 +299,16 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
 
+  router.post("/uit/applications/:applicationId/offer-document/download", uitOnly, async (request, response) => {
+    response.json({
+      data: await service.createUitOfferDocumentDownload(
+        principal(request).userId,
+        applicationIdSchema.parse(request.params.applicationId),
+        metadata(request),
+      ),
+    });
+  });
+
   router.post("/uit/applications/:applicationId/request-supplement", uitOnly, async (request, response) => {
     const auth = principal(request);
     const payload = applicationSupplementRequestSchema.parse(request.body);
@@ -366,6 +389,52 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
           { userId: auth.userId, companyId: auth.companyId },
           applicationIdSchema.parse(request.params.applicationId),
           applicationDocumentIdSchema.parse(request.params.documentId),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
+  router.post(
+    "/companies/me/applications/:applicationId/offer-document/uploads",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.status(201).json({
+        data: await service.createOfferDocumentUploadIntent(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          offerDocumentUploadSchema.parse(request.body),
+        ),
+      });
+    },
+  );
+
+  router.post(
+    "/companies/me/applications/:applicationId/offer-document/uploads/:uploadId/complete",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.completeOfferDocumentUpload(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          offerDocumentUploadIdSchema.parse(request.params.uploadId),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
+  router.post(
+    "/companies/me/applications/:applicationId/offer-document/download",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.createCompanyOfferDocumentDownload(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
           metadata(request),
         ),
       });
