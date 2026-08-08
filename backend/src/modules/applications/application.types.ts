@@ -14,6 +14,9 @@ export const applicationStatuses = [
   "WITHDRAWN",
 ] as const;
 
+export const studentDocumentTypes = ["CV", "TRANSCRIPT", "STUDENT_CONFIRMATION", "OTHER"] as const;
+export type StudentDocumentType = (typeof studentDocumentTypes)[number];
+
 export type ApplicationStatus = (typeof applicationStatuses)[number];
 export type AvailableAction =
   | "RESUBMIT"
@@ -138,6 +141,19 @@ export type StudentDocumentDto = {
   isDefault: boolean;
   verificationStatus: string;
   createdAt: string;
+};
+
+export type StudentDocumentUploadIntentDto = {
+  uploadId: string;
+  uploadUrl: string;
+  method: "PUT";
+  headers: { "Content-Type": "application/pdf" };
+  expiresAt: string;
+};
+
+export type StudentDocumentDownloadDto = {
+  downloadUrl: string;
+  expiresAt: string;
 };
 
 export type RequestMetadata = {

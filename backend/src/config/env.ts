@@ -61,6 +61,13 @@ const environmentSchema = z.object({
   ),
   EMAIL_BATCH_SIZE: z.coerce.number().int().min(1).max(50).default(10),
   EMAIL_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  OBJECT_STORAGE_ENABLED: optionalBoolean.default(false),
+  R2_ACCOUNT_ID: optionalString,
+  R2_ACCESS_KEY_ID: optionalString,
+  R2_SECRET_ACCESS_KEY: optionalString,
+  R2_BUCKET: optionalString,
+  OBJECT_UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
+  OBJECT_DOWNLOAD_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
 });
 
 function assertPostgresUrl(value: string, key: string) {
@@ -111,6 +118,15 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     throw new Error("EMAIL_ENABLED=true yêu cầu RESEND_API_KEY và EMAIL_FROM.");
   }
 
+  if (
+    parsed.OBJECT_STORAGE_ENABLED &&
+    (!parsed.R2_ACCOUNT_ID || !parsed.R2_ACCESS_KEY_ID || !parsed.R2_SECRET_ACCESS_KEY || !parsed.R2_BUCKET)
+  ) {
+    throw new Error(
+      "OBJECT_STORAGE_ENABLED=true requires R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.",
+    );
+  }
+
   assertPostgresUrl(parsed.DATABASE_URL, "DATABASE_URL");
   if (parsed.DATABASE_URL_DIRECT) {
     assertPostgresUrl(parsed.DATABASE_URL_DIRECT, "DATABASE_URL_DIRECT");
@@ -144,6 +160,13 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     publicAppUrl: parsed.PUBLIC_APP_URL ?? parsed.CORS_ORIGIN,
     emailBatchSize: parsed.EMAIL_BATCH_SIZE,
     emailMaxAttempts: parsed.EMAIL_MAX_ATTEMPTS,
+    objectStorageEnabled: parsed.OBJECT_STORAGE_ENABLED,
+    r2AccountId: parsed.R2_ACCOUNT_ID,
+    r2AccessKeyId: parsed.R2_ACCESS_KEY_ID,
+    r2SecretAccessKey: parsed.R2_SECRET_ACCESS_KEY,
+    r2Bucket: parsed.R2_BUCKET,
+    objectUploadUrlTtlSeconds: parsed.OBJECT_UPLOAD_URL_TTL_SECONDS,
+    objectDownloadUrlTtlSeconds: parsed.OBJECT_DOWNLOAD_URL_TTL_SECONDS,
   } as const;
 }
 
