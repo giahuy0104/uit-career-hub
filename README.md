@@ -162,6 +162,8 @@ Doanh nghiệp hiện đã có hàng đợi hồ sơ thật, chỉ thấy hồ s
 
 Màn “Hồ sơ & CV” của sinh viên dùng dữ liệu thật từ API: hiển thị thông tin UIT, tính độ hoàn thiện, cập nhật số điện thoại, upload/tải xuống PDF qua Cloudflare R2 private bằng URL ký trước, xóa tài liệu chưa được dùng và chọn CV đã xác minh làm mặc định. Backend kiểm tra MIME cùng dung lượng thực tế trên R2 trước khi tạo tài liệu ở trạng thái chờ UIT xác minh; CV mặc định và tài liệu đã dùng trong đơn ứng tuyển được bảo vệ khỏi thao tác xóa. Xem hướng dẫn tại `docs/deployment/cloudflare-r2.md`.
 
+UIT Admin có hàng đợi xác minh tài liệu thật: lọc theo trạng thái, tìm theo sinh viên/MSSV/tên tệp, mở PDF bằng URL ký ngắn hạn và quyết định xác minh hoặc từ chối kèm lý do. Chỉ tài liệu `PENDING` được xử lý; quyết định không thể đảo ngược, được ghi audit log và tạo thông báo cho đúng sinh viên.
+
 Danh bạ doanh nghiệp dành cho sinh viên cũng dùng dữ liệu thật: chỉ công khai đối tác đang hoạt động, hỗ trợ tìm kiếm/lọc, xem hồ sơ công khai và mở danh sách tin còn hạn của đúng doanh nghiệp. API không trả tên pháp lý, mã số thuế, phiên bản quản trị hoặc tài khoản recruiter ra màn sinh viên.
 
 Happy flow và các nhánh ngoại lệ chính của hồ sơ đã chạy xuyên suốt. Hộp thông báo trong hệ thống cũng đã dùng dữ liệu thật cho cả ba vai trò: xem tất cả/chưa đọc, phân trang, đếm badge, đánh dấu một hoặc tất cả là đã đọc và mở đúng màn hình/bản ghi cần xử lý. API luôn giới hạn thông báo theo người dùng đang đăng nhập; không thể đọc hoặc cập nhật thông báo của tài khoản khác.

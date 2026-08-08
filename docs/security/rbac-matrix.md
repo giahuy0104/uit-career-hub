@@ -32,6 +32,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Sinh viên | `GET/POST /applications` và `GET /applications/{id}` | ✓ | — | — |
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |
 | UIT | hàng đợi và quyết định duyệt tin `/uit/jobs/**` | — | ✓ | — |
+| UIT | danh sách, tải xuống và xác minh tài liệu `/uit/student-documents/**` | — | ✓ | — |
 | UIT | `GET /uit/dashboard` | — | ✓ | — |
 | UIT | hàng đợi và quyết định hồ sơ `/uit/applications/**` | — | ✓ | — |
 | UIT | quản lý đối tác và tài khoản tuyển dụng `/uit/companies/**` | — | ✓ | — |

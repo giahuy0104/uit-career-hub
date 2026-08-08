@@ -20,6 +20,8 @@ import {
   placementConfirmationSchema,
   recruitmentResultSchema,
   studentDocumentIdSchema,
+  studentDocumentReviewListQuerySchema,
+  studentDocumentReviewSchema,
   studentDocumentUploadIdSchema,
   studentDocumentUploadSchema,
   studentProfileUpdateSchema,
@@ -234,6 +236,31 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     const query = applicationReviewQueueQuerySchema.parse(request.query);
     const result = await service.listReviewQueue(query);
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.get("/uit/student-documents", uitOnly, async (request, response) => {
+    const query = studentDocumentReviewListQuerySchema.parse(request.query);
+    const result = await service.listStudentDocumentsForReview(query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post("/uit/student-documents/:documentId/download", uitOnly, async (request, response) => {
+    response.json({
+      data: await service.createUitStudentDocumentDownload(
+        studentDocumentIdSchema.parse(request.params.documentId),
+      ),
+    });
+  });
+
+  router.post("/uit/student-documents/:documentId/review", uitOnly, async (request, response) => {
+    response.json({
+      data: await service.reviewStudentDocument(
+        principal(request).userId,
+        studentDocumentIdSchema.parse(request.params.documentId),
+        studentDocumentReviewSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
   });
 
   router.get("/uit/applications/placement-queue", uitOnly, async (request, response) => {

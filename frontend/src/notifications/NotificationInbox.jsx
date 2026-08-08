@@ -43,6 +43,7 @@ export function notificationRoute(role, notification) {
   const type = notification.type || "";
   if (role === "admin") {
     if (link.includes("/uit/jobs") || notification.resourceType === "JOB_POST") return "admin-jobs";
+    if (link.includes("/uit/student-documents") || notification.resourceType === "STUDENT_DOCUMENT") return "admin-documents";
     if (link.includes("/placements") || /PLACEMENT|HIRED/.test(type)) return "admin-placements";
     if (link.includes("/uit/applications") || notification.resourceType === "APPLICATION") return "admin-applications";
     return "admin-dashboard";
@@ -54,6 +55,7 @@ export function notificationRoute(role, notification) {
     return "company-dashboard";
   }
   if (link.includes("/interview") || /INTERVIEW/.test(type)) return "interviews";
+  if (link.includes("/profile") || notification.resourceType === "STUDENT_DOCUMENT") return "profile";
   if (link.includes("/applications") || notification.resourceType === "APPLICATION") return "applications";
   if (link.includes("/jobs") || notification.resourceType === "JOB_POST") return "jobs";
   return "dashboard";

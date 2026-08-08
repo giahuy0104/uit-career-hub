@@ -143,6 +143,20 @@ export type StudentDocumentDto = {
   createdAt: string;
 };
 
+export const studentDocumentVerificationStatuses = ["PENDING", "VERIFIED", "REJECTED"] as const;
+export type StudentDocumentVerificationStatus = (typeof studentDocumentVerificationStatuses)[number];
+
+export type UitStudentDocumentReviewDto = StudentDocumentDto & {
+  student: {
+    id: string;
+    studentCode: string;
+    fullName: string;
+    email: string;
+    faculty: string;
+    major: string;
+  };
+};
+
 export type StudentDocumentUploadIntentDto = {
   uploadId: string;
   uploadUrl: string;

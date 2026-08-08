@@ -180,7 +180,7 @@ paths:
     post:
       tags: [Students]
       operationId: completeMyDocumentUpload
-      description: Kiểm tra object trên R2 bằng HEAD rồi mới tạo tài liệu ở trạng thái PENDING.
+      description: Kiểm tra object trên R2 bằng HEAD, tạo tài liệu ở trạng thái PENDING và thông báo cho UIT xử lý.
       parameters:
         - name: uploadId
           in: path
@@ -268,6 +268,80 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/StudentDocument'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /uit/student-documents:
+    get:
+      tags: [UIT]
+      operationId: listStudentDocumentsForReview
+      description: Danh sách tài liệu sinh viên theo trạng thái, sắp xếp tài liệu cũ nhất trước.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, VERIFIED, REJECTED], default: PENDING }
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 120 }
+      responses:
+        '200':
+          description: Hàng đợi xác minh tài liệu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UitStudentDocumentListEnvelope' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /uit/student-documents/{documentId}/download:
+    post:
+      tags: [UIT]
+      operationId: createUitStudentDocumentDownloadUrl
+      description: Tạo URL GET ký trước ngắn hạn để UIT đối chiếu tài liệu PDF private.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: URL tải xuống có thời hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /uit/student-documents/{documentId}/review:
+    post:
+      tags: [UIT]
+      operationId: reviewStudentDocument
+      description: Chỉ cho phép chuyển một lần từ PENDING sang VERIFIED hoặc REJECTED; quyết định và lý do được lưu audit log.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StudentDocumentReviewRequest' }
+      responses:
+        '200':
+          description: Tài liệu sau khi xử lý
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/UitStudentDocument' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1632,6 +1706,44 @@ components:
         data:
           type: array
           items: { $ref: '#/components/schemas/StudentDocument' }
+    UitStudentDocument:
+      allOf:
+        - $ref: '#/components/schemas/StudentDocument'
+        - type: object
+          required: [student]
+          properties:
+            student:
+              type: object
+              required: [id, studentCode, fullName, email, faculty, major]
+              properties:
+                id: { type: string, format: uuid }
+                studentCode: { type: string }
+                fullName: { type: string }
+                email: { type: string, format: email }
+                faculty: { type: string }
+                major: { type: string }
+    UitStudentDocumentListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/UitStudentDocument' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    StudentDocumentReviewRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [decision]
+          properties:
+            decision: { type: string, const: VERIFY }
+            note: { type: string, maxLength: 2000 }
+        - type: object
+          additionalProperties: false
+          required: [decision, note]
+          properties:
+            decision: { type: string, const: REJECT }
+            note: { type: string, minLength: 5, maxLength: 2000 }
     StudentDocumentUploadRequest:
       type: object
       additionalProperties: false

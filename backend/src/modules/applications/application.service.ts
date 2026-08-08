@@ -11,6 +11,7 @@ import type {
   StudentDocumentDownloadDto,
   StudentDocumentType,
   StudentDocumentUploadIntentDto,
+  StudentDocumentVerificationStatus,
 } from "./application.types.js";
 
 function studentNotFound() {
@@ -54,6 +55,98 @@ export class ApplicationService {
   async listStudentDocuments(studentProfileId: string | null) {
     if (!studentProfileId) throw studentNotFound();
     return this.repository.listStudentDocuments(studentProfileId);
+  }
+
+  async listStudentDocumentsForReview(input: {
+    page: number;
+    pageSize: number;
+    status: StudentDocumentVerificationStatus;
+    query?: string;
+  }) {
+    return this.repository.listStudentDocumentsForReview(input);
+  }
+
+  async createUitStudentDocumentDownload(documentId: string): Promise<StudentDocumentDownloadDto> {
+    const objectStorage = this.requireObjectStorage();
+    const document = await this.repository.findStudentDocumentForUit(documentId);
+    if (!document) {
+      throw new AppError(404, "STUDENT_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu của sinh viên.");
+    }
+    const expiresAt = new Date(Date.now() + this.objectStorageOptions.downloadUrlTtlSeconds * 1_000);
+    return {
+      downloadUrl: await objectStorage.createDownloadUrl({
+        key: document.storageKey,
+        fileName: document.dto.fileName,
+        expiresInSeconds: this.objectStorageOptions.downloadUrlTtlSeconds,
+      }),
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  async reviewStudentDocument(
+    actorUserId: string,
+    documentId: string,
+    input: { decision: "VERIFY"; note?: string } | { decision: "REJECT"; note: string },
+    request: RequestMetadata,
+  ) {
+    return this.repository.withTransaction(async (client) => {
+      const document = await this.repository.findStudentDocumentForUit(documentId, client, true);
+      if (!document) {
+        throw new AppError(404, "STUDENT_DOCUMENT_NOT_FOUND", "Không tìm thấy tài liệu của sinh viên.");
+      }
+
+      const toStatus = input.decision === "VERIFY" ? "VERIFIED" : "REJECTED";
+      if (document.dto.verificationStatus === toStatus) return document.dto;
+      if (document.dto.verificationStatus !== "PENDING") {
+        throw new AppError(
+          409,
+          "STUDENT_DOCUMENT_REVIEW_CONFLICT",
+          "Tài liệu đã được xử lý và không thể đổi sang quyết định khác.",
+        );
+      }
+
+      await this.repository.updateStudentDocumentVerification(client, documentId, toStatus);
+      const notification = input.decision === "VERIFY"
+        ? {
+            type: "STUDENT_DOCUMENT_VERIFIED",
+            title: "Tài liệu đã được UIT xác minh",
+            body: `Tài liệu “${document.dto.fileName}” đã được chấp nhận và có thể dùng trong hồ sơ ứng tuyển.`,
+          }
+        : {
+            type: "STUDENT_DOCUMENT_REJECTED",
+            title: "Tài liệu chưa được chấp nhận",
+            body: `Tài liệu “${document.dto.fileName}” chưa được UIT chấp nhận. Lý do: ${input.note}`,
+          };
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         VALUES ($1, $2, $3, $4, 'STUDENT_DOCUMENT', $5::uuid, '/profile',
+                 'student-document:' || $5::text || ':' || $6::text,
+                 jsonb_build_object('documentId', $5::text, 'status', $6::text))
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [document.studentUserId, notification.type, notification.title, notification.body, documentId, toStatus],
+      );
+      await client.query(
+        `INSERT INTO audit_logs
+         (actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent)
+         VALUES ($1, $2, 'STUDENT_DOCUMENT', $3, $4::jsonb, $5, $6)`,
+        [
+          actorUserId,
+          input.decision === "VERIFY" ? "STUDENT_DOCUMENT_VERIFIED_BY_UIT" : "STUDENT_DOCUMENT_REJECTED_BY_UIT",
+          documentId,
+          JSON.stringify({
+            studentProfileId: document.studentProfileId,
+            fromStatus: "PENDING",
+            toStatus,
+            note: input.note?.trim() || null,
+          }),
+          request.ipAddress,
+          request.userAgent,
+        ],
+      );
+      const updated = await this.repository.findStudentDocumentForUit(documentId, client);
+      return updated!.dto;
+    });
   }
 
   async createStudentDocumentUploadIntent(
@@ -167,6 +260,19 @@ export class ApplicationService {
           request.ipAddress,
           request.userAgent,
         ],
+      );
+      await client.query(
+        `INSERT INTO notifications
+         (recipient_user_id, type, title, body, resource_type, resource_id, deep_link, dedupe_key, payload)
+         SELECT u.id, 'STUDENT_DOCUMENT_PENDING_REVIEW', 'Có tài liệu sinh viên cần xác minh',
+                sp.full_name || ' vừa tải lên tài liệu “' || $3 || '”.',
+                'STUDENT_DOCUMENT', $1::uuid, '/uit/student-documents/' || $1::text,
+                'student-document:' || $1::text || ':pending:uit:' || u.id::text,
+                jsonb_build_object('documentId', $1::text, 'studentProfileId', $2::uuid::text, 'status', 'PENDING')
+         FROM users u CROSS JOIN student_profiles sp
+         WHERE u.role = 'UIT_ADMIN' AND u.status = 'ACTIVE' AND sp.id = $2::uuid
+         ON CONFLICT (dedupe_key) DO NOTHING`,
+        [documentId, studentProfileId, upload.fileName],
       );
       return this.repository.listStudentDocuments(studentProfileId, client);
     });
