@@ -533,10 +533,15 @@ export class ApplicationRepository {
       document_type: string;
       verification_status: string;
       is_default: boolean;
+      storage_key: string;
+      used_by_application: boolean;
     }>(
-      `SELECT id, document_type, verification_status, is_default
-       FROM student_documents
-       WHERE id = $1 AND student_profile_id = $2
+      `SELECT sd.id, sd.document_type, sd.verification_status, sd.is_default, sd.storage_key,
+              EXISTS (
+                SELECT 1 FROM application_documents ad WHERE ad.source_document_id = sd.id
+              ) AS used_by_application
+       FROM student_documents sd
+       WHERE sd.id = $1 AND sd.student_profile_id = $2
        FOR UPDATE`,
       [documentId, studentProfileId],
     );
@@ -547,8 +552,22 @@ export class ApplicationRepository {
           documentType: row.document_type,
           verificationStatus: row.verification_status,
           isDefault: row.is_default,
+          storageKey: row.storage_key,
+          usedByApplication: row.used_by_application,
         }
       : null;
+  }
+
+  async deleteStudentDocument(client: PoolClient, studentProfileId: string, documentId: string) {
+    await client.query(
+      "DELETE FROM student_document_uploads WHERE student_document_id = $1 AND student_profile_id = $2",
+      [documentId, studentProfileId],
+    );
+    const result = await client.query(
+      "DELETE FROM student_documents WHERE id = $1 AND student_profile_id = $2 RETURNING id",
+      [documentId, studentProfileId],
+    );
+    return result.rowCount === 1;
   }
 
   async setDefaultCv(client: PoolClient, studentProfileId: string, documentId: string) {
