@@ -815,6 +815,24 @@ paths:
                 $ref: '#/components/schemas/ApplicationListEnvelope'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /companies/me/applications/{applicationId}/documents/{documentId}/download:
+    post:
+      tags: [Companies, Applications]
+      operationId: createCompanyApplicationDocumentDownload
+      summary: Tạo URL tạm thời để doanh nghiệp mở tài liệu ứng viên đã được UIT chuyển
+      description: Trả 404 nếu đơn chưa từng được UIT chuyển hoặc không thuộc doanh nghiệp đang đăng nhập.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/ApplicationDocumentId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /companies/me/applications/{applicationId}/start-review:
     post:
       tags: [Companies, Applications]
@@ -1179,6 +1197,23 @@ paths:
                 $ref: '#/components/schemas/ApplicationListEnvelope'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /uit/applications/{applicationId}/documents/{documentId}/download:
+    post:
+      tags: [UIT, Applications]
+      operationId: createUitApplicationDocumentDownload
+      summary: Tạo URL tạm thời để UIT mở đúng bản chụp tài liệu trong đơn
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/ApplicationDocumentId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /uit/applications/{applicationId}/request-supplement:
     post:
       tags: [UIT]
@@ -1501,6 +1536,11 @@ components:
       schema: { type: string, format: uuid }
     ApplicationId:
       name: applicationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ApplicationDocumentId:
+      name: documentId
       in: path
       required: true
       schema: { type: string, format: uuid }

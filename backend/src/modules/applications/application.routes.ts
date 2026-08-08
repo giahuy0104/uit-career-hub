@@ -5,6 +5,7 @@ import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import {
+  applicationDocumentIdSchema,
   applicationIdSchema,
   applicationIdempotencyKeySchema,
   applicationListQuerySchema,
@@ -238,6 +239,22 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
 
+  router.post(
+    "/uit/applications/:applicationId/documents/:documentId/download",
+    uitOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.createUitApplicationDocumentDownload(
+          auth.userId,
+          applicationIdSchema.parse(request.params.applicationId),
+          applicationDocumentIdSchema.parse(request.params.documentId),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
   router.get("/uit/student-documents", uitOnly, async (request, response) => {
     const query = studentDocumentReviewListQuerySchema.parse(request.query);
     const result = await service.listStudentDocumentsForReview(query);
@@ -338,6 +355,22 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     const result = await service.listCompanyInterviews(auth.companyId, query);
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
+
+  router.post(
+    "/companies/me/applications/:applicationId/documents/:documentId/download",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.createCompanyApplicationDocumentDownload(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          applicationDocumentIdSchema.parse(request.params.documentId),
+          metadata(request),
+        ),
+      });
+    },
+  );
 
   router.post(
     "/companies/me/applications/:applicationId/start-review",

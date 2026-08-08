@@ -7,6 +7,7 @@ import {
 } from "./application.types.js";
 
 export const applicationIdSchema = z.string().uuid();
+export const applicationDocumentIdSchema = z.string().uuid();
 export const interviewIdSchema = z.string().uuid();
 export const studentDocumentIdSchema = z.string().uuid();
 export const studentDocumentUploadIdSchema = z.string().uuid();
