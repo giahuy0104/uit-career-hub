@@ -326,7 +326,7 @@ function LiveCompanyMark({ company, size = "md" }) {
   return <span className={`company-mark ${size}`}>{(company?.code || company?.name || "DN").slice(0, 3).toUpperCase()}</span>;
 }
 
-function LiveJobsScreen({ navigate, user, onLogout }) {
+function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, initialCompanyName = "" }) {
   const { authorizedRequest } = useAuth();
   const [items, setItems] = useState([]);
   const [applications, setApplications] = useState([]);
@@ -341,7 +341,7 @@ function LiveJobsScreen({ navigate, user, onLogout }) {
     let active = true;
     setLoadingJobs(true);
     Promise.all([
-      authorizedRequest("/jobs?page=1&pageSize=100"),
+      authorizedRequest(`/jobs?page=1&pageSize=100${initialCompanyId ? `&companyId=${encodeURIComponent(initialCompanyId)}` : ""}`),
       authorizedRequest("/applications?page=1&pageSize=100"),
     ]).then(([jobResponse, applicationResponse]) => {
       if (!active) return;
@@ -355,7 +355,7 @@ function LiveJobsScreen({ navigate, user, onLogout }) {
       if (active) setLoadingJobs(false);
     });
     return () => { active = false; };
-  }, [authorizedRequest]);
+  }, [authorizedRequest, initialCompanyId]);
 
   const appliedJobIds = useMemo(() => new Set(applications.map((application) => application.job.id)), [applications]);
   const filtered = useMemo(() => items.filter((job) => {
@@ -377,6 +377,7 @@ function LiveJobsScreen({ navigate, user, onLogout }) {
             <label className="search-field"><MagnifyingGlass size={22} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty hoặc kỹ năng" /></label>
             <button className={`secondary-button ${filtersOpen ? "selected" : ""}`} onClick={() => setFiltersOpen(!filtersOpen)}><FunnelSimple size={20} />Bộ lọc</button>
           </div>
+          {initialCompanyId && <div className="filter-strip company-source-filter"><span><Buildings size={18} />Doanh nghiệp: <strong>{initialCompanyName || "Đối tác đã chọn"}</strong></span><button className="text-button" onClick={() => navigate("jobs")}>Xem tất cả doanh nghiệp</button></div>}
           {filtersOpen && <div className="filter-strip"><span><SlidersHorizontal size={18} />Lọc nhanh</span><button className={internOnly ? "chip selected" : "chip"} onClick={() => setInternOnly(!internOnly)}>Chỉ thực tập</button><button className="text-button" onClick={() => setInternOnly(false)}>Xóa lọc</button></div>}
           <section className="job-group" aria-label="Danh sách việc làm">
             <div className="job-table-header"><span>Cơ hội</span><span>Loại hình</span><span>Địa điểm</span><span>Hạn nộp</span><span>Xác thực</span></div>
@@ -700,6 +701,6 @@ export function App() {
   else if (route === "applications") content = <LiveApplicationsScreen navigate={navigate} targetApplicationId={navigationPayload?.notification?.resourceId} user={user} onLogout={logout} />;
   else if (route === "apply") content = <LiveApplyScreen job={selectedJob} navigate={navigate} user={user} onLogout={logout} />;
   else if (["dashboard", "companies", "profile", "interviews", "notifications"].includes(route)) content = <StudentExtraScreen route={route} navigate={navigate} user={user} onLogout={logout} />;
-  else content = <LiveJobsScreen navigate={navigate} user={user} onLogout={logout} />;
+  else content = <LiveJobsScreen navigate={navigate} user={user} onLogout={logout} initialCompanyId={navigationPayload?.companyId} initialCompanyName={navigationPayload?.companyName} />;
   return content;
 }

@@ -238,7 +238,7 @@ export function StudentExtraScreen({ route, navigate, user, onLogout }) {
   return (
     <WorkspaceShell role="student" route={route} navigate={navigate} title={title} description={description} user={user} onLogout={onLogout} actions={route === "dashboard" ? <button className="primary-button" onClick={() => navigate("jobs")}><MagnifyingGlass size={18} />Tìm việc ngay</button> : null}>
       {route === "dashboard" && <LiveStudentDashboard navigate={navigate} />}
-      {route === "companies" && <CompaniesScreen />}
+      {route === "companies" && <CompaniesScreen navigate={navigate} />}
       {route === "profile" && <ProfileScreen />}
       {route === "interviews" && <LiveInterviewsScreen />}
       {route === "notifications" && <StudentNotifications navigate={navigate} />}
@@ -263,17 +263,57 @@ function StudentDashboard({ navigate }) {
   </>;
 }
 
-function CompaniesScreen() {
+function CompanyDirectoryModal({ company, onClose, onViewJobs }) {
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal portal-modal company-directory-modal" onMouseDown={event => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={onClose}><X /></button><div className="company-directory-heading"><div className="company-logo directory-logo">{company.code.slice(0, 3)}</div><div><Status tone="success"><SealCheck size={14} weight="fill" />Đối tác UIT</Status><h2>{company.name}</h2><p>{company.code} · {company.industry || "Chưa cập nhật lĩnh vực"}</p></div></div><p className="company-directory-description">{company.description || "Doanh nghiệp chưa cập nhật phần giới thiệu."}</p><div className="company-directory-details"><div><small>Lĩnh vực</small><strong>{company.industry || "Chưa cập nhật"}</strong></div><div><small>Quy mô</small><strong>{company.companySize || "Chưa cập nhật"}</strong></div><div><small>Địa chỉ</small><strong>{company.address || "Chưa cập nhật"}</strong></div><div><small>Cơ hội đang tuyển</small><strong>{company.recruitingJobCount} tin còn hạn</strong></div></div><div className="modal-actions split-actions">{company.website ? <a className="secondary-button" href={company.website} target="_blank" rel="noreferrer">Website doanh nghiệp <ArrowRight /></a> : <span />}<button className="primary-button" disabled={!company.recruitingJobCount} onClick={onViewJobs}><Briefcase />{company.recruitingJobCount ? `Xem ${company.recruitingJobCount} cơ hội` : "Chưa có tin đang tuyển"}</button></div></div></div>;
+}
+
+function CompaniesScreen({ navigate }) {
+  const { authorizedRequest } = useAuth();
+  const [companies, setCompanies] = useState([]);
   const [query, setQuery] = useState("");
-  const companies = [
-    ["VNG", "VNG Corporation", "Công nghệ sản phẩm", "7 vị trí", "TP. Hồ Chí Minh", "VNG"],
-    ["FPT", "FPT Software", "Dịch vụ công nghệ", "12 vị trí", "Toàn quốc", "FPT"],
-    ["M", "MoMo Technology", "Công nghệ tài chính", "5 vị trí", "TP. Hồ Chí Minh", "MOMO"],
-    ["NT", "NashTech Vietnam", "Dịch vụ phần mềm", "4 vị trí", "TP.HCM · Đà Nẵng", "NASH"],
-    ["KMS", "KMS Technology", "Sản phẩm & dịch vụ", "3 vị trí", "TP. Hồ Chí Minh", "KMS"],
-    ["TIKI", "Tiki Corporation", "Thương mại điện tử", "2 vị trí", "TP. Hồ Chí Minh", "TIKI"],
-  ].filter(company => company.join(" ").toLowerCase().includes(query.toLowerCase()));
-  return <><div className="portal-toolbar"><label className="portal-search"><MagnifyingGlass size={19} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm tên hoặc lĩnh vực doanh nghiệp" /></label><button className="secondary-button"><FunnelSimple size={18} />Lĩnh vực</button><button className="secondary-button"><MapPin size={18} />Địa điểm</button></div><div className="company-card-grid">{companies.map(([mark, name, field, jobs, location, tone]) => <article key={name} className="company-card"><div className={`company-logo ${tone.toLowerCase()}`}>{mark}</div><Status tone="success"><SealCheck size={14} weight="fill" /> Đối tác UIT</Status><h2>{name}</h2><p>{field}</p><div><span><Briefcase size={17} />{jobs} đang tuyển</span><span><MapPin size={17} />{location}</span></div><button className="secondary-button">Xem doanh nghiệp <ArrowRight size={16} /></button></article>)}</div></>;
+  const [industry, setIndustry] = useState("");
+  const [recruitingOnly, setRecruitingOnly] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [busyId, setBusyId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    setError("");
+    authorizedRequest("/companies?page=1&pageSize=100")
+      .then(response => { if (!ignore) setCompanies(response.data); })
+      .catch(requestError => { if (!ignore) setError(getApiError(requestError)); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [authorizedRequest, refreshKey]);
+
+  const industries = useMemo(() => [...new Set(companies.map(company => company.industry).filter(Boolean))].sort((left, right) => left.localeCompare(right, "vi")), [companies]);
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("vi");
+    return companies.filter(company => {
+      const matchesQuery = !normalizedQuery || `${company.name} ${company.code} ${company.industry || ""} ${company.address || ""}`.toLocaleLowerCase("vi").includes(normalizedQuery);
+      return matchesQuery && (!industry || company.industry === industry) && (!recruitingOnly || company.recruitingJobCount > 0);
+    });
+  }, [companies, query, industry, recruitingOnly]);
+
+  const openCompany = async company => {
+    setBusyId(company.id);
+    setError("");
+    try {
+      const response = await authorizedRequest(`/companies/${company.id}`);
+      setSelected(response.data);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  if (loading) return <div className="portal-loading"><CircleNotch className="spin" />Đang tải doanh nghiệp đối tác...</div>;
+  return <><div className="portal-toolbar company-directory-toolbar"><label className="portal-search"><MagnifyingGlass size={19} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Tìm tên, mã, lĩnh vực hoặc địa chỉ" /></label><label className="directory-filter"><FunnelSimple size={18} /><span>Lĩnh vực</span><select value={industry} onChange={event => setIndustry(event.target.value)}><option value="">Tất cả</option>{industries.map(item => <option key={item} value={item}>{item}</option>)}</select></label><label className="directory-check"><input type="checkbox" checked={recruitingOnly} onChange={event => setRecruitingOnly(event.target.checked)} /><Briefcase />Đang tuyển</label></div>{error && <p className="review-error"><Warning />{error}<button className="link-button" onClick={() => setRefreshKey(value => value + 1)}>Thử lại</button></p>}<div className="directory-result-line"><span>{filtered.length} doanh nghiệp đối tác phù hợp</span>{(query || industry || recruitingOnly) && <button className="link-button" onClick={() => { setQuery(""); setIndustry(""); setRecruitingOnly(false); }}>Xóa bộ lọc</button>}</div><div className="company-card-grid live-company-directory">{filtered.length ? filtered.map(company => <article key={company.id} className="company-card"><div className="company-logo directory-logo">{company.code.slice(0, 3)}</div><Status tone="success"><SealCheck size={14} weight="fill" /> Đối tác UIT</Status><h2>{company.name}</h2><p>{company.industry || "Chưa cập nhật lĩnh vực"}</p><div><span><Briefcase size={17} />{company.recruitingJobCount} tin đang tuyển</span><span><MapPin size={17} />{company.address || "Chưa cập nhật địa chỉ"}</span></div><button className="secondary-button" disabled={busyId === company.id} onClick={() => void openCompany(company)}>{busyId === company.id ? <CircleNotch className="spin" /> : null}Xem doanh nghiệp <ArrowRight size={16} /></button></article>) : <div className="directory-empty"><Buildings size={38} /><strong>Không tìm thấy doanh nghiệp phù hợp</strong><span>Hãy thử từ khóa hoặc bộ lọc khác.</span></div>}</div>{selected && <CompanyDirectoryModal company={selected} onClose={() => setSelected(null)} onViewJobs={() => navigate("jobs", { companyId: selected.id, companyName: selected.name })} />}</>;
 }
 
 const profileDocumentCopy = {

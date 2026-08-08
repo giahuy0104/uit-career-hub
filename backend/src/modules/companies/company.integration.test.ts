@@ -55,6 +55,11 @@ describeWithDatabase("company partner management API", () => {
     }
     if (companyIds.length) {
       await client.query("DELETE FROM audit_logs WHERE target_id = ANY($1::uuid[])", [companyIds]);
+      await client.query(
+        "DELETE FROM job_post_status_history WHERE job_post_id IN (SELECT id FROM job_posts WHERE company_id = ANY($1::uuid[]))",
+        [companyIds],
+      );
+      await client.query("DELETE FROM job_posts WHERE company_id = ANY($1::uuid[])", [companyIds]);
       await client.query("DELETE FROM company_users WHERE company_id = ANY($1::uuid[])", [companyIds]);
       await client.query("DELETE FROM companies WHERE id = ANY($1::uuid[])", [companyIds]);
     }
@@ -99,6 +104,83 @@ describeWithDatabase("company partner management API", () => {
     );
     return { ...user, token: (await tokenService.signAccessToken(user)).accessToken };
   }
+
+  async function createStudentToken() {
+    const user: AuthUser = {
+      id: randomUUID(),
+      email: `student-${randomUUID()}@student.uit.edu.vn`,
+      role: "STUDENT",
+      status: "ACTIVE",
+      passwordHash: null,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      displayName: "Sinh viên xem đối tác",
+      organization: null,
+      studentProfileId: randomUUID(),
+      companyId: null,
+    };
+    return (await tokenService.signAccessToken(user)).accessToken;
+  }
+
+  it("exposes only active partners and public fields in the student directory", async () => {
+    const admin = await createAdmin();
+    const studentToken = await createStudentToken();
+    const code = `DIR-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const suspendedCode = `${code}-S`;
+    const activeCompanyId = randomUUID();
+    const suspendedCompanyId = randomUUID();
+    companyCodes.push(code, suspendedCode);
+    await client.query(
+      `INSERT INTO companies
+       (id, code, name, legal_name, tax_code, industry, company_size, description,
+        website, address, partner_status, verified_at, created_by_user_id)
+       VALUES
+       ($1, $2, 'Đối tác Công nghệ Sinh viên', 'Tên pháp lý nội bộ', 'PRIVATE-TAX',
+        'Công nghệ thông tin', '100-499', 'Phát triển sản phẩm số cho người dùng Việt Nam.',
+        'https://partner-directory.test', 'TP. Hồ Chí Minh', 'ACTIVE', now(), $5),
+       ($3, $4, 'Đối tác đang tạm ngưng', NULL, NULL, 'Công nghệ thông tin', NULL, NULL,
+        NULL, NULL, 'SUSPENDED', now(), $5)`,
+      [activeCompanyId, code, suspendedCompanyId, suspendedCode, admin.id],
+    );
+    await client.query(
+      `INSERT INTO job_posts
+       (company_id, created_by_user_id, title, opportunity_type, work_mode, location,
+        description, requirements, positions, deadline, status)
+       VALUES
+       ($1, $2, 'Thực tập sinh đang tuyển', 'INTERNSHIP', 'HYBRID', 'TP. Hồ Chí Minh',
+        'Cơ hội còn hạn cho sinh viên.', 'Có kiến thức lập trình cơ bản.', 2, '2099-12-31', 'RECRUITING'),
+       ($1, $2, 'Tin đã hết hạn', 'INTERNSHIP', 'REMOTE', 'Từ xa',
+        'Tin cũ không tính vào số vị trí đang tuyển.', 'Có kiến thức lập trình cơ bản.', 1, '2000-01-01', 'RECRUITING')`,
+      [activeCompanyId, admin.id],
+    );
+
+    const list = await request(app)
+      .get(`/api/v1/companies?query=${code}&hasRecruitingJobs=true`)
+      .set("Authorization", `Bearer ${studentToken}`);
+    expect(list.status).toBe(200);
+    expect(list.body.meta.totalItems).toBe(1);
+    expect(list.body.data[0]).toMatchObject({
+      id: activeCompanyId,
+      code,
+      recruitingJobCount: 1,
+      industry: "Công nghệ thông tin",
+    });
+    expect(list.body.data[0]).not.toHaveProperty("legalName");
+    expect(list.body.data[0]).not.toHaveProperty("taxCode");
+    expect(list.body.data[0]).not.toHaveProperty("recruiters");
+    expect(list.body.data[0]).not.toHaveProperty("version");
+
+    const detail = await request(app)
+      .get(`/api/v1/companies/${activeCompanyId}`)
+      .set("Authorization", `Bearer ${studentToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data).toMatchObject({ id: activeCompanyId, recruitingJobCount: 1 });
+
+    const hidden = await request(app)
+      .get(`/api/v1/companies/${suspendedCompanyId}`)
+      .set("Authorization", `Bearer ${studentToken}`);
+    expect(hidden.status).toBe(404);
+  });
 
   it("runs creation, manual activation, profile update and suspension rules end to end", async () => {
     const admin = await createAdmin();

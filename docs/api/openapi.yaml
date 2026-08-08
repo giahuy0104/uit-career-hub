@@ -452,6 +452,48 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /companies:
+    get:
+      tags: [Students, Companies]
+      operationId: listActivePartnerCompanies
+      description: Danh bạ dành cho sinh viên; chỉ trả doanh nghiệp đối tác đang hoạt động và không chứa dữ liệu quản trị hoặc tài khoản recruiter.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: industry
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: hasRecruitingJobs
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Danh sách đối tác UIT đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDirectoryListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /companies/{companyId}:
+    get:
+      tags: [Students, Companies]
+      operationId: getActivePartnerCompany
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      responses:
+        '200':
+          description: Hồ sơ công khai của đối tác UIT đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDirectoryEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /companies/me/profile:
     get:
       tags: [Companies]
@@ -1675,6 +1717,33 @@ components:
         recruitingJobCount: { type: integer, minimum: 0 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PartnerDirectoryCompany:
+      type: object
+      required: [id, code, name, industry, companySize, description, website, address, verifiedAt, recruitingJobCount]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        industry: { type: [string, 'null'] }
+        companySize: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'] }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        recruitingJobCount: { type: integer, minimum: 0 }
+    PartnerDirectoryEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/PartnerDirectoryCompany' }
+    PartnerDirectoryListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/PartnerDirectoryCompany' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
     CompanyRecruiter:
       type: object
       required: [userId, email, fullName, isPrimary, status, createdAt]
