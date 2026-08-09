@@ -1,6 +1,8 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import { evaluateDemoReadiness, type DemoReadinessRow } from "./demo-readiness.js";
+import { getDatabaseDirectory } from "./migration-files.js";
 
 describe("evaluateDemoReadiness", () => {
   it("should_report_ready_checks_when_actual_matches_expected", () => {
@@ -26,5 +28,12 @@ describe("evaluateDemoReadiness", () => {
       expected: 1,
       passed: false,
     });
+  });
+
+  it("should_seed_an_isolated_offer_flow_with_another_active_application", async () => {
+    const sql = await readFile(`${getDatabaseDirectory("seeds")}/development.sql`, "utf8");
+
+    expect(sql).toMatch(/00000000-0000-4000-8000-000000008004[\s\S]*?INTERVIEW_INVITED/);
+    expect(sql).toMatch(/00000000-0000-4000-8000-000000008005[\s\S]*?COMPANY_REVIEWING/);
   });
 });

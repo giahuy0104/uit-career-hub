@@ -91,6 +91,14 @@ function formatSubmitted(value) {
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} byte`;
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function getApiError(error) {
   return error?.message || "Không thể kết nối đến hệ thống. Vui lòng thử lại.";
 }
@@ -226,6 +234,31 @@ function Panel({ title, action, children, className = "" }) {
 
 function EmptyHint({ icon: Icon = Info, title, text }) {
   return <div className="empty-hint"><Icon size={30} /><strong>{title}</strong><p>{text}</p></div>;
+}
+
+function OfferDocumentCard({ document, startDate, busy, error, onOpen, compact = false }) {
+  if (!document) return null;
+  return (
+    <div className={`offer-review-card ${compact ? "compact" : ""}`} data-testid="offer-document-card">
+      <span className="offer-review-icon"><FileText /></span>
+      <span className="offer-review-copy">
+        <small>PDF OFFER ĐƯỢC BẢO VỆ</small>
+        <strong>{document.fileName}</strong>
+        <p>{formatBytes(document.fileSizeBytes)}{startDate ? ` · Bắt đầu ${formatDate(startDate)}` : ""}</p>
+      </span>
+      <button
+        type="button"
+        className="secondary-button offer-review-open"
+        disabled={busy}
+        onClick={onOpen}
+        aria-label={`Mở PDF offer ${document.fileName}`}
+      >
+        {busy ? <CircleNotch className="spin" /> : <DownloadSimple />}
+        Mở PDF offer
+      </button>
+      {error && <p className="review-error offer-review-error" role="alert"><Warning />{error}</p>}
+    </div>
+  );
 }
 
 export function StudentExtraScreen({ route, navigate, user, onLogout }) {
@@ -1247,6 +1280,8 @@ function AdminPlacements({ targetApplicationId = null }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [offerDocumentBusy, setOfferDocumentBusy] = useState(false);
+  const [offerDocumentError, setOfferDocumentError] = useState("");
   const load = async () => {
     setLoading(true);
     setError("");
@@ -1290,7 +1325,24 @@ function AdminPlacements({ targetApplicationId = null }) {
     }
   };
 
-  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}<div className="metric-grid four"><MetricCard label="Chờ UIT xác nhận" value={items.length} helper="Sinh viên đã nhận offer" Icon={UserCheck} tone="green"/><MetricCard label="Bắt đầu trong 30 ngày" value={startSoon} helper="Cần hoàn tất đối chiếu" Icon={CalendarCheck}/><MetricCard label="Doanh nghiệp liên quan" value={companies} helper="Đối tác đang chờ phản hồi" Icon={Buildings} tone="purple"/><MetricCard label="Chờ quá 3 ngày" value={overdue} helper="Cần ưu tiên xử lý" Icon={Warning} tone="amber"/></div>{loading ? <Panel title="Xác nhận nơi thực tập"><div className="portal-loading"><CircleNotch className="spin" />Đang tải hàng đợi xác nhận...</div></Panel> : error && !selected ? <Panel title="Xác nhận nơi thực tập"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={() => void load()}>Thử lại</button></div></Panel> : !selected ? <Panel title="Xác nhận nơi thực tập" action={<Status tone="success">0 cần xử lý</Status>}><EmptyHint title="Đã xử lý hết hàng đợi" text="Hiện không có sinh viên đã nhận offer đang chờ UIT xác nhận." /></Panel> : <div className="review-workspace placement-workspace"><Panel title="Chờ xác nhận" action={<Status tone="warning">{items.length} sinh viên</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Chờ lâu nhất</button><button onClick={() => void load()}>Làm mới</button></div><div className="review-list application-review-list">{items.map(item => <button key={item.id} className={selected.id === item.id ? "selected" : ""} onClick={() => { setSelectedId(item.id); setError(""); }}><div className="candidate-initials">{userInitials(item.student.fullName)}</div><div><strong>{item.student.fullName}</strong><small>{item.student.studentCode} · {item.job.title}</small><p>{item.job.company.name} · Nhận offer {formatSubmitted(item.lastTransitionAt)}</p></div><Status tone="success">Đã nhận offer</Status></button>)}</div></Panel><Panel title="Đối chiếu placement" action={<Status tone="success">Chờ UIT xác nhận</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{userInitials(selected.student.fullName)}</div><div><h2>{selected.student.fullName}</h2><p>MSSV {selected.student.studentCode} · {selected.student.faculty}</p><span>Đã nhận offer <strong>{selected.job.title}</strong> tại {selected.job.company.name}</span></div><span className="version-label">Phiên bản {selected.version}</span></div><div className="eligibility-grid placement-offer-grid"><article><small>Quyết định sinh viên</small><strong><CheckCircle />Đã nhận offer</strong></article><article><small>Ngày bắt đầu đề xuất</small><strong>{formatDate(selected.recruitmentResult?.startDate)}</strong></article><article><small>Doanh nghiệp</small><strong>{selected.job.company.name}</strong></article><article><small>Email sinh viên</small><strong>{selected.student.email}</strong></article></div><div className="placement-confirmation-card"><ShieldCheck /><span><strong>Đủ điều kiện xác nhận</strong><small>Offer có kết quả PASS và sinh viên đã phản hồi ACCEPTED. Sau khi xác nhận, đơn này thành Đã nhận việc.</small></span></div><div className="placement-impact inline"><Info /><span><strong>Quy tắc nhiều đơn</strong><small>Chỉ bước xác nhận của UIT mới đóng các đơn khác. Mỗi đơn tự đóng đều có history, lý do và thông báo đến doanh nghiệp liên quan.</small></span></div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button" onClick={() => void load()} disabled={busy}>Làm mới dữ liệu</button><button className="primary-button" onClick={() => setConfirming(true)} disabled={busy}><GraduationCap />Xác nhận nơi thực tập</button></div></Panel></div>}{confirming && selected && <PlacementConfirmationModal application={selected} busy={busy} error={error} close={() => { if (!busy) { setConfirming(false); setError(""); } }} submit={payload => void confirm(payload)} />}</>;
+  const openOfferDocument = async () => {
+    if (!selected || offerDocumentBusy) return;
+    setOfferDocumentBusy(true);
+    setOfferDocumentError("");
+    try {
+      const response = await authorizedRequest(
+        `/uit/applications/${selected.id}/offer-document/download`,
+        { method: "POST" },
+      );
+      window.location.assign(response.data.downloadUrl);
+    } catch (requestError) {
+      setOfferDocumentError(getApiError(requestError));
+    } finally {
+      setOfferDocumentBusy(false);
+    }
+  };
+
+  return <>{message && <div className="toast"><CheckCircle weight="fill" />{message}</div>}<div className="metric-grid four"><MetricCard label="Chờ UIT xác nhận" value={items.length} helper="Sinh viên đã nhận offer" Icon={UserCheck} tone="green"/><MetricCard label="Bắt đầu trong 30 ngày" value={startSoon} helper="Cần hoàn tất đối chiếu" Icon={CalendarCheck}/><MetricCard label="Doanh nghiệp liên quan" value={companies} helper="Đối tác đang chờ phản hồi" Icon={Buildings} tone="purple"/><MetricCard label="Chờ quá 3 ngày" value={overdue} helper="Cần ưu tiên xử lý" Icon={Warning} tone="amber"/></div>{loading ? <Panel title="Xác nhận nơi thực tập"><div className="portal-loading"><CircleNotch className="spin" />Đang tải hàng đợi xác nhận...</div></Panel> : error && !selected ? <Panel title="Xác nhận nơi thực tập"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={() => void load()}>Thử lại</button></div></Panel> : !selected ? <Panel title="Xác nhận nơi thực tập" action={<Status tone="success">0 cần xử lý</Status>}><EmptyHint title="Đã xử lý hết hàng đợi" text="Hiện không có sinh viên đã nhận offer đang chờ UIT xác nhận." /></Panel> : <div className="review-workspace placement-workspace"><Panel title="Chờ xác nhận" action={<Status tone="warning">{items.length} sinh viên</Status>} className="review-list-panel"><div className="review-filter"><button className="active">Chờ lâu nhất</button><button onClick={() => void load()}>Làm mới</button></div><div className="review-list application-review-list">{items.map(item => <button key={item.id} className={selected.id === item.id ? "selected" : ""} onClick={() => { setSelectedId(item.id); setError(""); setOfferDocumentError(""); }}><div className="candidate-initials">{userInitials(item.student.fullName)}</div><div><strong>{item.student.fullName}</strong><small>{item.student.studentCode} · {item.job.title}</small><p>{item.job.company.name} · Nhận offer {formatSubmitted(item.lastTransitionAt)}</p></div><Status tone="success">Đã nhận offer</Status></button>)}</div></Panel><Panel title="Đối chiếu placement" action={<Status tone="success">Chờ UIT xác nhận</Status>} className="review-detail-panel"><div className="student-review-heading"><div className="large-avatar small">{userInitials(selected.student.fullName)}</div><div><h2>{selected.student.fullName}</h2><p>MSSV {selected.student.studentCode} · {selected.student.faculty}</p><span>Đã nhận offer <strong>{selected.job.title}</strong> tại {selected.job.company.name}</span></div><span className="version-label">Phiên bản {selected.version}</span></div><div className="eligibility-grid placement-offer-grid"><article><small>Quyết định sinh viên</small><strong><CheckCircle />Đã nhận offer</strong></article><article><small>Ngày bắt đầu đề xuất</small><strong>{formatDate(selected.recruitmentResult?.startDate)}</strong></article><article><small>Doanh nghiệp</small><strong>{selected.job.company.name}</strong></article><article><small>Email sinh viên</small><strong>{selected.student.email}</strong></article></div>{selected.recruitmentResult?.offerDocument ? <div className="placement-offer-document"><OfferDocumentCard document={selected.recruitmentResult.offerDocument} startDate={selected.recruitmentResult.startDate} busy={offerDocumentBusy} error={offerDocumentError} onOpen={() => void openOfferDocument()} /></div> : <div className="placement-offer-missing"><Info /><span><strong>Offer không có tệp PDF</strong><small>Doanh nghiệp đã ghi nhận kết quả trực tiếp trên hệ thống. UIT vẫn có thể tiếp tục đối chiếu thông tin.</small></span></div>}<div className="placement-confirmation-card"><ShieldCheck /><span><strong>Đủ điều kiện xác nhận</strong><small>Offer có kết quả PASS và sinh viên đã phản hồi ACCEPTED. Sau khi xác nhận, đơn này thành Đã nhận việc.</small></span></div><div className="placement-impact inline"><Info /><span><strong>Quy tắc nhiều đơn</strong><small>Chỉ bước xác nhận của UIT mới đóng các đơn khác. Mỗi đơn tự đóng đều có history, lý do và thông báo đến doanh nghiệp liên quan.</small></span></div>{error && <p className="review-error"><Warning />{error}</p>}<div className="review-actions"><button className="secondary-button" onClick={() => void load()} disabled={busy}>Làm mới dữ liệu</button><button className="primary-button" onClick={() => setConfirming(true)} disabled={busy}><GraduationCap />Xác nhận nơi thực tập</button></div></Panel></div>}{confirming && selected && <PlacementConfirmationModal application={selected} busy={busy} error={error} close={() => { if (!busy) { setConfirming(false); setError(""); } }} submit={payload => void confirm(payload)} />}</>;
 }
 
 function AdminScheduler() {
@@ -1465,8 +1517,11 @@ function CompanyCandidateDetailModal({
   application,
   busyDocumentId,
   documentError,
+  offerDocumentBusy,
+  offerDocumentError,
   close,
   downloadDocument,
+  downloadOfferDocument,
 }) {
   const status = companyCandidateStatusCopy[application.status] || [
     application.status,
@@ -1478,7 +1533,7 @@ function CompanyCandidateDetailModal({
         className="modal portal-modal candidate-detail-modal"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="modal-close" onClick={close}>
+        <button className="modal-close" onClick={close} disabled={Boolean(busyDocumentId) || offerDocumentBusy}>
           <X />
         </button>
         <div className="candidate-modal-heading">
@@ -1546,6 +1601,23 @@ function CompanyCandidateDetailModal({
             </p>
           )}
         </section>
+        {application.recruitmentResult?.outcome === "PASS" && (
+          <section className="candidate-offer-document">
+            <h3>Kết quả & offer</h3>
+            {application.recruitmentResult.offerDocument ? (
+              <OfferDocumentCard
+                compact
+                document={application.recruitmentResult.offerDocument}
+                startDate={application.recruitmentResult.startDate}
+                busy={offerDocumentBusy}
+                error={offerDocumentError}
+                onOpen={() => void downloadOfferDocument(application)}
+              />
+            ) : (
+              <p className="candidate-offer-empty">Kết quả đạt được ghi nhận không kèm tệp PDF offer.</p>
+            )}
+          </section>
+        )}
         <section className="candidate-timeline">
           <h3>Lịch sử xử lý</h3>
           {application.timeline.map((event, index) => {
@@ -1665,6 +1737,8 @@ function CompanyCandidates({ targetApplicationId = null }) {
   const [busyId, setBusyId] = useState("");
   const [busyDocumentId, setBusyDocumentId] = useState("");
   const [documentError, setDocumentError] = useState("");
+  const [busyOfferApplicationId, setBusyOfferApplicationId] = useState("");
+  const [offerDocumentError, setOfferDocumentError] = useState("");
   const [detail, setDetail] = useState(null);
   const [decision, setDecision] = useState(null);
   const load = async () => {
@@ -1702,6 +1776,22 @@ function CompanyCandidates({ targetApplicationId = null }) {
       setDocumentError(getApiError(requestError));
     } finally {
       setBusyDocumentId("");
+    }
+  };
+  const downloadOfferDocument = async application => {
+    if (busyOfferApplicationId) return;
+    setBusyOfferApplicationId(application.id);
+    setOfferDocumentError("");
+    try {
+      const response = await authorizedRequest(
+        `/companies/me/applications/${application.id}/offer-document/download`,
+        { method: "POST" },
+      );
+      window.location.assign(response.data.downloadUrl);
+    } catch (requestError) {
+      setOfferDocumentError(getApiError(requestError));
+    } finally {
+      setBusyOfferApplicationId("");
     }
   };
   const startReview = async application => {
@@ -1793,12 +1883,12 @@ function CompanyCandidates({ targetApplicationId = null }) {
             return <section key={column.key}><header><h2>{column.label}</h2><span>{candidatesInStage.length}</span></header><div>{!candidatesInStage.length && <p className="candidate-empty">Chưa có hồ sơ</p>}{candidatesInStage.map(application => {
               const status = companyCandidateStatusCopy[application.status] || [application.status, "neutral"];
               const busy = busyId === application.id;
-              return <article key={application.id}><div className="candidate-card-heading"><span className="candidate-initials">{userInitials(application.student.fullName)}</span><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.student.major}</small></div></div><p>{application.job.title}</p><div className="candidate-meta"><span>GPA <b>{application.student.gpa ?? "—"}</b></span><Status tone={status[1]}>{status[0]}</Status></div><small className="candidate-received">Cập nhật {formatSubmitted(application.lastTransitionAt)}</small><div className={`candidate-card-actions ${application.status === "INTERVIEW_INVITED" ? "result-actions" : ""}`}><button onClick={() => setDetail(application)}><Eye />Xem</button>{application.status === "FORWARDED_TO_COMPANY" && <button className="primary wide" disabled={busy} onClick={() => void startReview(application)}>{busy ? <CircleNotch className="spin" /> : <ArrowRight />}Bắt đầu xem</button>}{application.status === "COMPANY_REVIEWING" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "reject", application }); }}>Không phù hợp</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "interview", application }); }}><CalendarCheck />Mời PV</button></>}{application.status === "INTERVIEW_INVITED" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "result-fail", application }); }}>Không đạt</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "result-pass", application }); }}><CheckCircle />Đạt & offer</button></>}</div></article>;
+              return <article key={application.id}><div className="candidate-card-heading"><span className="candidate-initials">{userInitials(application.student.fullName)}</span><div><strong>{application.student.fullName}</strong><small>{application.student.studentCode} · {application.student.major}</small></div></div><p>{application.job.title}</p><div className="candidate-meta"><span>GPA <b>{application.student.gpa ?? "—"}</b></span><Status tone={status[1]}>{status[0]}</Status></div><small className="candidate-received">Cập nhật {formatSubmitted(application.lastTransitionAt)}</small><div className={`candidate-card-actions ${application.status === "INTERVIEW_INVITED" ? "result-actions" : ""}`}><button onClick={() => { setDocumentError(""); setOfferDocumentError(""); setDetail(application); }}><Eye />Xem</button>{application.status === "FORWARDED_TO_COMPANY" && <button className="primary wide" disabled={busy} onClick={() => void startReview(application)}>{busy ? <CircleNotch className="spin" /> : <ArrowRight />}Bắt đầu xem</button>}{application.status === "COMPANY_REVIEWING" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "reject", application }); }}>Không phù hợp</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "interview", application }); }}><CalendarCheck />Mời PV</button></>}{application.status === "INTERVIEW_INVITED" && <><button className="reject" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "result-fail", application }); }}>Không đạt</button><button className="primary" disabled={busy} onClick={() => { setError(""); setDecision({ mode: "result-pass", application }); }}><CheckCircle />Đạt & offer</button></>}</div></article>;
             })}</div></section>;
           })}
         </div>
       )}
-      {detail && <CompanyCandidateDetailModal application={detail} busyDocumentId={busyDocumentId} documentError={documentError} downloadDocument={downloadApplicationDocument} close={() => { if (!busyDocumentId) { setDetail(null); setDocumentError(""); } }} />}
+      {detail && <CompanyCandidateDetailModal application={detail} busyDocumentId={busyDocumentId} documentError={documentError} offerDocumentBusy={busyOfferApplicationId === detail.id} offerDocumentError={offerDocumentError} downloadDocument={downloadApplicationDocument} downloadOfferDocument={downloadOfferDocument} close={() => { if (!busyDocumentId && !busyOfferApplicationId) { setDetail(null); setDocumentError(""); setOfferDocumentError(""); } }} />}
       {decision && <CompanyCandidateDecisionModal mode={decision.mode} application={decision.application} interviewerName={user?.displayName} busy={busyId === decision.application.id} error={error} close={() => { if (!busyId) { setDecision(null); setError(""); } }} submit={payload => void decide(payload)} />}
     </>
   );
