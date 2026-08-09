@@ -17,6 +17,7 @@
     "db:seed": "pnpm --dir backend db:seed",
     "db:demo:reset": "pnpm --dir backend db:demo:reset",
     "db:demo:check": "pnpm --dir backend db:demo:check",
+    "smoke:offer-flow": "node scripts/smoke-offer-flow.mjs",
     "db:setup": "pnpm db:migrate && pnpm db:seed",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",

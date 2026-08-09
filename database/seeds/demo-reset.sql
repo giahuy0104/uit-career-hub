@@ -70,6 +70,11 @@ DELETE FROM recruitment_results
 WHERE application_id IN (SELECT id FROM demo_application_ids)
    OR decided_by_user_id IN (SELECT id FROM demo_user_ids);
 
+DELETE FROM offer_document_uploads
+WHERE application_id IN (SELECT id FROM demo_application_ids)
+   OR created_by_user_id IN (SELECT id FROM demo_user_ids)
+   OR company_id IN (SELECT id FROM demo_company_ids);
+
 DELETE FROM interviews
 WHERE application_id IN (SELECT id FROM demo_application_ids)
    OR created_by_user_id IN (SELECT id FROM demo_user_ids);

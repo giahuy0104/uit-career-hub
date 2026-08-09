@@ -33,6 +33,7 @@ Chuẩn bị ba cửa sổ trình duyệt hoặc ba profile riêng để tránh 
 |---|---|---|---|
 | UIT Admin | `admin.career@uit.edu.vn` | `Admin@12345` | Duyệt tin, xác nhận nơi thực tập |
 | Sinh viên | `20521067@student.uit.edu.vn` | `Student@12345` | Theo dõi ba đơn, phản hồi offer |
+| Sinh viên phụ | `21520881@student.uit.edu.vn` | `Student@12345` | Nhận offer vừa được doanh nghiệp tải PDF lên |
 | VNG recruiter | `recruiter@vng.example` | `Company@12345` | Minh họa doanh nghiệp đã gửi offer |
 | FPT recruiter | `recruiter@fpt.example` | `Company@12345` | Minh họa đơn tự đóng sau khi sinh viên nhận việc khác |
 
@@ -46,7 +47,31 @@ Sinh viên `20521067` có ba đơn:
 
 Ngoài ra có một tin tuyển dụng đang chờ UIT duyệt và cả UIT, sinh viên, doanh nghiệp đều có thông báo chưa đọc.
 
-## 4. Luồng trình bày 8–10 phút
+Checkpoint còn có hai hồ sơ của sinh viên `21520881`: một đơn ở `INTERVIEW_INVITED` tại VNG và một đơn ở `COMPANY_REVIEWING` tại FPT. Cặp hồ sơ này dành riêng cho việc kiểm tra PDF offer và quy tắc tự đóng đơn khác, không làm thay đổi ba đơn của sinh viên chính `20521067`.
+
+## 4. Kiểm tra PDF offer trên Cloudflare R2
+
+Thực hiện phần này trước luồng bảo vệ chính hoặc dùng làm phần mở rộng khi giảng viên hỏi về lưu trữ tệp:
+
+1. Đăng nhập VNG recruiter, mở **Ứng viên** và tìm sinh viên `21520881` ở cột **Phỏng vấn**.
+2. Chọn **Đạt & offer**, nhập ngày bắt đầu và chọn một PDF nhỏ hơn 10 MB.
+3. Sau khi gửi, mở lại chi tiết ứng viên và chọn **Mở PDF offer**.
+4. Đăng nhập sinh viên `21520881`, mở đơn vừa nhận, mở PDF rồi chọn nhận offer.
+5. Đăng nhập UIT Admin, vào **Theo dõi kết quả**, mở cùng PDF để đối chiếu trước khi xác nhận nơi thực tập.
+
+Kết quả mong đợi: cả ba vai trò đều nhận URL tải xuống ngắn hạn; client không nhìn thấy storage key hoặc khóa R2. Nếu upload bị trình duyệt chặn nhưng API vẫn hoạt động, kiểm tra CORS bucket có đúng domain frontend hiện tại hay không.
+
+Có thể chạy smoke test HTTP + Neon + R2 tự động trên môi trường development sau khi backend đã khởi động:
+
+```powershell
+$env:E2E_CONFIRM_DEMO_MUTATION = "true"
+pnpm smoke:offer-flow
+$env:E2E_CONFIRM_DEMO_MUTATION = "false"
+```
+
+Script bị khóa mặc định, chỉ chạy với host local. Muốn trỏ đến một môi trường demo từ xa phải chủ động đặt thêm `E2E_ALLOW_REMOTE=true`; tuyệt đối không dùng với production. Sau khi chạy xong, dùng `db:demo:reset` để phục hồi checkpoint. Khi R2 được bật trong cùng môi trường, reset cũng xóa các object offer demo tương ứng để không để lại file mồ côi.
+
+## 5. Luồng trình bày 8–10 phút
 
 ### 0:00–0:45 — Giới thiệu phạm vi
 
@@ -102,13 +127,13 @@ Kết quả mong đợi trong cùng một transaction:
   còn email/FCM và retry nâng cao là phần phát triển tiếp theo.
 - Hướng phát triển: thêm trường khác bằng cấu hình tenant, không thay đổi lõi quy trình.
 
-## 5. Phương án dự phòng
+## 6. Phương án dự phòng
 
 - Nếu dữ liệu khác checkpoint: dừng backend, chạy lại `db:demo:reset` rồi `db:demo:check`.
 - Nếu một cửa sổ bị sai quyền: đăng xuất hoặc xóa cookie, không đổi dữ liệu trực tiếp trong Neon Console.
 - Nếu mạng chậm: ưu tiên phần sinh viên nhận offer → UIT xác nhận → hai đơn còn lại tự rút; đây là điểm nghiệp vụ quan trọng nhất.
 - Không chỉnh trạng thái bằng SQL trong lúc demo vì sẽ bỏ qua history, audit và notification.
 
-## 6. Luồng đầy đủ để quay video hoặc demo dài
+## 7. Luồng đầy đủ để quay video hoặc demo dài
 
 Khi có 15–20 phút, có thể chạy từ đầu: doanh nghiệp tạo tin → UIT duyệt → sinh viên ứng tuyển hai bước → UIT chuyển hồ sơ → doanh nghiệp sàng lọc/đặt lịch/phỏng vấn → doanh nghiệp gửi offer → sinh viên nhận offer → UIT xác nhận nơi thực tập. Checkpoint ngắn ở trên phù hợp hơn cho phần bảo vệ trực tiếp.

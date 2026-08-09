@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-import { resetDemoDatabase } from "./demo-reset.js";
+import { cleanupDemoOfferObjects, resetDemoDatabase } from "./demo-reset.js";
 import { getDatabaseDirectory } from "./migration-files.js";
 
 describe("resetDemoDatabase", () => {
@@ -24,5 +24,37 @@ describe("resetDemoDatabase", () => {
       expect(statement).toMatch(/\bWHERE\b/i);
     }
     expect(sql).not.toMatch(/^\s*(?:TRUNCATE|DROP)\s/im);
+  });
+
+  it("should_delete_offer_upload_records_before_demo_applications", async () => {
+    const sql = await readFile(`${getDatabaseDirectory("seeds")}/demo-reset.sql`, "utf8");
+
+    expect(sql.indexOf("DELETE FROM offer_document_uploads")).toBeGreaterThan(
+      sql.indexOf("DELETE FROM recruitment_results"),
+    );
+    expect(sql.indexOf("DELETE FROM offer_document_uploads")).toBeLessThan(
+      sql.indexOf("DELETE FROM applications"),
+    );
+  });
+
+  it("should_cleanup_every_demo_offer_object_when_storage_is_enabled", async () => {
+    const deleted: string[] = [];
+    const logs: string[] = [];
+    const objectStorage = {
+      createUploadUrl: async () => "",
+      createDownloadUrl: async () => "",
+      headObject: async () => null,
+      readObjectPrefix: async () => new Uint8Array(),
+      deleteObject: async (key: string) => { deleted.push(key); },
+    };
+
+    await cleanupDemoOfferObjects(
+      ["offers/demo/one.pdf", "offers/demo/two.pdf"],
+      objectStorage,
+      (message) => logs.push(message),
+    );
+
+    expect(deleted).toEqual(["offers/demo/one.pdf", "offers/demo/two.pdf"]);
+    expect(logs).toEqual(["Đã dọn 2 object offer demo trên R2."]);
   });
 });
