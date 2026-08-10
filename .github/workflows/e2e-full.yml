@@ -1,28 +1,22 @@
-name: CI
+name: Playwright full E2E
 
 on:
-  push:
-    branches:
-      - develop
-      - main
-  pull_request:
-    branches:
-      - develop
-      - main
   workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * 6"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: playwright-full-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  quality:
-    name: Typecheck, test and build
+  full-e2e:
+    name: Happy flow and critical branches
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     env:
       CI: true
@@ -64,31 +58,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck backend
-        run: pnpm typecheck
-
-      - name: Validate OpenAPI specification
-        run: pnpm openapi:validate
-
-      - name: Run unit and integration tests
-        run: pnpm test
-
-      - name: Build frontend and backend
-        run: pnpm build
-
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run Playwright portal smoke tests
-        run: pnpm e2e:smoke
+      - name: Run full Playwright suite
+        run: pnpm e2e:full
 
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-smoke-${{ github.run_id }}
+          name: playwright-full-${{ github.run_id }}
           path: |
             playwright-report/
             test-results/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 30

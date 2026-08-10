@@ -37,6 +37,7 @@ const environmentSchema = z.object({
     .default("postgresql://uit_user:uit_local_password@localhost:5432/uit_career_hub"),
   DATABASE_URL_DIRECT: optionalDatabaseUrl,
   DATABASE_URL_TEST: optionalDatabaseUrl,
+  DATABASE_URL_E2E: optionalDatabaseUrl,
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(10),
   JWT_ACCESS_SECRET: z.string().min(32).optional(),
   JWT_ISSUER: z.string().min(1).default("uit-career-hub-api"),
@@ -48,6 +49,7 @@ const environmentSchema = z.object({
   AUTH_COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   UIT_EMAIL_DOMAINS: z.string().min(1).default("student.uit.edu.vn,uit.edu.vn"),
   ALLOW_DEMO_RESET: optionalBoolean.default(false),
+  ALLOW_E2E_RESET: optionalBoolean.default(false),
   CRON_SECRET: optionalSecret,
   EMAIL_ENABLED: optionalBoolean.default(false),
   RESEND_API_KEY: z.preprocess(
@@ -134,6 +136,9 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
   if (parsed.DATABASE_URL_TEST) {
     assertPostgresUrl(parsed.DATABASE_URL_TEST, "DATABASE_URL_TEST");
   }
+  if (parsed.DATABASE_URL_E2E) {
+    assertPostgresUrl(parsed.DATABASE_URL_E2E, "DATABASE_URL_E2E");
+  }
 
   return {
     nodeEnv: parsed.NODE_ENV,
@@ -142,6 +147,7 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     databaseUrl: parsed.DATABASE_URL,
     databaseUrlDirect: parsed.DATABASE_URL_DIRECT,
     databaseUrlTest: parsed.DATABASE_URL_TEST,
+    databaseUrlE2e: parsed.DATABASE_URL_E2E,
     databasePoolMax: parsed.DATABASE_POOL_MAX,
     jwtAccessSecret,
     jwtIssuer: parsed.JWT_ISSUER,
@@ -153,6 +159,7 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     authCookieSameSite: parsed.AUTH_COOKIE_SAME_SITE,
     uitEmailDomains,
     allowDemoReset: parsed.ALLOW_DEMO_RESET,
+    allowE2eReset: parsed.ALLOW_E2E_RESET,
     cronSecret: parsed.CRON_SECRET,
     emailEnabled: parsed.EMAIL_ENABLED,
     resendApiKey: parsed.RESEND_API_KEY,

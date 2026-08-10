@@ -18,6 +18,7 @@ uit-career-hub/
 ├── docs/releases/   Checklist, phạm vi và ghi chú phát hành
 ├── docs/deployment/ Cấu hình Vercel và Neon production
 ├── docs/security/   Ma trận phân quyền và ghi chú hardening
+├── docs/testing/    Hướng dẫn Playwright E2E và database kiểm thử riêng
 └── docker-compose.yml (PostgreSQL local tùy chọn)
 ```
 
@@ -101,6 +102,8 @@ pnpm openapi:validate
 
 Nếu `DATABASE_URL_TEST` để trống, các integration test cần database sẽ được skip có chủ đích; unit test và health route test vẫn chạy.
 
+Playwright dùng `DATABASE_URL_E2E` tách biệt và không fallback sang database runtime. Xem cấu hình an toàn cùng lệnh chạy smoke/full suite tại `docs/testing/playwright-e2e.md`.
+
 ### GitHub Actions CI
 
 Workflow `.github/workflows/ci.yml` tự chạy khi có push hoặc pull request vào `develop` và `main`. Mỗi lượt CI sẽ:
@@ -108,6 +111,7 @@ Workflow `.github/workflows/ci.yml` tự chạy khi có push hoặc pull request
 1. Cài đúng pnpm 11.16.0 và Node.js 24 theo cấu hình của dự án.
 2. Khởi tạo PostgreSQL 16 tạm thời trên GitHub runner, không dùng thông tin kết nối Neon.
 3. Chạy typecheck, kiểm tra OpenAPI, toàn bộ unit/integration test và build frontend/backend.
+4. Cài Chromium rồi chạy smoke đăng nhập/dashboard cho cả ba portal bằng database E2E tạm thời riêng.
 
 Có thể chạy thủ công trong tab **Actions → CI → Run workflow**. Chỉ merge pull request khi job `Typecheck, test and build` đã thành công.
 
@@ -141,6 +145,7 @@ pnpm db:down
 - `docs/domain/application-state-machine.md`
 - `docs/api/openapi.yaml`
 - `docs/security/rbac-matrix.md`
+- `docs/testing/playwright-e2e.md`
 - `docs/demo/e2e-defense-script.md`
 - `docs/handoff/CODEX_NEXT_PHASE.md`
 - `docs/releases/v0.1.0.md`
