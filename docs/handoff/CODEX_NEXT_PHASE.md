@@ -96,7 +96,7 @@ uit-career-hub/
 │       ├── dashboard/        Số liệu ba vai trò
 │       └── storage/          Cloudflare R2
 ├── database/
-│   ├── migrations/           `0001` đến `0013`
+│   ├── migrations/           `0001` đến `0015`
 │   └── seeds/                Dữ liệu development/demo
 ├── docs/api/openapi.yaml     Hợp đồng API
 ├── docs/domain/              ERD và state machine
@@ -138,16 +138,17 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 | Cron tổng hợp | Đã hiện thực | Tổng hợp hàng đợi UIT/doanh nghiệp theo ngày, chống gửi trùng |
 | Email | Một phần | Outbox/provider/retry đã có; chưa mặc định bật Resend production |
 | Dashboard | Hoàn thành MVP | Ba dashboard đọc PostgreSQL thật và có RBAC |
+| Báo cáo UIT | Hoàn thành CSV/Excel | Lọc theo kỳ/khoa/ngành/doanh nghiệp/trạng thái; export có audit và giới hạn 10.000 dòng |
 | Deploy | Hoàn thành | Frontend/backend Vercel, Neon và R2 public happy flow đã test |
-| Test hiện tại | Đạt | 187 backend tests; 4 frontend hosting tests; typecheck/build/OpenAPI đạt |
+| Test hiện tại | Đạt | 213 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
 
 ## 7. Phần chưa hoàn thành hoặc mới ở mức MVP
 
 ### 7.1. Khoảng trống quan trọng trước khi gọi là đồ án hoàn chỉnh
 
-- Chưa có bộ E2E browser tự động cho luồng ba vai trò. Kiểm tra happy flow hiện chủ yếu bằng
-  integration test backend và demo thủ công.
-- Frontend chưa có test component/interaction đầy đủ. Bốn frontend test hiện tại chủ yếu kiểm tra
+- Playwright đã tự động hóa đăng nhập ba vai trò, happy flow xuyên suốt, các nhánh quan trọng,
+  ownership, taxonomy và báo cáo/export; bộ smoke chạy trên PR, bộ full chạy theo lịch/thủ công.
+- Frontend chưa có test component/interaction đầy đủ. Chín frontend test hiện tại chủ yếu kiểm tra
   build/hosting, không chứng minh toàn bộ hành vi UI.
 - `App.jsx` và `RolePortals.jsx` đang lớn, chứa nhiều màn hình và cần tách component/module trước
   khi nhóm tiếp tục mở rộng.
@@ -155,7 +156,7 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
   còn được dùng.
 - Chưa audit accessibility đầy đủ: keyboard, focus visible, screen reader, zoom 200%, contrast.
 - Cần kiểm tra responsive thực tế ở desktop, tablet và mobile.
-- Bundle frontend còn cảnh báo chunk lớn hơn 500 kB; cần code splitting hợp lý.
+- Bundle đã tách theo portal và build hiện không còn cảnh báo chunk lớn hơn 500 kB; tiếp tục giữ lazy loading khi thêm portal mới.
 
 ### 7.2. Nghiệp vụ còn thiếu so với đề xuất ban đầu
 
@@ -163,7 +164,7 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 - Quản trị danh mục ngành nghề/kỹ năng đã có migration, API UIT-only, audit/optimistic lock,
   màn UIT hoàn chỉnh và Playwright E2E; chưa nối bộ chọn taxonomy vào form tin tuyển dụng.
 - Chưa có quản lý vòng đời thực tập sau `HIRED`: bắt đầu, đang thực tập, hoàn thành, đánh giá.
-- Chưa có báo cáo nâng cao và xuất Excel/PDF theo khoa, ngành, doanh nghiệp, kỳ tuyển dụng.
+- Báo cáo hồ sơ theo khoa, ngành, doanh nghiệp và kỳ tuyển dụng đã có CSV/Excel; PDF chưa làm vì là phần tùy chọn sau ưu tiên chính.
 - Chưa có saved jobs, lịch sử xem tin và nhắc hạn nộp hoàn chỉnh.
 - Chưa có màn SchedulerLog, cấu hình ngưỡng, resend log và theo dõi delivered/bounced.
 - Chưa tích hợp FCM.
@@ -213,8 +214,8 @@ Mục tiêu: thay việc bấm tay bằng bằng chứng có thể chạy lại.
 
 Ưu tiên theo thứ tự:
 
-1. Quản lý danh mục ngành nghề/kỹ năng cho UIT.
-2. Báo cáo có bộ lọc và xuất CSV/Excel; PDF chỉ làm nếu còn thời gian.
+1. Quản lý danh mục ngành nghề/kỹ năng cho UIT. **Đã hoàn thành.**
+2. Báo cáo có bộ lọc và xuất CSV/Excel; PDF chỉ làm nếu còn thời gian. **Đã hoàn thành CSV/Excel.**
 3. Mở rộng placement thành vòng đời thực tập: `HIRED → STARTED → COMPLETED`, có actor/history.
 4. Bổ sung đánh giá doanh nghiệp hoặc xác nhận hoàn thành thực tập nếu phù hợp quy trình thật.
 5. Chỉ nghiên cứu UIT SSO sau khi có thông tin tích hợp chính thức; không giả lập SSO production.
@@ -261,8 +262,8 @@ rồi bỏ backend.
 
 ### P2 — Làm sau P1
 
-- Category/skill admin.
-- Báo cáo và export.
+- Category/skill admin. **Đã hoàn thành.**
+- Báo cáo và export CSV/Excel. **Đã hoàn thành; PDF tùy chọn chưa làm.**
 - Vòng đời thực tập sau `HIRED`.
 - Bundle splitting và frontend test coverage.
 - Resend production/SchedulerLog nếu nhóm cần trình bày vận hành.
@@ -339,6 +340,7 @@ Một tính năng chỉ được coi là hoàn thành khi đáp ứng đủ ph�
 - ERD: `docs/domain/erd.md`
 - OpenAPI: `docs/api/openapi.yaml`
 - RBAC: `docs/security/rbac-matrix.md`
+- Reporting: `docs/domain/reporting.md`
 - Vercel/Neon: `docs/deployment/vercel-neon.md`
 - Cloudflare R2: `docs/deployment/cloudflare-r2.md`
 - Quy ước nhánh: `docs/branching.md` và `CONTRIBUTING.md`

@@ -31,6 +31,9 @@ import { JobService } from "./modules/jobs/job.service.js";
 import { NotificationRepository, type NotificationDatabase } from "./modules/notifications/notification.repository.js";
 import { createNotificationRouter } from "./modules/notifications/notification.routes.js";
 import { NotificationService } from "./modules/notifications/notification.service.js";
+import { ReportingRepository, type ReportingDatabase } from "./modules/reporting/reporting.repository.js";
+import { createReportingRouter } from "./modules/reporting/reporting.routes.js";
+import { ReportingService } from "./modules/reporting/reporting.service.js";
 import { DailyPendingRepository, type DailyPendingDatabase } from "./modules/scheduler/daily-pending.repository.js";
 import { createDailyPendingRouter } from "./modules/scheduler/daily-pending.routes.js";
 import { DailyPendingService } from "./modules/scheduler/daily-pending.service.js";
@@ -62,6 +65,8 @@ type AppDependencies = {
   dailyPendingService?: DailyPendingService;
   taxonomyDatabase?: TaxonomyDatabase;
   taxonomyService?: TaxonomyService;
+  reportingDatabase?: ReportingDatabase;
+  reportingService?: ReportingService;
   cronSecret?: string;
   objectStorage?: ObjectStorage;
 };
@@ -74,7 +79,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     app.set("trust proxy", 1);
   }
   app.use(helmet());
-  app.use(cors({ origin: env.corsOrigin, credentials: true }));
+  app.use(cors({
+    origin: env.corsOrigin,
+    credentials: true,
+    exposedHeaders: ["Content-Disposition", "X-Report-Row-Count"],
+  }));
   app.use(requestContext);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
@@ -151,9 +160,14 @@ export function createApp(dependencies: AppDependencies = {}) {
     new TaxonomyService(
       new TaxonomyRepository(dependencies.taxonomyDatabase ?? databasePool),
     );
+  const reportingService =
+    dependencies.reportingService ??
+    new ReportingService(
+      new ReportingRepository(dependencies.reportingDatabase ?? databasePool),
+    );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.13.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.14.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
@@ -167,6 +181,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
   app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
   app.use("/api/v1", createTaxonomyRouter(taxonomyService, tokenService));
+  app.use("/api/v1", createReportingRouter(reportingService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

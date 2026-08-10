@@ -52,7 +52,7 @@ Quy ước:
 | Theo dõi kết quả | Live | placement queue, offer download, confirm placement | Bảo toàn transaction nhiều đơn của happy flow. |
 | Nhắc việc & tác vụ | Ẩn khỏi portal | Chưa có API quản trị | Không còn xuất hiện trong điều hướng bảo vệ; chỉ mở lại khi có API và dữ liệu vận hành thật. |
 | Thông báo | Live | `/notifications/**` | Dùng inbox chung theo ownership. |
-| Báo cáo & thống kê | Ẩn khỏi portal | Chưa có API báo cáo/export | Không còn xuất hiện trong điều hướng bảo vệ; không trình bày số liệu/CTA mẫu như chức năng hoàn chỉnh. |
+| Báo cáo tuyển dụng | Live | `GET /uit/reports/applications`, `POST /uit/reports/applications/exports` | Lọc dữ liệu thật theo kỳ/khoa/ngành/doanh nghiệp/trạng thái và xuất CSV/XLSX có audit. |
 | Tài khoản & nhật ký | Ẩn khỏi portal | Chưa có API admin access/audit UI | Không còn xuất hiện trong điều hướng bảo vệ; route không hợp lệ tự quay về Tổng quan. |
 
 ### Doanh nghiệp

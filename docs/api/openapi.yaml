@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.0.0
+  version: 1.1.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -16,6 +16,7 @@ tags:
   - name: Companies
   - name: UIT
   - name: Taxonomy
+  - name: Reports
   - name: Interviews
   - name: Notifications
   - name: Scheduler
@@ -1227,6 +1228,87 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /uit/reports/applications:
+    get:
+      tags: [UIT, Reports]
+      operationId: getUitApplicationReport
+      summary: Tổng hợp hồ sơ ứng tuyển toàn trường theo bộ lọc
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: fromDate
+          in: query
+          description: Ngày ứng tuyển bắt đầu theo múi giờ Asia/Ho_Chi_Minh
+          schema: { type: string, format: date }
+        - name: toDate
+          in: query
+          description: Ngày ứng tuyển kết thúc, tính trọn ngày theo múi giờ Asia/Ho_Chi_Minh
+          schema: { type: string, format: date }
+        - name: faculty
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: major
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: cohort
+          in: query
+          schema: { type: string, maxLength: 40 }
+        - name: companyId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ApplicationStatus' }
+        - name: opportunityType
+          in: query
+          schema: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] }
+        - name: query
+          in: query
+          description: Tìm theo MSSV, họ tên, tin tuyển dụng hoặc doanh nghiệp
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Dữ liệu trang hiện tại, tổng hợp trên toàn bộ kết quả và tùy chọn bộ lọc
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationReportEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /uit/reports/applications/exports:
+    post:
+      tags: [UIT, Reports]
+      operationId: exportUitApplicationReport
+      summary: Xuất báo cáo hồ sơ theo đúng bộ lọc hiện tại
+      description: Tạo CSV UTF-8 hoặc workbook XLSX tối đa 10.000 dòng và ghi audit trong cùng transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApplicationReportExportRequest' }
+      responses:
+        '200':
+          description: Tệp báo cáo; tên tệp nằm trong Content-Disposition và số dòng nằm trong X-Report-Row-Count
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Report-Row-Count:
+              schema: { type: integer, minimum: 0 }
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422':
+          description: Kết quả vượt giới hạn 10.000 dòng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
   /uit/companies:
     get:
       tags: [UIT]
@@ -2036,6 +2118,110 @@ components:
         data:
           type: array
           items: { $ref: '#/components/schemas/Skill' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    ApplicationReportExportRequest:
+      type: object
+      additionalProperties: false
+      required: [format]
+      properties:
+        format: { type: string, enum: [CSV, XLSX] }
+        fromDate: { type: string, format: date }
+        toDate: { type: string, format: date }
+        faculty: { type: string, minLength: 1, maxLength: 120 }
+        major: { type: string, minLength: 1, maxLength: 120 }
+        cohort: { type: string, minLength: 1, maxLength: 40 }
+        companyId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        opportunityType: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] }
+        query: { type: string, minLength: 1, maxLength: 100 }
+    ApplicationReportRow:
+      type: object
+      required: [applicationId, submittedAt, lastTransitionAt, student, company, job, status, recruitmentResult]
+      properties:
+        applicationId: { type: string, format: uuid }
+        submittedAt: { type: string, format: date-time }
+        lastTransitionAt: { type: string, format: date-time }
+        student:
+          type: object
+          required: [studentCode, fullName, faculty, major, cohort]
+          properties:
+            studentCode: { type: string }
+            fullName: { type: string }
+            faculty: { type: string }
+            major: { type: string }
+            cohort: { type: string }
+        company:
+          type: object
+          required: [id, code, name]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+        job:
+          type: object
+          required: [title, opportunityType, workMode]
+          properties:
+            title: { type: string }
+            opportunityType: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] }
+            workMode: { $ref: '#/components/schemas/WorkMode' }
+        status: { $ref: '#/components/schemas/ApplicationStatus' }
+        recruitmentResult:
+          oneOf:
+            - type: object
+              required: [outcome, studentDecision, startDate]
+              properties:
+                outcome: { type: string, enum: [PASS, FAIL] }
+                studentDecision: { type: [string, 'null'], enum: [ACCEPTED, DECLINED, null] }
+                startDate: { type: [string, 'null'], format: date }
+            - type: 'null'
+    ApplicationReportSummary:
+      type: object
+      required: [totalApplications, uniqueStudents, companyCount, hiredCount, hiredRate, statusCounts]
+      properties:
+        totalApplications: { type: integer, minimum: 0 }
+        uniqueStudents: { type: integer, minimum: 0 }
+        companyCount: { type: integer, minimum: 0 }
+        hiredCount: { type: integer, minimum: 0 }
+        hiredRate: { type: number, minimum: 0, maximum: 1 }
+        statusCounts:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status: { $ref: '#/components/schemas/ApplicationStatus' }
+              count: { type: integer, minimum: 0 }
+    ApplicationReportFilterOptions:
+      type: object
+      required: [faculties, majors, cohorts, companies]
+      properties:
+        faculties:
+          type: array
+          items: { type: string }
+        majors:
+          type: array
+          items: { type: string }
+        cohorts:
+          type: array
+          items: { type: string }
+        companies:
+          type: array
+          items:
+            type: object
+            required: [id, code, name]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+    ApplicationReportEnvelope:
+      type: object
+      required: [data, summary, filterOptions, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/ApplicationReportRow' }
+        summary: { $ref: '#/components/schemas/ApplicationReportSummary' }
+        filterOptions: { $ref: '#/components/schemas/ApplicationReportFilterOptions' }
         meta: { $ref: '#/components/schemas/PageMeta' }
     ErrorEnvelope:
       type: object
