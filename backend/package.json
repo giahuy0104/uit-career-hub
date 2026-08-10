@@ -13,6 +13,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:demo:reset": "tsx src/db/demo-reset.ts",
     "db:demo:check": "tsx src/db/demo-readiness.ts",
+    "db:e2e:provision": "tsx src/db/e2e-database.ts provision",
+    "db:e2e:reset": "tsx src/db/e2e-database.ts reset",
     "test": "vitest run",
     "test:watch": "vitest",
     "openapi:validate": "node scripts/validate-openapi.mjs"

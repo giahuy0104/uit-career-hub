@@ -10,8 +10,10 @@ describe("parseEnvironment", () => {
     expect(result.corsOrigin).toBe("http://localhost:5173");
     expect(result.databaseUrl).toContain("localhost");
     expect(result.databaseUrlDirect).toBeUndefined();
+    expect(result.databaseUrlE2e).toBeUndefined();
     expect(result.databasePoolMax).toBe(10);
     expect(result.allowDemoReset).toBe(false);
+    expect(result.allowE2eReset).toBe(false);
     expect(result.cronSecret).toBeUndefined();
     expect(result.emailEnabled).toBe(false);
     expect(result.resendApiKey).toBeUndefined();
@@ -40,6 +42,17 @@ describe("parseEnvironment", () => {
     });
 
     expect(result.allowDemoReset).toBe(true);
+  });
+
+  it("should_only_enable_e2e_reset_when_explicitly_requested", () => {
+    const result = parseEnvironment({
+      NODE_ENV: "test",
+      DATABASE_URL_E2E: "postgresql://user:password@127.0.0.1:5432/uit_career_hub_e2e",
+      ALLOW_E2E_RESET: "true",
+    });
+
+    expect(result.databaseUrlE2e).toContain("uit_career_hub_e2e");
+    expect(result.allowE2eReset).toBe(true);
   });
 
   it("should_accept_a_cron_secret_with_at_least_32_characters", () => {
