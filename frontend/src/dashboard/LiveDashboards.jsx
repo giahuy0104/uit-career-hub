@@ -86,8 +86,8 @@ function useLiveDashboard(path) {
 }
 
 function DashboardState({ loading, error, reload }) {
-  if (loading) return <Panel title="Đang tổng hợp dữ liệu"><div className="portal-loading"><CircleNotch className="spin" />Đang tải số liệu mới nhất...</div></Panel>;
-  if (error) return <Panel title="Chưa tải được dashboard"><div className="portal-error"><Warning />{error}<button className="secondary-button small" onClick={reload}>Thử lại</button></div></Panel>;
+  if (loading) return <Panel title="Đang tổng hợp dữ liệu"><div className="portal-loading" role="status"><CircleNotch className="spin" />Đang tải số liệu mới nhất...</div></Panel>;
+  if (error) return <Panel title="Chưa tải được dashboard"><div className="portal-error" role="alert"><Warning />{error}<button className="secondary-button small" onClick={reload}>Thử lại</button></div></Panel>;
   return null;
 }
 

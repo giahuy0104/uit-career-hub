@@ -83,11 +83,11 @@ function Panel({ title, action, children }) {
 }
 
 function Loading({ text = "Đang tải dữ liệu..." }) {
-  return <div className="portal-loading"><CircleNotch className="spin" />{text}</div>;
+  return <div className="portal-loading" role="status"><CircleNotch className="spin" />{text}</div>;
 }
 
 function ErrorBox({ message, retry }) {
-  return <div className="portal-error"><Warning />{message}{retry && <button className="secondary-button small" onClick={retry}>Thử lại</button>}</div>;
+  return <div className="portal-error" role="alert"><Warning />{message}{retry && <button className="secondary-button small" onClick={retry}>Thử lại</button>}</div>;
 }
 
 function ActivationLink({ token, expiresAt }) {
@@ -190,7 +190,7 @@ export function CompanyCreatePartnerModal({ close, onComplete }) {
     }
   };
 
-  return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal company-create-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={busy} onClick={close}><X /></button>
+  return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal company-create-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" disabled={busy} onClick={close}><X /></button>
     {created ? <div className="modal-success company-created-result"><CheckCircle size={52} weight="fill" /><h2>Đã tạo doanh nghiệp đối tác</h2><p><strong>{created.company.name}</strong> đang hoạt động; tài khoản {created.company.recruiters[0]?.email} đang chờ kích hoạt.</p><ActivationLink {...created.activation} /><button className="primary-button full" onClick={close}>Hoàn tất</button></div> : <>
       <span className="modal-icon"><Buildings /></span><h2>Thêm doanh nghiệp đối tác</h2><p>Tạo hồ sơ đã xác minh và tài khoản phụ trách chính. Không gửi email tự động ở giai đoạn hiện tại.</p>
       <div className="modal-form two-cols company-form">
@@ -208,7 +208,7 @@ export function CompanyCreatePartnerModal({ close, onComplete }) {
         <label><span>Chức danh</span><input value={form.recruiterTitle} onChange={(event) => update("recruiterTitle", event.target.value)} /></label>
         <label className="full"><span>Email *</span><input type="email" value={form.recruiterEmail} onChange={(event) => update("recruiterEmail", event.target.value)} /></label>
       </div>
-      {error && <p className="form-error"><Warning />{error}</p>}
+      {error && <p className="form-error" role="alert"><Warning />{error}</p>}
       <div className="modal-actions"><button className="secondary-button" disabled={busy} onClick={close}>Hủy</button><button className="primary-button" disabled={busy || !valid} onClick={submit}>{busy ? <CircleNotch className="spin" /> : <UserPlus />}Tạo hồ sơ & link kích hoạt</button></div>
     </>}
   </div></div>;
@@ -259,7 +259,7 @@ function CompanyDetailModal({ companyId, close, onChanged }) {
   const recruiterAction = (user, action) => execute(`/uit/companies/${companyId}/recruiters/${user.userId}/${action}`, { method: "POST", body: JSON.stringify({ reason: reason.trim() || `UIT ${action === "suspend" ? "tạm ngưng" : "kích hoạt lại"} tài khoản.` }) });
   const regenerate = (userId) => execute(`/uit/companies/${companyId}/recruiters/${userId}/activation-link`, { method: "POST" }, (data) => data.company);
 
-  return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal company-detail-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" disabled={busy} onClick={close}><X /></button>
+  return <div className="modal-backdrop" onMouseDown={() => !busy && close()}><div className="modal portal-modal company-detail-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" disabled={busy} onClick={close}><X /></button>
     {loading ? <Loading /> : !company ? <ErrorBox message={error} retry={load} /> : <>
       <div className="company-detail-heading"><span className="company-logo large">{initials(company.name)}</span><div><Status value={company.partnerStatus} /><h2>{company.name}</h2><p>{company.code} · phiên bản {company.version}</p></div></div>
       <div className="company-detail-columns">
@@ -275,7 +275,7 @@ function CompanyDetailModal({ companyId, close, onChanged }) {
       <section className="recruiter-management"><h3>Tài khoản tuyển dụng</h3><div className="recruiter-list management-recruiters">{company.recruiters.map((user) => <div key={user.userId}><span>{initials(user.fullName)}</span><div><strong>{user.fullName}{user.isPrimary && <em>Chính</em>}</strong><small>{user.email} · {user.title || "Nhà tuyển dụng"}</small></div><Status value={user.status} /><div className="recruiter-actions">{user.status === "PENDING_ACTIVATION" && <button title="Tạo lại link" onClick={() => regenerate(user.userId)}><Copy /></button>}{["ACTIVE", "PENDING_ACTIVATION"].includes(user.status) && <button title="Tạm ngưng" onClick={() => recruiterAction(user, "suspend")}><X /></button>}{user.status === "SUSPENDED" && <button title="Kích hoạt lại" onClick={() => recruiterAction(user, "reactivate")}><CheckCircle /></button>}</div></div>)}</div>
         {company.partnerStatus === "ACTIVE" && <div className="add-recruiter-row"><input placeholder="Họ tên" value={recruiter.fullName} onChange={(event) => setRecruiter((current) => ({ ...current, fullName: event.target.value }))} /><input type="email" placeholder="Email" value={recruiter.email} onChange={(event) => setRecruiter((current) => ({ ...current, email: event.target.value }))} /><input placeholder="Chức danh" value={recruiter.title} onChange={(event) => setRecruiter((current) => ({ ...current, title: event.target.value }))} /><button className="primary-button" disabled={busy || recruiter.fullName.trim().length < 2 || !recruiter.email.includes("@")} onClick={addRecruiter}><Plus />Thêm tài khoản</button></div>}
       </section>
-      {activation && <ActivationLink {...activation} />}{error && <p className="form-error"><Warning />{error}</p>}
+      {activation && <ActivationLink {...activation} />}{error && <p className="form-error" role="alert"><Warning />{error}</p>}
     </>}
   </div></div>;
 }
@@ -309,5 +309,5 @@ export function CompanyProfileManagement() {
   };
   if (loading) return <Panel title="Hồ sơ doanh nghiệp"><Loading /></Panel>;
   if (!company) return <Panel title="Hồ sơ doanh nghiệp"><ErrorBox message={error} retry={load} /></Panel>;
-  return <div className="company-profile-layout"><Panel title="Hồ sơ hiển thị" action={<button className="secondary-button small" disabled={busy || company.partnerStatus !== "ACTIVE"} onClick={() => editing ? save() : setEditing(true)}>{busy ? <CircleNotch className="spin" /> : <PencilSimple />}{editing ? "Lưu thay đổi" : "Chỉnh sửa"}</button>}><div className="company-cover"><div className="company-logo large">{initials(company.name)}</div><div><h2>{company.name}</h2><p><SealCheck weight="fill" />Đối tác UIT đã xác thực · {company.code}</p></div></div><div className="company-profile-fields">{Object.entries({ name: "Tên doanh nghiệp", website: "Website", industry: "Lĩnh vực", companySize: "Quy mô", address: "Địa chỉ" }).map(([field, label]) => <label className={field === "address" ? "full" : ""} key={field}><span>{label}</span><input disabled={!editing} value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} /></label>)}<label className="full"><span>Giới thiệu</span><textarea disabled={!editing} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label></div>{error && <p className="form-error"><Warning />{error}</p>}</Panel><div><Panel title="Trạng thái hợp tác"><div className="partnership-state"><CheckCircle size={36} /><Status value={company.partnerStatus} /><p>Hồ sơ phiên bản {company.version}</p><small>Cập nhật lần cuối: {formatDate(company.updatedAt)}</small></div></Panel><Panel title="Tài khoản tuyển dụng"><div className="recruiter-list">{company.recruiters.map((user) => <div key={user.userId}><span>{initials(user.fullName)}</span><div><strong>{user.fullName}</strong><small>{user.email} · {user.title || "Nhà tuyển dụng"}</small></div><Status value={user.status} /></div>)}</div></Panel></div></div>;
+  return <div className="company-profile-layout"><Panel title="Hồ sơ hiển thị" action={<button className="secondary-button small" disabled={busy || company.partnerStatus !== "ACTIVE"} onClick={() => editing ? save() : setEditing(true)}>{busy ? <CircleNotch className="spin" /> : <PencilSimple />}{editing ? "Lưu thay đổi" : "Chỉnh sửa"}</button>}><div className="company-cover"><div className="company-logo large">{initials(company.name)}</div><div><h2>{company.name}</h2><p><SealCheck weight="fill" />Đối tác UIT đã xác thực · {company.code}</p></div></div><div className="company-profile-fields">{Object.entries({ name: "Tên doanh nghiệp", website: "Website", industry: "Lĩnh vực", companySize: "Quy mô", address: "Địa chỉ" }).map(([field, label]) => <label className={field === "address" ? "full" : ""} key={field}><span>{label}</span><input disabled={!editing} value={form[field]} onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))} /></label>)}<label className="full"><span>Giới thiệu</span><textarea disabled={!editing} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></label></div>{error && <p className="form-error" role="alert"><Warning />{error}</p>}</Panel><div><Panel title="Trạng thái hợp tác"><div className="partnership-state"><CheckCircle size={36} /><Status value={company.partnerStatus} /><p>Hồ sơ phiên bản {company.version}</p><small>Cập nhật lần cuối: {formatDate(company.updatedAt)}</small></div></Panel><Panel title="Tài khoản tuyển dụng"><div className="recruiter-list">{company.recruiters.map((user) => <div key={user.userId}><span>{initials(user.fullName)}</span><div><strong>{user.fullName}</strong><small>{user.email} · {user.title || "Nhà tuyển dụng"}</small></div><Status value={user.status} /></div>)}</div></Panel></div></div>;
 }

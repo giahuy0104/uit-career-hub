@@ -148,7 +148,7 @@ export function NotificationInbox({ role, onOpen }) {
       </div>
       {error && <p className="notification-error"><Warning />{error}</p>}
       {loading ? (
-        <div className="portal-loading"><CircleNotch className="spin" />Đang tải thông báo...</div>
+        <div className="portal-loading" role="status"><CircleNotch className="spin" />Đang tải thông báo...</div>
       ) : !items.length ? (
         <div className="notification-empty"><Bell size={34} /><strong>Không có thông báo</strong><p>Các cập nhật mới của quy trình sẽ xuất hiện tại đây.</p></div>
       ) : (

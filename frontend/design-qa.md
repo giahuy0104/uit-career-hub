@@ -1,78 +1,39 @@
 # Design QA — UIT Career Hub
 
-## Phạm vi kiểm tra
+Ngày audit gần nhất: **10/08/2026**
 
-- Prototype: `C:/Users/Windows/Documents/Codex/2026-07-25/hi-n/uit-career-hub-client-prototype`
-- Viewport chuẩn: `1440 x 1024`
-- Trình duyệt kiểm tra: Codex In-app Browser
-- Ngày kiểm tra: `2026-08-05`
+## Nguồn sự thật hiện tại
 
-## Nguồn thiết kế và bản dựng
+- UI đang chạy và API production của `v0.1.0`.
+- `docs/domain/application-state-machine.md` và `docs/domain/job-state-machine.md`.
+- `docs/api/openapi.yaml`.
+- Inventory, bằng chứng ảnh và giới hạn audit: `../docs/ui-audit/route-inventory.md`.
 
-| Màn hình | Thiết kế nguồn | Ảnh bản dựng | Ảnh đối chiếu |
-| --- | --- | --- | --- |
-| Danh sách việc làm | `qa/source-jobs.png` | `qa/implementation-jobs.png` | `qa/compare-jobs.png` |
-| Ứng tuyển | `qa/source-apply.png` | `qa/implementation-apply.png` | `qa/compare-apply.png` |
-| Đơn ứng tuyển | `qa/source-applications.png` | `qa/implementation-applications.png` | `qa/compare-applications.png` |
+Tài liệu này không còn dùng prototype ngày 05/08 làm nguồn sự thật. Các mô tả luồng ba bước, câu hỏi nhà tuyển
+dụng, dữ liệu mẫu và bộ chuyển vai trò đã lỗi thời. Luồng ứng tuyển MVP hiện tại có **hai bước**:
 
-Ảnh bổ sung cho các vai trò chưa có thiết kế nguồn độc lập:
+1. chọn CV/tài liệu đã xác minh;
+2. kiểm tra consent và gửi đơn.
 
-- `qa/implementation-admin-dashboard.png`
-- `qa/implementation-admin-job-review.png`
-- `qa/implementation-company-candidates.png`
+## Kết quả hiện tại
 
-## Kết quả đối chiếu hình ảnh
+- Student Dashboard, Jobs, Applications và luồng apply dùng API thật.
+- UIT và Company happy flow dùng API thật ở các màn được nêu trong inventory.
+- Student Jobs/Applications có loading, empty, error, retry và trạng thái lọc nhất quán.
+- Responsive browser check đã đạt tại `1440×1024`, `1024×768`, `768×1024`, `390×844`; không có overflow
+  ngang ở cấp trang. Bảng đơn dùng vùng cuộn riêng trên màn nhỏ.
+- Mobile navigation không còn ẩn Hồ sơ, Lịch phỏng vấn và Thông báo; toàn bộ route nằm trong thanh cuộn ngang.
+- Màn `Scheduler`, `Reports`, `Access` của UIT đã bị loại khỏi điều hướng bảo vệ cho đến khi có API/dữ liệu thật.
+- Ô tìm nhanh chỉ điều hướng trong route live của vai trò; avatar mở menu tài khoản và đăng xuất.
+- Portal được lazy-load: build production hiện tách `RolePortals` khoảng 181 kB, chunk khởi tạo khoảng 346 kB và không
+  còn cảnh báo 535 kB.
 
-### Danh sách việc làm
+## Checklist QA tiếp theo
 
-- Bố cục danh sách bên trái và chi tiết bên phải khớp với thiết kế nguồn.
-- Phân cấp tiêu đề, trạng thái xác thực, bộ lọc, kỹ năng và CTA ứng tuyển rõ ràng.
-- Khoảng cách, viền, bán kính bo và sắc độ nền đạt mức nhất quán.
-- Sai khác P3: logo doanh nghiệp và avatar dùng dữ liệu/asset mẫu; bộ chuyển vai trò chỉ xuất hiện trong prototype để phục vụ trình bày.
+- Chạy browser check ở `1440×1024`, `1024×768`, `768×1024`, `390×844`.
+- Kiểm tra keyboard, focus visible, screen reader và zoom 200%.
+- Chạy screen reader, contrast tự động và zoom 200% thủ công trước release candidate; ảnh/DOM hiện tại không đủ để
+  tuyên bố WCAG compliance.
+- Giữ Scheduler/Reports/Access ngoài portal cho đến khi có lát cắt backend/OpenAPI/RBAC hoàn chỉnh.
 
-### Ứng tuyển
-
-- Luồng 3 bước, hồ sơ sinh viên, chọn CV, kiểm tra tài liệu và thông tin việc làm được giữ đúng.
-- Trạng thái thiếu bảng điểm, thao tác tải lên, câu hỏi nhà tuyển dụng và bước xác nhận đều hoạt động.
-- Sai khác P3: prototype dùng thanh điều hướng trắng để thống nhất hệ thống; thiết kế nguồn của riêng màn này dùng thanh điều hướng xanh đậm.
-- Không có nội dung quan trọng bị che hoặc mất khả năng thao tác tại viewport chuẩn.
-
-### Đơn ứng tuyển
-
-- Sidebar, thẻ tiến trình 5 bước, trạng thái người xử lý, bảng đơn khác và khu vực thông báo khớp thiết kế nguồn.
-- Màu trạng thái, hành động xem hồ sơ/rút đơn và thông báo về quyền xem CV được thể hiện rõ.
-- Sai khác P3: tên người dùng và dữ liệu mẫu được chuẩn hóa thành Nguyễn Minh Khoa trong toàn prototype.
-
-### UIT Admin và Doanh nghiệp
-
-- Giữ cùng hệ thống màu, typography, spacing, form, badge và bảng dữ liệu với client.
-- Dashboard Admin có số liệu cần xử lý, doanh nghiệp đối tác, duyệt tin, duyệt hồ sơ, tác vụ hẹn giờ và báo cáo.
-- Workspace Doanh nghiệp có hồ sơ doanh nghiệp, tin tuyển dụng, Kanban ứng viên, lịch phỏng vấn và thông báo.
-- Không phát hiện phần tử tràn, chồng lớp nghiêm trọng hoặc CTA chính không nhìn thấy.
-
-## Kiểm tra chức năng chính
-
-- Chuyển vai trò Sinh viên / UIT Admin / Doanh nghiệp: đạt.
-- Sinh viên: Việc làm → Ứng tuyển → tải bảng điểm → trả lời câu hỏi → xác nhận → gửi đơn: đạt.
-- Sau khi gửi đơn, hệ thống hiển thị `Đơn ứng tuyển của tôi` và trạng thái `UIT kiểm duyệt`: đạt.
-- UIT Admin: mở hàng đợi duyệt tin và phê duyệt tin tuyển dụng: đạt.
-- Doanh nghiệp: mở bảng ứng viên và chuyển ứng viên sang bước tiếp theo: đạt.
-- Console errors tại thời điểm kiểm tra: không có.
-
-## Lịch sử xử lý
-
-1. Dựng ba màn hình sinh viên theo ba thiết kế nguồn.
-2. Mở rộng thành hệ thống ba vai trò theo cùng design system.
-3. Chụp ảnh bản dựng tại viewport `1440 x 1024`.
-4. Ghép thiết kế nguồn và bản dựng trong cùng một ảnh đối chiếu.
-5. Kiểm tra lại bố cục, trạng thái, CTA và luồng thao tác cốt lõi.
-6. Giữ các sai khác còn lại ở mức P3, không ảnh hưởng luồng chính hoặc khả năng trình bày đồ án.
-
-## Kết luận
-
-- P0: 0
-- P1: 0
-- P2: 0
-- P3: 3 nhóm sai khác nhỏ đã ghi nhận ở trên
-
-final result: passed
+Không kết luận WCAG compliance chỉ từ ảnh chụp.
