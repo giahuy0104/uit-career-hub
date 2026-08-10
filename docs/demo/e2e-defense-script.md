@@ -108,19 +108,29 @@ Kết quả mong đợi trong cùng một transaction:
 - Lịch phỏng vấn còn hiệu lực của các đơn bị rút được hủy.
 - History, audit log và thông báo cho các bên liên quan được tạo.
 
-### 5:00–6:30 — Kiểm tra kết quả ở sinh viên
+### 5:00–5:45 — Theo dõi vòng đời thực tập
+
+1. Ngay trong **Theo dõi kết quả**, mở phần **Vòng đời thực tập** và chọn placement vừa tạo.
+2. Chỉ ra ba mốc `HIRED → STARTED → COMPLETED`, version và actor history.
+3. Trong dữ liệu demo chuyên dụng, ghi nhận bắt đầu rồi hoàn thành; giải thích ngày hiệu lực không được ở tương lai,
+   không được bỏ bước và retry cùng command không tạo lịch sử trùng.
+
+Kết quả mong đợi: application vẫn ở `HIRED`; aggregate kỳ thực tập chuyển độc lập, sinh viên và recruiter nhận
+thông báo cho từng mốc.
+
+### 5:45–6:45 — Kiểm tra kết quả ở sinh viên
 
 1. Làm mới danh sách đơn của sinh viên.
 2. Chỉ ra một đơn `HIRED` và hai đơn đã rút tự động.
 3. Mở lịch sử một đơn để cho thấy lý do và thời điểm thay đổi.
 
-### 6:30–7:45 — Kiểm tra kết quả ở doanh nghiệp
+### 6:45–8:00 — Kiểm tra kết quả ở doanh nghiệp
 
 1. Đăng nhập FPT recruiter.
 2. Mở thông báo về việc ứng viên đã nhận công việc khác.
 3. Mở pipeline ứng viên và cho thấy hồ sơ không còn được phép chuyển bước/từ chối lần nữa.
 
-### 7:45–9:00 — Tổng kết
+### 8:00–9:30 — Tổng kết
 
 - Nhắc lại kiểm soát quyền theo vai trò và ownership ở backend.
 - Thông báo trong hệ thống thuộc MVP; cron tổng hợp hằng ngày đã được hiện thực ở Phase 2,

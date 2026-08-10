@@ -1928,6 +1928,30 @@ export class ApplicationService {
           JSON.stringify({ startDate: input.startDate, autoWithdrawnApplicationIds }),
         ],
       );
+      const placementResult = await client.query<{ id: string }>(
+        `INSERT INTO internship_placements
+         (application_id, status, expected_start_date, hired_at)
+         VALUES ($1, 'HIRED', $2, now())
+         RETURNING id`,
+        [applicationId, input.startDate],
+      );
+      const placementId = placementResult.rows[0]!.id;
+      await client.query(
+        `INSERT INTO internship_placement_history
+         (placement_id, command_id, from_status, to_status, actor_type, actor_user_id,
+          effective_date, note, metadata)
+         VALUES ($1, $2, NULL, 'HIRED', 'UIT_ADMIN', $3, $4, $5,
+                 jsonb_build_object('applicationId', $6::text, 'autoWithdrawnApplicationIds', $7::jsonb))`,
+        [
+          placementId,
+          commandId,
+          actorUserId,
+          input.startDate,
+          input.note ?? null,
+          applicationId,
+          JSON.stringify(autoWithdrawnApplicationIds),
+        ],
+      );
       for (const otherApplication of otherApplications) {
         await client.query(
           `INSERT INTO application_status_history
@@ -2017,7 +2041,7 @@ export class ApplicationService {
         [
           actorUserId,
           applicationId,
-          JSON.stringify({ commandId, startDate: input.startDate, autoWithdrawnApplicationIds }),
+          JSON.stringify({ commandId, placementId, startDate: input.startDate, autoWithdrawnApplicationIds }),
           request.ipAddress,
           request.userAgent,
         ],

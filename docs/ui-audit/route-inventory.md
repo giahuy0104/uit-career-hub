@@ -17,7 +17,8 @@ có. Audit không thực hiện mutation trên production.
 - OpenAPI hiện chỉ có endpoint cho lát cắt tạo nháp, cập nhật, gửi duyệt và UIT
   approve/request-revision/reject. Các transition pause/reopen/close/extend/expire có trong state machine nhưng
   chưa có endpoint công khai; UI hiện tại không được giả lập các transition này.
-- Lát cắt audit này không thay đổi enum, endpoint, payload hay quy tắc state machine.
+- Lát cắt lifecycle không đổi `ApplicationStatus`; nó bổ sung aggregate `PlacementStatus` và endpoint UIT-only
+  riêng để application `HIRED` vẫn terminal của quy trình tuyển dụng.
 
 ## 2. Inventory theo vai trò
 
@@ -49,7 +50,7 @@ Quy ước:
 | Duyệt tin tuyển dụng | Live | `/uit/jobs/**` | Approve/revision/reject theo action endpoint. |
 | Xác minh tài liệu | Live | `/uit/student-documents/**` | Danh sách, tải PDF private và review. |
 | Duyệt hồ sơ sinh viên | Live | `/uit/applications/**` | Supplement/reject/forward và tải snapshot tài liệu. |
-| Theo dõi kết quả | Live | placement queue, offer download, confirm placement | Bảo toàn transaction nhiều đơn của happy flow. |
+| Theo dõi kết quả | Live | placement queue, confirm placement, `GET/POST /uit/placements/**` | Bảo toàn transaction nhiều đơn; theo dõi tiếp `HIRED → STARTED → COMPLETED` với actor history và optimistic lock. |
 | Nhắc việc & tác vụ | Ẩn khỏi portal | Chưa có API quản trị | Không còn xuất hiện trong điều hướng bảo vệ; chỉ mở lại khi có API và dữ liệu vận hành thật. |
 | Thông báo | Live | `/notifications/**` | Dùng inbox chung theo ownership. |
 | Báo cáo tuyển dụng | Live | `GET /uit/reports/applications`, `POST /uit/reports/applications/exports` | Lọc dữ liệu thật theo kỳ/khoa/ngành/doanh nghiệp/trạng thái và xuất CSV/XLSX có audit. |

@@ -43,6 +43,7 @@ import {
 } from "./companies/CompanyManagement.jsx";
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
 import { AdminReports } from "./reports/AdminReports.jsx";
+import { AdminPlacementLifecycle } from "./placements/AdminPlacementLifecycle.jsx";
 import { AdminTaxonomyManagement } from "./taxonomy/TaxonomyManagement.jsx";
 import {
   LiveAdminDashboard,
@@ -545,7 +546,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     {activeRoute === "admin-jobs" && <LiveAdminJobReview targetJobId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-documents" && <AdminStudentDocumentReview targetDocumentId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
-    {activeRoute === "admin-placements" && <AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} />}
+    {activeRoute === "admin-placements" && <><AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} /><AdminPlacementLifecycle /></>}
     {activeRoute === "admin-notifications" && <NotificationInbox role="admin" onOpen={(notification, destination) => navigate(destination, { notification })} />}
     {modal === "company" && <CompanyCreatePartnerModal close={() => setModal(null)} onComplete={() => setCompaniesVersion(value => value + 1)} />}
   </WorkspaceShell>;
@@ -1138,6 +1139,7 @@ function AdminPlacements({ targetApplicationId = null }) {
       setItems(current => current.filter(item => item.id !== selected.id));
       setConfirming(false);
       setMessage(`Đã xác nhận ${selected.student.fullName} nhận việc${closedCount ? ` và tự đóng ${closedCount} đơn khác` : ""}.`);
+      window.dispatchEvent(new CustomEvent("uit:placement-updated"));
       window.setTimeout(() => setMessage(""), 4500);
     } catch (requestError) {
       setError(getApiError(requestError));

@@ -25,6 +25,8 @@ erDiagram
     USERS o|--o{ APPLICATION_STATUS_HISTORY : acts
     APPLICATIONS ||--o{ INTERVIEWS : schedules
     APPLICATIONS ||--o| RECRUITMENT_RESULTS : concludes
+    APPLICATIONS ||--o| INTERNSHIP_PLACEMENTS : creates
+    INTERNSHIP_PLACEMENTS ||--o{ INTERNSHIP_PLACEMENT_HISTORY : records
     USERS ||--o{ NOTIFICATIONS : receives
     USERS o|--o{ AUDIT_LOGS : performs
 
@@ -166,6 +168,29 @@ erDiagram
       date start_date
       text offer_storage_key
     }
+    INTERNSHIP_PLACEMENTS {
+      uuid id PK
+      uuid application_id FK,UK
+      text status
+      integer version
+      date expected_start_date
+      date actual_start_date
+      date completed_date
+      timestamptz hired_at
+      timestamptz started_at
+      timestamptz completed_at
+    }
+    INTERNSHIP_PLACEMENT_HISTORY {
+      uuid id PK
+      uuid placement_id FK
+      uuid command_id UK
+      text from_status
+      text to_status
+      text actor_type
+      uuid actor_user_id FK
+      date effective_date
+      text note
+    }
     NOTIFICATIONS {
       uuid id PK
       uuid recipient_user_id FK
@@ -191,6 +216,7 @@ erDiagram
 - Student chỉ đọc/sửa `student_profiles`, `student_documents` và `applications` của chính mình.
 - Company chỉ đọc/sửa `companies`, `job_posts` thuộc company và chỉ thấy application sau khi UIT chuyển đến.
 - UIT_ADMIN quản lý đối tác, duyệt job/application và xác nhận placement; không tự gán kết quả tuyển dụng khi chưa có căn cứ.
+- UIT_ADMIN theo dõi kỳ thực tập sau `HIRED`; mỗi transition có version, command id, actor history, audit và notification.
 - UIT_ADMIN là vai trò duy nhất được tạo, đổi tên, ngừng hoặc kích hoạt lại category/skill; khóa nghiệp vụ không đổi và bản ghi không bị xóa cứng.
 - UIT_ADMIN là vai trò duy nhất được tổng hợp và xuất báo cáo toàn trường; export chỉ đọc các quan hệ hiện có và ghi một `AUDIT_LOGS` với `target_type = REPORT`.
 - `application_documents` là snapshot độc lập; thay đổi tài liệu gốc không làm đổi hồ sơ đã gửi.

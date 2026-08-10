@@ -44,6 +44,7 @@ describeWithDatabase("student job application flow", () => {
     authDatabase: database,
     jobDatabase: database,
     applicationDatabase: database,
+    placementDatabase: database,
     tokenService,
     emailDeliveryService: { dispatchPending } as unknown as EmailDeliveryService,
     objectStorage,
@@ -73,6 +74,22 @@ describeWithDatabase("student job application flow", () => {
        WHERE actor_user_id = ANY($1::uuid[])
           OR target_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($2::uuid[]))`,
       [userIds, studentProfileIds],
+    );
+    await client.query(
+      `DELETE FROM internship_placement_history
+       WHERE placement_id IN (
+         SELECT ip.id FROM internship_placements ip
+         JOIN applications a ON a.id = ip.application_id
+         WHERE a.student_profile_id = ANY($1::uuid[])
+       )`,
+      [studentProfileIds],
+    );
+    await client.query(
+      `DELETE FROM internship_placements
+       WHERE application_id IN (
+         SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[])
+       )`,
+      [studentProfileIds],
     );
     await client.query(
       "DELETE FROM recruitment_results WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
@@ -1762,5 +1779,130 @@ describeWithDatabase("student job application flow", () => {
       .get("/api/v1/uit/applications/placement-queue")
       .set("Authorization", `Bearer ${accepted.recruiter.token}`);
     expect(forbidden.status).toBe(403);
+  }, 30_000);
+
+  it("tracks HIRED to STARTED to COMPLETED with history, audit, notifications, and idempotency", async () => {
+    const accepted = await prepareAcceptedOffer();
+    const confirmed = await request(app)
+      .post(`/api/v1/uit/applications/${accepted.applicationId}/confirm-placement`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ startDate: "2099-12-30", note: "Đã đối chiếu offer trước khi theo dõi kỳ thực tập." });
+    expect(confirmed.status).toBe(200);
+
+    const listed = await request(app)
+      .get("/api/v1/uit/placements?page=1&pageSize=20&status=HIRED&query=Sinh%20vi%C3%AAn")
+      .set("Authorization", `Bearer ${accepted.admin.token}`);
+    expect(listed.status).toBe(200);
+    expect(listed.body.summary.HIRED).toBeGreaterThanOrEqual(1);
+    const placement = listed.body.data.find(
+      (item: { applicationId: string }) => item.applicationId === accepted.applicationId,
+    );
+    expect(placement).toMatchObject({
+      applicationId: accepted.applicationId,
+      status: "HIRED",
+      version: 1,
+      expectedStartDate: "2099-12-30",
+      availableActions: ["START"],
+      history: [expect.objectContaining({ fromStatus: null, toStatus: "HIRED", actorType: "UIT_ADMIN" })],
+    });
+
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const startCommand = randomUUID();
+    const started = await request(app)
+      .post(`/api/v1/uit/placements/${placement.id}/start`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", startCommand)
+      .send({ expectedVersion: 1, effectiveDate: today, note: "Đã xác nhận sinh viên bắt đầu tại doanh nghiệp." });
+    expect(started.status).toBe(200);
+    expect(started.body.data).toMatchObject({
+      status: "STARTED",
+      version: 2,
+      actualStartDate: today,
+      availableActions: ["COMPLETE"],
+    });
+    expect(started.body.data.history.at(-1)).toMatchObject({
+      fromStatus: "HIRED",
+      toStatus: "STARTED",
+      effectiveDate: today,
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/uit/placements/${placement.id}/start`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", startCommand)
+      .send({ expectedVersion: 1, effectiveDate: today, note: "Đã xác nhận sinh viên bắt đầu tại doanh nghiệp." });
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data).toMatchObject({ status: "STARTED", version: 2 });
+    expect(repeated.body.data.history).toHaveLength(2);
+
+    const stale = await request(app)
+      .post(`/api/v1/uit/placements/${placement.id}/complete`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ expectedVersion: 1, effectiveDate: today, note: "Phiên bản cũ không được chấp nhận." });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe("INTERNSHIP_PLACEMENT_VERSION_CONFLICT");
+
+    const future = await request(app)
+      .post(`/api/v1/uit/placements/${placement.id}/complete`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ expectedVersion: 2, effectiveDate: "2099-12-31", note: "Không được hoàn thành trong tương lai." });
+    expect(future.status).toBe(400);
+    expect(future.body.error.code).toBe("INTERNSHIP_PLACEMENT_DATE_IN_FUTURE");
+
+    const completed = await request(app)
+      .post(`/api/v1/uit/placements/${placement.id}/complete`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ expectedVersion: 2, effectiveDate: today, note: "Đã đối chiếu và xác nhận hoàn thành kỳ thực tập." });
+    expect(completed.status).toBe(200);
+    expect(completed.body.data).toMatchObject({
+      status: "COMPLETED",
+      version: 3,
+      completedDate: today,
+      availableActions: [],
+    });
+    expect(completed.body.data.history.map((item: { toStatus: string }) => item.toStatus)).toEqual([
+      "HIRED",
+      "STARTED",
+      "COMPLETED",
+    ]);
+
+    const invalidRestart = await request(app)
+      .post(`/api/v1/uit/placements/${placement.id}/start`)
+      .set("Authorization", `Bearer ${accepted.admin.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({ expectedVersion: 3, effectiveDate: today, note: "Không thể bắt đầu lại kỳ đã hoàn thành." });
+    expect(invalidRestart.status).toBe(409);
+    expect(invalidRestart.body.error.code).toBe("INTERNSHIP_PLACEMENT_STATE_CONFLICT");
+
+    const audit = await client.query<{ action: string }>(
+      `SELECT action FROM audit_logs
+       WHERE target_type = 'INTERNSHIP_PLACEMENT' AND target_id = $1
+       ORDER BY created_at`,
+      [placement.id],
+    );
+    expect(audit.rows.map((row) => row.action)).toEqual([
+      "INTERNSHIP_PLACEMENT_STARTED",
+      "INTERNSHIP_PLACEMENT_COMPLETED",
+    ]);
+    const notifications = await client.query<{ recipient_user_id: string; type: string }>(
+      `SELECT recipient_user_id, type FROM notifications
+       WHERE resource_type = 'INTERNSHIP_PLACEMENT' AND resource_id = $1`,
+      [placement.id],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      { recipient_user_id: accepted.student.id, type: "INTERNSHIP_PLACEMENT_STARTED" },
+      { recipient_user_id: accepted.student.id, type: "INTERNSHIP_PLACEMENT_COMPLETED" },
+      { recipient_user_id: accepted.recruiter.id, type: "INTERNSHIP_PLACEMENT_STARTED" },
+      { recipient_user_id: accepted.recruiter.id, type: "INTERNSHIP_PLACEMENT_COMPLETED" },
+    ]));
   }, 30_000);
 });

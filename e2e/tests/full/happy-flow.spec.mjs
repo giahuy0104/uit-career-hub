@@ -131,7 +131,29 @@ test("@full happy flow ba vai trò đến placement", async ({ page }) => {
     const placementResponse = waitForApi(page, "POST", "/confirm-placement");
     await dialog.getByRole("button", { name: "Xác nhận & đóng đơn khác" }).click();
     expect((await placementResponse).status()).toBe(200);
-    await expect(page.getByText(/Đã xác nhận .* nhận việc/)).toBeVisible();
+    await expect(page.locator(".toast").filter({ hasText: /Đã xác nhận .* nhận việc/ })).toBeVisible();
+  });
+
+  await test.step("UIT theo dõi kỳ thực tập đến hoàn thành", async () => {
+    await expect(page.getByRole("heading", { name: "Vòng đời thực tập", level: 2 })).toBeVisible();
+    const placementRow = page.locator(".placement-lifecycle-list").getByRole("button").filter({ hasText: jobTitle });
+    await expect(placementRow).toBeVisible();
+    await placementRow.click();
+
+    await page.getByRole("button", { name: "Ghi nhận bắt đầu", exact: true }).click();
+    let dialog = getDialog(page, "Ghi nhận bắt đầu thực tập");
+    const startResponse = waitForApi(page, "POST", "/uit/placements/");
+    await dialog.getByRole("button", { name: "Xác nhận bắt đầu" }).click();
+    expect((await startResponse).url()).toMatch(/\/start$/);
+    await expect(page.getByTestId("placement-lifecycle-detail")).toContainText("Đang thực tập");
+
+    await page.getByRole("button", { name: "Ghi nhận hoàn thành", exact: true }).click();
+    dialog = getDialog(page, "Xác nhận hoàn thành thực tập");
+    const completeResponse = waitForApi(page, "POST", "/uit/placements/");
+    await dialog.getByRole("button", { name: "Xác nhận hoàn thành" }).click();
+    expect((await completeResponse).url()).toMatch(/\/complete$/);
+    await expect(page.getByTestId("placement-lifecycle-detail")).toContainText("Đã hoàn thành");
+    await expect(page.getByText("Kỳ thực tập đã hoàn tất")).toBeVisible();
   });
 
   await test.step("Student thấy trạng thái đã nhận việc", async () => {

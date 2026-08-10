@@ -53,10 +53,17 @@ WHERE student_profile_id IN (SELECT id FROM demo_student_ids)
        '00000000-0000-4000-8000-000000008003'
    );
 
+CREATE TEMP TABLE demo_placement_ids (id uuid PRIMARY KEY) ON COMMIT DROP;
+INSERT INTO demo_placement_ids (id)
+SELECT id
+FROM internship_placements
+WHERE application_id IN (SELECT id FROM demo_application_ids);
+
 DELETE FROM notifications
 WHERE recipient_user_id IN (SELECT id FROM demo_user_ids)
    OR resource_id IN (SELECT id FROM demo_application_ids)
-   OR resource_id IN (SELECT id FROM demo_job_ids);
+   OR resource_id IN (SELECT id FROM demo_job_ids)
+   OR resource_id IN (SELECT id FROM demo_placement_ids);
 
 DELETE FROM audit_logs
 WHERE actor_user_id IN (SELECT id FROM demo_user_ids)
@@ -64,7 +71,14 @@ WHERE actor_user_id IN (SELECT id FROM demo_user_ids)
    OR target_id IN (SELECT id FROM demo_job_ids)
    OR target_id IN (SELECT id FROM demo_company_ids)
    OR target_id IN (SELECT id FROM demo_student_ids)
-   OR target_id IN (SELECT id FROM demo_user_ids);
+   OR target_id IN (SELECT id FROM demo_user_ids)
+   OR target_id IN (SELECT id FROM demo_placement_ids);
+
+DELETE FROM internship_placement_history
+WHERE placement_id IN (SELECT id FROM demo_placement_ids);
+
+DELETE FROM internship_placements
+WHERE id IN (SELECT id FROM demo_placement_ids);
 
 DELETE FROM recruitment_results
 WHERE application_id IN (SELECT id FROM demo_application_ids)

@@ -37,6 +37,8 @@ Happy flow chính đã hoàn thành và chạy được trên môi trường pub
 9. UIT đối chiếu và xác nhận nơi thực tập.
 10. Đơn được chọn thành `HIRED`; các đơn còn hoạt động tự thành `WITHDRAWN` với lý do
     `ACCEPTED_OTHER_JOB`; lịch sử, audit và thông báo được tạo đầy đủ.
+11. UIT theo dõi kỳ thực tập riêng qua `HIRED → STARTED → COMPLETED`; application vẫn giữ `HIRED`
+    terminal và mỗi mốc có actor history, audit, notification cùng optimistic lock.
 
 Đây là bản MVP ổn định để phát triển tiếp thành đồ án hoàn chỉnh, chưa phải hệ thống production
 cho người dùng thật.
@@ -90,13 +92,14 @@ uit-career-hub/
 │       ├── companies/        Doanh nghiệp đối tác và recruiter
 │       ├── jobs/             Tin tuyển dụng và hàng đợi UIT
 │       ├── applications/     Hồ sơ, phỏng vấn, offer, placement
+│       ├── placements/       Vòng đời kỳ thực tập sau HIRED
 │       ├── notifications/    Thông báo trong hệ thống
 │       ├── scheduler/        Tổng hợp hồ sơ chờ hằng ngày
 │       ├── email/            Outbox và Resend provider
 │       ├── dashboard/        Số liệu ba vai trò
 │       └── storage/          Cloudflare R2
 ├── database/
-│   ├── migrations/           `0001` đến `0015`
+│   ├── migrations/           `0001` đến `0016`
 │   └── seeds/                Dữ liệu development/demo
 ├── docs/api/openapi.yaml     Hợp đồng API
 ├── docs/domain/              ERD và state machine
@@ -134,13 +137,14 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 | Pipeline doanh nghiệp | Hoàn thành | Start review, Không phù hợp, phỏng vấn, PASS/FAIL |
 | Offer | Hoàn thành | PDF private, student accept/decline, UIT tải và đối chiếu |
 | Placement nhiều đơn | Hoàn thành | UIT confirm, một `HIRED`, đơn khác tự `WITHDRAWN` trong transaction |
+| Vòng đời thực tập | Hoàn thành | Aggregate riêng `HIRED → STARTED → COMPLETED`, actor history, audit, notification và UI UIT |
 | Thông báo | Hoàn thành MVP | Inbox, unread badge, read/read-all, deep link, ownership, dedupe |
 | Cron tổng hợp | Đã hiện thực | Tổng hợp hàng đợi UIT/doanh nghiệp theo ngày, chống gửi trùng |
 | Email | Một phần | Outbox/provider/retry đã có; chưa mặc định bật Resend production |
 | Dashboard | Hoàn thành MVP | Ba dashboard đọc PostgreSQL thật và có RBAC |
 | Báo cáo UIT | Hoàn thành CSV/Excel | Lọc theo kỳ/khoa/ngành/doanh nghiệp/trạng thái; export có audit và giới hạn 10.000 dòng |
 | Deploy | Hoàn thành | Frontend/backend Vercel, Neon và R2 public happy flow đã test |
-| Test hiện tại | Đạt | 213 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
+| Test hiện tại | Đạt | 217 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
 
 ## 7. Phần chưa hoàn thành hoặc mới ở mức MVP
 
@@ -163,7 +167,7 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 - Chưa có UIT SSO hoặc đồng bộ tình trạng sinh viên đang còn hiệu lực từ hệ thống trường.
 - Quản trị danh mục ngành nghề/kỹ năng đã có migration, API UIT-only, audit/optimistic lock,
   màn UIT hoàn chỉnh và Playwright E2E; chưa nối bộ chọn taxonomy vào form tin tuyển dụng.
-- Chưa có quản lý vòng đời thực tập sau `HIRED`: bắt đầu, đang thực tập, hoàn thành, đánh giá.
+- Vòng đời thực tập sau `HIRED` đã có bắt đầu/hoàn thành và actor history; chưa có phiếu đánh giá doanh nghiệp/sinh viên.
 - Báo cáo hồ sơ theo khoa, ngành, doanh nghiệp và kỳ tuyển dụng đã có CSV/Excel; PDF chưa làm vì là phần tùy chọn sau ưu tiên chính.
 - Chưa có saved jobs, lịch sử xem tin và nhắc hạn nộp hoàn chỉnh.
 - Chưa có màn SchedulerLog, cấu hình ngưỡng, resend log và theo dõi delivered/bounced.
@@ -216,7 +220,7 @@ Mục tiêu: thay việc bấm tay bằng bằng chứng có thể chạy lại.
 
 1. Quản lý danh mục ngành nghề/kỹ năng cho UIT. **Đã hoàn thành.**
 2. Báo cáo có bộ lọc và xuất CSV/Excel; PDF chỉ làm nếu còn thời gian. **Đã hoàn thành CSV/Excel.**
-3. Mở rộng placement thành vòng đời thực tập: `HIRED → STARTED → COMPLETED`, có actor/history.
+3. Mở rộng placement thành vòng đời thực tập: `HIRED → STARTED → COMPLETED`, có actor/history. **Đã hoàn thành.**
 4. Bổ sung đánh giá doanh nghiệp hoặc xác nhận hoàn thành thực tập nếu phù hợp quy trình thật.
 5. Chỉ nghiên cứu UIT SSO sau khi có thông tin tích hợp chính thức; không giả lập SSO production.
 
@@ -264,7 +268,7 @@ rồi bỏ backend.
 
 - Category/skill admin. **Đã hoàn thành.**
 - Báo cáo và export CSV/Excel. **Đã hoàn thành; PDF tùy chọn chưa làm.**
-- Vòng đời thực tập sau `HIRED`.
+- Vòng đời thực tập sau `HIRED`. **Đã hoàn thành.**
 - Bundle splitting và frontend test coverage.
 - Resend production/SchedulerLog nếu nhóm cần trình bày vận hành.
 
@@ -336,6 +340,7 @@ Một tính năng chỉ được coi là hoàn thành khi đáp ứng đủ ph�
 - Phạm vi release: `docs/releases/v0.1.0.md`
 - Kịch bản E2E: `docs/demo/e2e-defense-script.md`
 - Application state machine: `docs/domain/application-state-machine.md`
+- Internship placement lifecycle: `docs/domain/internship-placement-lifecycle.md`
 - Job state machine: `docs/domain/job-state-machine.md`
 - ERD: `docs/domain/erd.md`
 - OpenAPI: `docs/api/openapi.yaml`
