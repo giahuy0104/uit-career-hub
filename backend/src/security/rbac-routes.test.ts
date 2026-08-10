@@ -74,6 +74,8 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "patch", path: `/api/v1/uit/taxonomy/skills/${resourceId}`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/taxonomy/skills/${resourceId}/archive`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/taxonomy/skills/${resourceId}/reactivate`, role: "UIT_ADMIN" },
+  { method: "get", path: "/api/v1/uit/reports/applications", role: "UIT_ADMIN" },
+  { method: "post", path: "/api/v1/uit/reports/applications/exports", role: "UIT_ADMIN" },
 
   { method: "get", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
   { method: "get", path: "/api/v1/companies/me/dashboard", role: "COMPANY" },

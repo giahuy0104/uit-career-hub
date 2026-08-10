@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { apiRequest } from "../api/client.js";
+import { apiRequest, apiResponse } from "../api/client.js";
 
 const AuthContext = createContext(null);
 let sharedRefreshPromise = null;
@@ -92,6 +92,32 @@ export function AuthProvider({ children }) {
     }
   }, [session, refresh]);
 
+  const authorizedResponse = useCallback(async (path, options = {}) => {
+    if (!session?.accessToken) {
+      throw new Error("Vui lòng đăng nhập để tiếp tục.");
+    }
+    try {
+      return await apiResponse(path, {
+        ...options,
+        headers: {
+          ...options.headers,
+          authorization: `Bearer ${session.accessToken}`,
+        },
+      });
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      const renewed = await refresh();
+      if (!renewed) throw error;
+      return apiResponse(path, {
+        ...options,
+        headers: {
+          ...options.headers,
+          authorization: `Bearer ${renewed.accessToken}`,
+        },
+      });
+    }
+  }, [session, refresh]);
+
   const value = useMemo(() => ({
     session,
     user: session?.user ?? null,
@@ -101,7 +127,8 @@ export function AuthProvider({ children }) {
     logout,
     refresh,
     authorizedRequest,
-  }), [session, loading, login, activateCompanyAccount, logout, refresh, authorizedRequest]);
+    authorizedResponse,
+  }), [session, loading, login, activateCompanyAccount, logout, refresh, authorizedRequest, authorizedResponse]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

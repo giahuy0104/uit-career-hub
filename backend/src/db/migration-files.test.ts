@@ -15,10 +15,10 @@ describe("loadMigrationFiles", () => {
     expect(migrations[0]?.checksum).toMatch(/^[a-f0-9]{64}$/);
     expect(migrations[0]?.sql).toContain("CREATE TABLE applications");
     expect(migrations.at(-1)).toMatchObject({
-      version: "0014",
-      name: "taxonomy_administration",
-      fileName: "0014_taxonomy_administration.sql",
+      version: "0015",
+      name: "uit_application_reporting",
+      fileName: "0015_uit_application_reporting.sql",
     });
-    expect(migrations.at(-1)?.sql).toContain("ADD COLUMN is_active");
+    expect(migrations.at(-1)?.sql).toContain("idx_applications_uit_reporting_period");
   });
 });

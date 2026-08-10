@@ -10,7 +10,7 @@ database/
 │   ├── 0001_initial_mvp_schema.sql
 │   ├── ...
 │   ├── 0010_email_delivery_outbox.sql
-│   └── 0011_company_partner_management.sql
+│   └── 0015_uit_application_reporting.sql
 └── seeds/
     ├── development.sql
     └── demo-reset.sql
@@ -25,6 +25,9 @@ lịch sử ngoài ý muốn khi bật provider lần đầu.
 Migration `0011` bổ sung mã số thuế duy nhất, optimistic version cho doanh nghiệp và nguyên nhân tạm
 ngưng tài khoản. Đây là nền tảng cho UIT quản lý đối tác, tạo link kích hoạt một lần và khôi phục đúng
 các tài khoản bị tạm ngưng theo doanh nghiệp mà không mở nhầm tài khoản đã bị UIT khóa riêng.
+
+Migration `0015` chỉ bổ sung các index phục vụ báo cáo hồ sơ theo thời gian, khoa/ngành/khóa và
+doanh nghiệp/loại cơ hội. Migration không đổi enum, constraint hoặc state machine hiện có.
 
 ## Lệnh
 

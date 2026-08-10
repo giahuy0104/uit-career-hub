@@ -42,6 +42,7 @@ import {
   CompanyProfileManagement,
 } from "./companies/CompanyManagement.jsx";
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
+import { AdminReports } from "./reports/AdminReports.jsx";
 import { AdminTaxonomyManagement } from "./taxonomy/TaxonomyManagement.jsx";
 import {
   LiveAdminDashboard,
@@ -526,6 +527,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     "admin-dashboard": ["Tổng quan vận hành", "Theo dõi khối lượng xử lý, hạn cam kết và hoạt động tuyển dụng toàn trường."],
     "admin-companies": ["Doanh nghiệp đối tác", "Tạo hồ sơ, cấp tài khoản và quản lý trạng thái hợp tác với UIT."],
     "admin-taxonomy": ["Danh mục ngành nghề & kỹ năng", "Chuẩn hóa dữ liệu dùng cho tin tuyển dụng và giữ nguyên liên kết với dữ liệu lịch sử."],
+    "admin-reports": ["Báo cáo tuyển dụng", "Lọc, đối chiếu và xuất dữ liệu hồ sơ theo khoa, ngành, doanh nghiệp và kỳ tuyển dụng."],
     "admin-jobs": ["Duyệt tin tuyển dụng", "Kiểm tra nội dung, nhóm ngành, yêu cầu và thời hạn trước khi công khai."],
     "admin-documents": ["Xác minh tài liệu sinh viên", "Kiểm tra tài liệu PDF mới tải lên trước khi sinh viên dùng trong hồ sơ ứng tuyển."],
     "admin-applications": ["Duyệt hồ sơ sinh viên", "Xác minh điều kiện và tài liệu trước khi chuyển hồ sơ đến doanh nghiệp."],
@@ -539,6 +541,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     {activeRoute === "admin-dashboard" && <LiveAdminDashboard navigate={navigate} />}
     {activeRoute === "admin-companies" && <AdminCompanyManagement refreshKey={companiesVersion} onCreate={() => setModal("company")} />}
     {activeRoute === "admin-taxonomy" && <AdminTaxonomyManagement />}
+    {activeRoute === "admin-reports" && <AdminReports />}
     {activeRoute === "admin-jobs" && <LiveAdminJobReview targetJobId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-documents" && <AdminStudentDocumentReview targetDocumentId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}

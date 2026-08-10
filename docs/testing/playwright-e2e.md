@@ -8,6 +8,7 @@ Bộ E2E chạy Chromium trên hai cổng riêng (`5174` và `3100`) và bắt b
 - `@full`: happy flow Company tạo tin → UIT duyệt → Student ứng tuyển → UIT chuyển → Company sàng lọc/phỏng vấn/PASS/offer → Student nhận offer → UIT xác nhận placement.
 - `@full`: revision, supplement, UIT reject, Company reject, withdraw, cancel interview, decline offer và cross-company ownership.
 - `@full`: UIT tạo/đổi tên/archive/reactivate nhóm ngành và tạo kỹ năng qua UI thật.
+- `@full`: UIT lọc báo cáo tuyển dụng và tải được cả CSV lẫn XLSX thật.
 
 Mỗi test reset checkpoint trong database E2E trước khi chạy. Test dùng API setup chỉ để đưa dữ liệu về đúng tiền điều kiện nghiệp vụ; các transition cần bảo vệ vẫn được thao tác qua UI, ngoại trừ kiểm tra ownership trực tiếp ở API boundary.
 

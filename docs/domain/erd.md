@@ -192,6 +192,7 @@ erDiagram
 - Company chỉ đọc/sửa `companies`, `job_posts` thuộc company và chỉ thấy application sau khi UIT chuyển đến.
 - UIT_ADMIN quản lý đối tác, duyệt job/application và xác nhận placement; không tự gán kết quả tuyển dụng khi chưa có căn cứ.
 - UIT_ADMIN là vai trò duy nhất được tạo, đổi tên, ngừng hoặc kích hoạt lại category/skill; khóa nghiệp vụ không đổi và bản ghi không bị xóa cứng.
+- UIT_ADMIN là vai trò duy nhất được tổng hợp và xuất báo cáo toàn trường; export chỉ đọc các quan hệ hiện có và ghi một `AUDIT_LOGS` với `target_type = REPORT`.
 - `application_documents` là snapshot độc lập; thay đổi tài liệu gốc không làm đổi hồ sơ đã gửi.
 - `application_status_history`, `job_post_status_history` và `audit_logs` không có API cập nhật/xóa.
 - `notifications` chỉ chứa metadata/deep link, không chứa CV hay internal note.
