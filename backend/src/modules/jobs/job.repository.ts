@@ -263,11 +263,11 @@ export class JobRepository {
 
   async assertReferenceIds(client: PoolClient, table: "categories" | "skills", ids: string[]) {
     if (ids.length === 0) return true;
-    const result = await client.query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM ${table} WHERE id = ANY($1::uuid[])`,
+    const result = await client.query<{ id: string }>(
+      `SELECT id FROM ${table} WHERE id = ANY($1::uuid[]) AND is_active = true FOR KEY SHARE`,
       [ids],
     );
-    return Number(result.rows[0]?.count ?? 0) === new Set(ids).size;
+    return result.rows.length === new Set(ids).size;
   }
 
   async replaceReferences(client: PoolClient, jobId: string, input: JobDraftInput) {

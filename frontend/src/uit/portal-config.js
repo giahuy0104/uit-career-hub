@@ -5,6 +5,7 @@ import {
   ClipboardText,
   GraduationCap,
   House,
+  Tag,
   UserCheck,
 } from "@phosphor-icons/react";
 
@@ -18,6 +19,7 @@ export const adminPortalConfig = {
   navigation: [
     { key: "admin-dashboard", label: "Tổng quan", Icon: House },
     { key: "admin-companies", label: "Doanh nghiệp đối tác", Icon: Buildings },
+    { key: "admin-taxonomy", label: "Danh mục & kỹ năng", Icon: Tag },
     { key: "admin-jobs", label: "Duyệt tin tuyển dụng", Icon: Briefcase },
     { key: "admin-documents", label: "Xác minh tài liệu", Icon: ClipboardText },
     { key: "admin-applications", label: "Duyệt hồ sơ sinh viên", Icon: UserCheck },

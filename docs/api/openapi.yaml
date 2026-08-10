@@ -15,6 +15,7 @@ tags:
   - name: Applications
   - name: Companies
   - name: UIT
+  - name: Taxonomy
   - name: Interviews
   - name: Notifications
   - name: Scheduler
@@ -1019,6 +1020,213 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /uit/taxonomy/categories:
+    get:
+      tags: [UIT, Taxonomy]
+      operationId: listUitCategories
+      summary: Liệt kê nhóm ngành nghề để UIT quản trị
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaxonomyStatus' }
+      responses:
+        '200':
+          description: Danh sách nhóm ngành và số tin đang sử dụng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryListEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [UIT, Taxonomy]
+      operationId: createUitCategory
+      summary: Tạo nhóm ngành với mã ổn định
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryCreateRequest' }
+      responses:
+        '201':
+          description: Nhóm ngành đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/categories/{taxonomyId}:
+    parameters:
+      - $ref: '#/components/parameters/TaxonomyId'
+    patch:
+      tags: [UIT, Taxonomy]
+      operationId: updateUitCategory
+      summary: Đổi tên hiển thị của nhóm ngành; mã không thay đổi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxonomyUpdateRequest' }
+      responses:
+        '200':
+          description: Nhóm ngành đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/categories/{taxonomyId}/archive:
+    post:
+      tags: [UIT, Taxonomy]
+      operationId: archiveUitCategory
+      summary: Ngừng sử dụng nhóm ngành nếu không còn tin chưa kết thúc tham chiếu
+      parameters:
+        - $ref: '#/components/parameters/TaxonomyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxonomyStateRequest' }
+      responses:
+        '200':
+          description: Nhóm ngành đã chuyển sang INACTIVE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/categories/{taxonomyId}/reactivate:
+    post:
+      tags: [UIT, Taxonomy]
+      operationId: reactivateUitCategory
+      summary: Kích hoạt lại nhóm ngành
+      parameters:
+        - $ref: '#/components/parameters/TaxonomyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxonomyStateRequest' }
+      responses:
+        '200':
+          description: Nhóm ngành đã chuyển sang ACTIVE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/skills:
+    get:
+      tags: [UIT, Taxonomy]
+      operationId: listUitSkills
+      summary: Liệt kê kỹ năng để UIT quản trị
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TaxonomyStatus' }
+      responses:
+        '200':
+          description: Danh sách kỹ năng và số tin đang sử dụng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SkillListEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [UIT, Taxonomy]
+      operationId: createUitSkill
+      summary: Tạo kỹ năng với slug ổn định
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SkillCreateRequest' }
+      responses:
+        '201':
+          description: Kỹ năng đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SkillEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/skills/{taxonomyId}:
+    parameters:
+      - $ref: '#/components/parameters/TaxonomyId'
+    patch:
+      tags: [UIT, Taxonomy]
+      operationId: updateUitSkill
+      summary: Đổi tên hiển thị của kỹ năng; slug không thay đổi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxonomyUpdateRequest' }
+      responses:
+        '200':
+          description: Kỹ năng đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SkillEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/skills/{taxonomyId}/archive:
+    post:
+      tags: [UIT, Taxonomy]
+      operationId: archiveUitSkill
+      summary: Ngừng sử dụng kỹ năng nếu không còn tin chưa kết thúc tham chiếu
+      parameters:
+        - $ref: '#/components/parameters/TaxonomyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxonomyStateRequest' }
+      responses:
+        '200':
+          description: Kỹ năng đã chuyển sang INACTIVE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SkillEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /uit/taxonomy/skills/{taxonomyId}/reactivate:
+    post:
+      tags: [UIT, Taxonomy]
+      operationId: reactivateUitSkill
+      summary: Kích hoạt lại kỹ năng
+      parameters:
+        - $ref: '#/components/parameters/TaxonomyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaxonomyStateRequest' }
+      responses:
+        '200':
+          description: Kỹ năng đã chuyển sang ACTIVE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SkillEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /uit/companies:
     get:
       tags: [UIT]
@@ -1651,6 +1859,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    TaxonomyId:
+      name: taxonomyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     UserId:
       name: userId
       in: path
@@ -1741,6 +1954,89 @@ components:
         pageSize: { type: integer, minimum: 1 }
         totalItems: { type: integer, minimum: 0 }
         totalPages: { type: integer, minimum: 0 }
+    TaxonomyStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    TaxonomyItem:
+      type: object
+      required: [id, name, status, version, jobCount, openJobCount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        status: { $ref: '#/components/schemas/TaxonomyStatus' }
+        version: { type: integer, minimum: 1 }
+        jobCount: { type: integer, minimum: 0 }
+        openJobCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Category:
+      allOf:
+        - $ref: '#/components/schemas/TaxonomyItem'
+        - type: object
+          required: [code]
+          properties:
+            code: { type: string, minLength: 2, maxLength: 50, pattern: '^[A-Z0-9_]+$' }
+    Skill:
+      allOf:
+        - $ref: '#/components/schemas/TaxonomyItem'
+        - type: object
+          required: [slug]
+          properties:
+            slug: { type: string, minLength: 2, maxLength: 80, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+    CategoryCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code: { type: string, minLength: 2, maxLength: 50, pattern: '^[A-Z0-9_]+$' }
+        name: { type: string, minLength: 2, maxLength: 120 }
+    SkillCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [slug, name]
+      properties:
+        slug: { type: string, minLength: 2, maxLength: 80, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        name: { type: string, minLength: 2, maxLength: 120 }
+    TaxonomyUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, expectedVersion]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        expectedVersion: { type: integer, minimum: 1 }
+    TaxonomyStateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, reason]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 5, maxLength: 500 }
+    CategoryEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Category' }
+    SkillEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Skill' }
+    CategoryListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Category' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    SkillListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Skill' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
     ErrorEnvelope:
       type: object
       required: [error]

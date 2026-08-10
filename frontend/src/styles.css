@@ -400,3 +400,47 @@ button { cursor: pointer; }
 @media (max-width: 760px) {
   .company-management-toolbar .primary-button { width:100%; margin-left:0; }.company-detail-columns { grid-template-columns:1fr; }.company-detail-columns > section { padding-right:0; border-right:0; }.company-detail-columns > aside { padding-left:0; border-top:1px solid var(--line); }.add-recruiter-row { grid-template-columns:1fr; }.company-create-modal .two-cols { grid-template-columns:1fr; }.company-create-modal .full { grid-column:auto; }.offer-review-card { align-items:flex-start; flex-wrap:wrap; }.offer-review-open { width:100%; justify-content:center; }.offer-review-error { position:static; width:100%; margin:0; }
 }
+
+/* UIT taxonomy administration */
+.taxonomy-tabs { margin-bottom:14px; display:flex; gap:7px; border-bottom:1px solid var(--line); }
+.taxonomy-tabs button { min-height:44px; padding:0 15px; display:flex; align-items:center; gap:7px; border:0; border-bottom:3px solid transparent; color:var(--muted); background:transparent; font-size:9px; font-weight:750; }
+.taxonomy-tabs button.active { color:var(--blue); border-bottom-color:var(--blue); }
+.metric-grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.taxonomy-panel { overflow:hidden; }
+.taxonomy-toolbar { min-height:62px; padding:10px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); background:#fafbfd; }
+.taxonomy-toolbar .portal-search { margin:0; max-width:560px; }
+.taxonomy-toolbar .portal-search .secondary-button { flex:0 0 auto; }
+.taxonomy-toolbar > label { min-height:42px; padding:0 10px; display:flex; align-items:center; gap:8px; border:1px solid var(--line-strong); border-radius:7px; color:var(--muted); background:white; font-size:8px; font-weight:700; }
+.taxonomy-toolbar select { border:0; outline:0; color:#31445d; background:transparent; font:inherit; }
+.taxonomy-toolbar > .link-button { margin-left:auto; white-space:nowrap; }
+.taxonomy-table { width:100%; overflow-x:auto; }
+.taxonomy-table-head,.taxonomy-row { min-width:840px; padding:0 16px; display:grid; grid-template-columns:minmax(180px,1.4fr) minmax(150px,1fr) 110px 120px 125px 82px; gap:12px; align-items:center; }
+.taxonomy-table-head { min-height:42px; color:var(--muted); background:#f7f9fc; font-size:8px; font-weight:800; text-transform:uppercase; letter-spacing:.035em; }
+.taxonomy-row { min-height:68px; border-top:1px solid var(--line); color:#43536a; font-size:9px; }
+.taxonomy-row:hover { background:#fbfdff; }
+.taxonomy-row > span:first-child strong,.taxonomy-row > span:first-child small,.taxonomy-row > span:nth-child(4) strong,.taxonomy-row > span:nth-child(4) small { display:block; }
+.taxonomy-row > span:first-child strong,.taxonomy-row > span:nth-child(4) strong { color:#203650; font-size:9px; }
+.taxonomy-row small { margin-top:4px; color:var(--muted); font-size:7.5px; }
+.taxonomy-row code { width:max-content; max-width:100%; padding:5px 7px; overflow:hidden; border-radius:4px; color:#235991; background:#eef6ff; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.taxonomy-row time { color:var(--muted); font-size:8px; }
+.taxonomy-actions { display:flex; gap:5px; }
+.taxonomy-actions button { width:32px; height:32px; display:grid; place-items:center; border:1px solid var(--line); border-radius:6px; color:#4c6078; background:white; }
+.taxonomy-actions button:hover:not(:disabled) { color:var(--blue); border-color:#9fc5f2; }
+.taxonomy-actions button:disabled { cursor:not-allowed; opacity:.38; }
+.taxonomy-modal { width:min(560px,calc(100vw - 30px)); }
+.taxonomy-form small { margin-top:5px; display:block; color:var(--muted); font-size:8px; line-height:1.45; }
+.taxonomy-form input:disabled { color:#64748a; background:#f3f6f9; }
+
+@media (max-width: 900px) {
+  .metric-grid.three { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .taxonomy-toolbar { align-items:stretch; flex-wrap:wrap; }
+  .taxonomy-toolbar .portal-search { min-width:100%; max-width:none; }
+  .taxonomy-toolbar > .link-button { margin-left:0; }
+}
+
+@media (max-width: 620px) {
+  .metric-grid.three { grid-template-columns:1fr; }
+  .taxonomy-tabs button { flex:1; justify-content:center; }
+  .taxonomy-toolbar > label { width:100%; justify-content:space-between; }
+  .taxonomy-toolbar select { flex:1; }
+}

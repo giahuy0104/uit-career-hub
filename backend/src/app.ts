@@ -36,6 +36,9 @@ import { createDailyPendingRouter } from "./modules/scheduler/daily-pending.rout
 import { DailyPendingService } from "./modules/scheduler/daily-pending.service.js";
 import type { ObjectStorage } from "./modules/storage/object-storage.js";
 import { R2ObjectStorage } from "./modules/storage/r2-object-storage.js";
+import { TaxonomyRepository, type TaxonomyDatabase } from "./modules/taxonomy/taxonomy.repository.js";
+import { createTaxonomyRouter } from "./modules/taxonomy/taxonomy.routes.js";
+import { TaxonomyService } from "./modules/taxonomy/taxonomy.service.js";
 import { AppError } from "./shared/app-error.js";
 
 type AppDependencies = {
@@ -57,6 +60,8 @@ type AppDependencies = {
   emailDeliveryService?: EmailDeliveryService;
   dailyPendingDatabase?: DailyPendingDatabase;
   dailyPendingService?: DailyPendingService;
+  taxonomyDatabase?: TaxonomyDatabase;
+  taxonomyService?: TaxonomyService;
   cronSecret?: string;
   objectStorage?: ObjectStorage;
 };
@@ -141,9 +146,14 @@ export function createApp(dependencies: AppDependencies = {}) {
       new DailyPendingRepository(dependencies.dailyPendingDatabase ?? databasePool),
       emailDeliveryService,
     );
+  const taxonomyService =
+    dependencies.taxonomyService ??
+    new TaxonomyService(
+      new TaxonomyRepository(dependencies.taxonomyDatabase ?? databasePool),
+    );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.12.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.13.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
@@ -156,6 +166,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use("/api/v1", createDashboardRouter(dashboardService, tokenService));
   app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
   app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
+  app.use("/api/v1", createTaxonomyRouter(taxonomyService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));
