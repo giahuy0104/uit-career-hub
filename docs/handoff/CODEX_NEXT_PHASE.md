@@ -160,7 +160,8 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 ### 7.2. Nghiệp vụ còn thiếu so với đề xuất ban đầu
 
 - Chưa có UIT SSO hoặc đồng bộ tình trạng sinh viên đang còn hiệu lực từ hệ thống trường.
-- Quản trị danh mục ngành nghề/kỹ năng mới có data model; chưa có màn UIT hoàn chỉnh.
+- Quản trị danh mục ngành nghề/kỹ năng đã có migration, API UIT-only, audit/optimistic lock,
+  màn UIT hoàn chỉnh và Playwright E2E; chưa nối bộ chọn taxonomy vào form tin tuyển dụng.
 - Chưa có quản lý vòng đời thực tập sau `HIRED`: bắt đầu, đang thực tập, hoàn thành, đánh giá.
 - Chưa có báo cáo nâng cao và xuất Excel/PDF theo khoa, ngành, doanh nghiệp, kỳ tuyển dụng.
 - Chưa có saved jobs, lịch sử xem tin và nhắc hạn nộp hoàn chỉnh.

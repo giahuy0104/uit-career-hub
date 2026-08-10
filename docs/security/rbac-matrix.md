@@ -37,6 +37,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | UIT | hàng đợi và quyết định hồ sơ `/uit/applications/**` | — | ✓ | — |
 | UIT | mở bản chụp tài liệu trong đơn `/uit/applications/{id}/documents/{id}/download` | — | ✓ | — |
 | UIT | quản lý đối tác và tài khoản tuyển dụng `/uit/companies/**` | — | ✓ | — |
+| UIT | quản lý nhóm ngành/kỹ năng `/uit/taxonomy/**` | — | ✓ | — |
 | Doanh nghiệp | quản lý tin `/companies/me/jobs/**` | — | — | ✓ |
 | Doanh nghiệp | `GET /companies/me/dashboard` | — | — | ✓ |
 | Doanh nghiệp | xem/cập nhật hồ sơ `/companies/me/profile` | — | — | ✓ |
@@ -54,6 +55,7 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 - `backend/src/modules/applications/application.integration.test.ts`: xác nhận sinh viên và doanh nghiệp không truy cập chéo hồ sơ, tài liệu hoặc đơn ứng tuyển.
 - `backend/src/modules/notifications/notification.integration.test.ts`: xác nhận người dùng chỉ đọc/cập nhật thông báo của mình.
 - `backend/src/modules/companies/company.integration.test.ts`: xác nhận tạo đối tác, kích hoạt một lần, optimistic lock, phân quyền và quy tắc tạm ngưng/khôi phục tài khoản.
+- `backend/src/modules/taxonomy/taxonomy.integration.test.ts`: xác nhận CRUD có audit/optimistic lock, UIT-only RBAC, chặn archive mục đang được job mở sử dụng và từ chối tham chiếu đã inactive.
 
 ## Rủi ro còn lại và giới hạn MVP
 

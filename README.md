@@ -188,6 +188,8 @@ Thông báo trong hệ thống thuộc MVP. Email Phase 2 hiện gửi cho bốn
 
 UIT Admin hiện có màn hình và API thật để tìm kiếm, tạo, chỉnh sửa, tạm ngưng/kích hoạt lại doanh nghiệp đối tác; thêm, khóa hoặc mở lại từng tài khoản tuyển dụng. Tài khoản mới nhận link kích hoạt một lần (72 giờ), token thô chỉ trả trong response và database chỉ lưu SHA-256 hash. Khi chưa bật email, UIT sao chép link và gửi thủ công; luồng này không phụ thuộc Resend. Doanh nghiệp có thể xem/cập nhật hồ sơ công khai của mình nhưng không được sửa mã đối tác, tên pháp lý, mã số thuế hay trạng thái hợp tác.
 
+UIT Admin cũng có màn quản trị nhóm ngành nghề và kỹ năng dùng dữ liệu PostgreSQL thật: tìm kiếm/lọc, tạo, đổi tên, ngừng hoạt động và kích hoạt lại. `code`/`slug` được giữ ổn định, mọi mutation có optimistic lock và audit log; mục đang được tin chưa kết thúc sử dụng không thể bị ngừng, còn job mới không thể tham chiếu mục đã inactive. Vòng đời chi tiết xem tại `docs/domain/taxonomy-lifecycle.md`.
+
 Dashboard của cả ba vai trò đã dùng số liệu PostgreSQL thật. UIT theo dõi hàng đợi, SLA, phễu và doanh nghiệp hoạt động; doanh nghiệp theo dõi tin, ứng viên, phỏng vấn và hiệu quả từng tin; sinh viên thấy độ hoàn thiện hồ sơ, đơn đang xử lý, offer, lịch phỏng vấn và các việc cần làm. Mỗi API dashboard có RBAC và phạm vi dữ liệu riêng theo người đăng nhập.
 
 ### Lịch phỏng vấn dùng dữ liệu thật

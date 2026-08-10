@@ -12,6 +12,7 @@ test("admin navigation exposes only API-backed screens", () => {
   assert.deepEqual(keys, [
     "admin-dashboard",
     "admin-companies",
+    "admin-taxonomy",
     "admin-jobs",
     "admin-documents",
     "admin-applications",
@@ -24,6 +25,7 @@ test("admin navigation exposes only API-backed screens", () => {
 });
 
 test("quick navigation resolves labels for each protected portal", () => {
+  assert.equal(findQuickNavigationTarget("admin", "taxonomy")?.key, "admin-taxonomy");
   assert.equal(findQuickNavigationTarget("admin", "doanh nghiệp")?.key, "admin-companies");
   assert.equal(findQuickNavigationTarget("company", "ứng viên")?.key, "company-candidates");
   assert.equal(findQuickNavigationTarget("student", "đơn ứng tuyển")?.key, "applications");
