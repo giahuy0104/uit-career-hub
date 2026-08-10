@@ -97,6 +97,11 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 
 `NOT_SUITABLE`, `INTERVIEW_FAILED`, `OFFER_DECLINED`, `UIT_REJECTED`, `WITHDRAWN`, `HIRED`.
 
+`HIRED` là terminal của **application tuyển dụng**, không phải kết thúc toàn bộ kỳ thực tập. Cùng transaction
+xác nhận `HIRED`, backend tạo một `internship_placements` riêng. Vòng đời sau tuyển dụng
+`HIRED → STARTED → COMPLETED` được mô tả tại `docs/domain/internship-placement-lifecycle.md`; việc chuyển
+trạng thái placement không sửa lại application và không ảnh hưởng quy tắc đóng nhiều đơn.
+
 ## Trạng thái lịch phỏng vấn
 
 Lịch mới ở `PENDING_STUDENT_CONFIRMATION`. Sinh viên sở hữu lịch có thể chuyển sang `CONFIRMED`; thao tác này khóa bản ghi, tăng `version`, ghi audit và thông báo doanh nghiệp. Gọi xác nhận lại khi đã `CONFIRMED` trả cùng kết quả mà không tạo thêm side effect. Hủy tham gia vẫn dùng transition của application sang `WITHDRAWN`, bắt buộc lý do và đồng thời chuyển lịch đang hoạt động sang `CANCELLED`.

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.1.0
+  version: 1.2.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -15,6 +15,7 @@ tags:
   - name: Applications
   - name: Companies
   - name: UIT
+  - name: Placements
   - name: Taxonomy
   - name: Reports
   - name: Interviews
@@ -1733,6 +1734,85 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /uit/placements:
+    get:
+      tags: [Placements]
+      operationId: listInternshipPlacements
+      summary: Theo dõi vòng đời thực tập sau khi UIT xác nhận nơi nhận việc
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/PlacementStatus' }
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 120 }
+      responses:
+        '200':
+          description: Danh sách kỳ thực tập cùng lịch sử actor và số liệu theo trạng thái
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlacementListEnvelope' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /uit/placements/{placementId}/start:
+    post:
+      tags: [Placements]
+      operationId: startInternshipPlacement
+      summary: Ghi nhận sinh viên bắt đầu kỳ thực tập
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlacementTransitionRequest' }
+      responses:
+        '200':
+          description: Kỳ thực tập chuyển từ HIRED sang STARTED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlacementEnvelope' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /uit/placements/{placementId}/complete:
+    post:
+      tags: [Placements]
+      operationId: completeInternshipPlacement
+      summary: Xác nhận sinh viên hoàn thành kỳ thực tập
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlacementTransitionRequest' }
+      responses:
+        '200':
+          description: Kỳ thực tập chuyển từ STARTED sang COMPLETED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlacementEnvelope' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /notifications:
     get:
       tags: [Notifications]
@@ -1923,6 +2003,11 @@ components:
       schema: { type: string, format: uuid }
     ApplicationId:
       name: applicationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PlacementId:
+      name: placementId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3112,6 +3197,111 @@ components:
       properties:
         startDate: { type: string, format: date }
         note: { type: string, maxLength: 500 }
+    PlacementStatus:
+      type: string
+      enum: [HIRED, STARTED, COMPLETED]
+    PlacementTransitionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, effectiveDate]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        effectiveDate: { type: string, format: date }
+        note: { type: string, minLength: 5, maxLength: 1000 }
+    PlacementHistory:
+      type: object
+      required: [fromStatus, toStatus, actorType, actorUserId, actorName, effectiveDate, note, createdAt]
+      properties:
+        fromStatus:
+          oneOf:
+            - { $ref: '#/components/schemas/PlacementStatus' }
+            - { type: 'null' }
+        toStatus: { $ref: '#/components/schemas/PlacementStatus' }
+        actorType: { type: string, enum: [UIT_ADMIN, SYSTEM] }
+        actorUserId: { type: [string, 'null'], format: uuid }
+        actorName: { type: string }
+        effectiveDate: { type: string, format: date }
+        note: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    InternshipPlacement:
+      type: object
+      required:
+        - id
+        - applicationId
+        - status
+        - version
+        - expectedStartDate
+        - actualStartDate
+        - completedDate
+        - hiredAt
+        - startedAt
+        - completedAt
+        - availableActions
+        - student
+        - job
+        - history
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/PlacementStatus' }
+        version: { type: integer, minimum: 1 }
+        expectedStartDate: { type: string, format: date }
+        actualStartDate: { type: [string, 'null'], format: date }
+        completedDate: { type: [string, 'null'], format: date }
+        hiredAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        availableActions:
+          type: array
+          items: { type: string, enum: [START, COMPLETE] }
+        student:
+          type: object
+          required: [id, studentCode, fullName, faculty, major, cohort, email]
+          properties:
+            id: { type: string, format: uuid }
+            studentCode: { type: string }
+            fullName: { type: string }
+            faculty: { type: string }
+            major: { type: string }
+            cohort: { type: string }
+            email: { type: string, format: email }
+        job:
+          type: object
+          required: [id, title, company]
+          properties:
+            id: { type: string, format: uuid }
+            title: { type: string }
+            company:
+              type: object
+              required: [id, code, name]
+              properties:
+                id: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/PlacementHistory' }
+    PlacementEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/InternshipPlacement' }
+    PlacementListEnvelope:
+      type: object
+      required: [data, summary, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/InternshipPlacement' }
+        summary:
+          type: object
+          required: [total, HIRED, STARTED, COMPLETED]
+          properties:
+            total: { type: integer, minimum: 0 }
+            HIRED: { type: integer, minimum: 0 }
+            STARTED: { type: integer, minimum: 0 }
+            COMPLETED: { type: integer, minimum: 0 }
+        meta: { $ref: '#/components/schemas/PageMeta' }
     Notification:
       type: object
       required: [id, type, title, body, resourceType, deepLink, payload, createdAt]

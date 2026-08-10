@@ -36,6 +36,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | UIT | `GET /uit/dashboard` | — | ✓ | — |
 | UIT | hàng đợi và quyết định hồ sơ `/uit/applications/**` | — | ✓ | — |
 | UIT | mở bản chụp tài liệu trong đơn `/uit/applications/{id}/documents/{id}/download` | — | ✓ | — |
+| UIT | xem và chuyển vòng đời thực tập `/uit/placements/**` | — | ✓ | — |
 | UIT | quản lý đối tác và tài khoản tuyển dụng `/uit/companies/**` | — | ✓ | — |
 | UIT | quản lý nhóm ngành/kỹ năng `/uit/taxonomy/**` | — | ✓ | — |
 | UIT | xem và xuất báo cáo hồ sơ `/uit/reports/**` | — | ✓ | — |
@@ -54,6 +55,7 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 - `backend/src/middleware/auth.test.ts`: kiểm tra độc lập middleware role/context/ownership.
 - `backend/src/modules/jobs/job.integration.test.ts`: xác nhận doanh nghiệp không đọc hoặc sửa tin của doanh nghiệp khác.
 - `backend/src/modules/applications/application.integration.test.ts`: xác nhận sinh viên và doanh nghiệp không truy cập chéo hồ sơ, tài liệu hoặc đơn ứng tuyển.
+- Cùng bộ application integration xác nhận lifecycle placement là UIT-only, khóa version/state, idempotent và thông báo đúng tenant.
 - `backend/src/modules/notifications/notification.integration.test.ts`: xác nhận người dùng chỉ đọc/cập nhật thông báo của mình.
 - `backend/src/modules/companies/company.integration.test.ts`: xác nhận tạo đối tác, kích hoạt một lần, optimistic lock, phân quyền và quy tắc tạm ngưng/khôi phục tài khoản.
 - `backend/src/modules/taxonomy/taxonomy.integration.test.ts`: xác nhận CRUD có audit/optimistic lock, UIT-only RBAC, chặn archive mục đang được job mở sử dụng và từ chối tham chiếu đã inactive.

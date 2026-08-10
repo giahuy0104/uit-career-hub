@@ -31,6 +31,9 @@ import { JobService } from "./modules/jobs/job.service.js";
 import { NotificationRepository, type NotificationDatabase } from "./modules/notifications/notification.repository.js";
 import { createNotificationRouter } from "./modules/notifications/notification.routes.js";
 import { NotificationService } from "./modules/notifications/notification.service.js";
+import { PlacementRepository, type PlacementDatabase } from "./modules/placements/placement.repository.js";
+import { createPlacementRouter } from "./modules/placements/placement.routes.js";
+import { PlacementService } from "./modules/placements/placement.service.js";
 import { ReportingRepository, type ReportingDatabase } from "./modules/reporting/reporting.repository.js";
 import { createReportingRouter } from "./modules/reporting/reporting.routes.js";
 import { ReportingService } from "./modules/reporting/reporting.service.js";
@@ -59,6 +62,8 @@ type AppDependencies = {
   dashboardService?: DashboardService;
   notificationDatabase?: NotificationDatabase;
   notificationService?: NotificationService;
+  placementDatabase?: PlacementDatabase;
+  placementService?: PlacementService;
   emailDeliveryDatabase?: EmailDeliveryDatabase;
   emailDeliveryService?: EmailDeliveryService;
   dailyPendingDatabase?: DailyPendingDatabase;
@@ -165,9 +170,14 @@ export function createApp(dependencies: AppDependencies = {}) {
     new ReportingService(
       new ReportingRepository(dependencies.reportingDatabase ?? databasePool),
     );
+  const placementService =
+    dependencies.placementService ??
+    new PlacementService(
+      new PlacementRepository(dependencies.placementDatabase ?? databasePool),
+    );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.14.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.15.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
@@ -182,6 +192,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
   app.use("/api/v1", createTaxonomyRouter(taxonomyService, tokenService));
   app.use("/api/v1", createReportingRouter(reportingService, tokenService));
+  app.use("/api/v1", createPlacementRouter(placementService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

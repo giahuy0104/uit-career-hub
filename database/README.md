@@ -10,7 +10,7 @@ database/
 │   ├── 0001_initial_mvp_schema.sql
 │   ├── ...
 │   ├── 0010_email_delivery_outbox.sql
-│   └── 0015_uit_application_reporting.sql
+│   └── 0016_internship_placement_lifecycle.sql
 └── seeds/
     ├── development.sql
     └── demo-reset.sql
@@ -28,6 +28,10 @@ các tài khoản bị tạm ngưng theo doanh nghiệp mà không mở nhầm t
 
 Migration `0015` chỉ bổ sung các index phục vụ báo cáo hồ sơ theo thời gian, khoa/ngành/khóa và
 doanh nghiệp/loại cơ hội. Migration không đổi enum, constraint hoặc state machine hiện có.
+
+Migration `0016` tạo aggregate `internship_placements` và history riêng cho vòng đời
+`HIRED → STARTED → COMPLETED`. Application vẫn giữ `HIRED` terminal; dữ liệu `HIRED` cũ được backfill
+an toàn từ offer và application history, không reset hoặc ghi đè dữ liệu production.
 
 ## Lệnh
 
