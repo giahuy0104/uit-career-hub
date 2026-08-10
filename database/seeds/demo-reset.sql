@@ -74,6 +74,9 @@ WHERE actor_user_id IN (SELECT id FROM demo_user_ids)
    OR target_id IN (SELECT id FROM demo_user_ids)
    OR target_id IN (SELECT id FROM demo_placement_ids);
 
+DELETE FROM internship_evaluations
+WHERE placement_id IN (SELECT id FROM demo_placement_ids);
+
 DELETE FROM internship_placement_history
 WHERE placement_id IN (SELECT id FROM demo_placement_ids);
 

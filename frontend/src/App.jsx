@@ -37,6 +37,7 @@ import { useAuth } from "./auth/AuthContext.jsx";
 import { CompanyActivationScreen } from "./auth/CompanyActivationScreen.jsx";
 import { LoginScreen, SessionLoadingScreen } from "./auth/LoginScreen.jsx";
 import { useNotifications } from "./notifications/NotificationContext.jsx";
+import { InternshipEvaluationPanel } from "./placements/InternshipEvaluationPanel.jsx";
 import {
   filterStudentApplications,
   filterStudentJobs,
@@ -439,6 +440,7 @@ function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId 
             {offerError && selected.recruitmentResult?.outcome === "PASS" && <p className="form-error offer-document-error"><Warning size={18} />{offerError}</p>}
             {selected.status === "NEEDS_SUPPLEMENT" && supplementRequest && <div className="supplement-request-card"><Warning size={24} /><span><small>YÊU CẦU BỔ SUNG TỪ UIT</small><strong>{supplementRequest.note}</strong><p>Cần nộp: {requiredSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")} · Hạn {formatDate(supplementRequest.metadata.dueAt)}</p></span><button className="primary-button" onClick={() => void openSupplement()}><UploadSimple size={18} />Chọn tài liệu</button></div>}
             {selected.status === "UIT_REVIEWING" && <p className="info-banner"><Info size={22} />Doanh nghiệp chưa thể xem CV cho đến khi UIT phê duyệt và chuyển hồ sơ.</p>}
+            {selected.status === "HIRED" && <InternshipEvaluationPanel role="student" applicationId={selected.id} />}
             <section className="student-application-history"><h3>Lịch sử xử lý</h3><div>{selected.timeline.slice().reverse().slice(0, 6).map((event, index) => <article key={`${event.createdAt}-${index}`}><span className="history-dot"><Check size={12} /></span><div><strong>{applicationStatusLabels[event.toStatus] || event.toStatus}</strong><small>{formatDate(event.createdAt)} · {event.actorType}</small>{event.note && <p>{event.note}</p>}</div></article>)}</div></section>
           </section>
           <section className="application-table-section live-applications-table"><h3>Tất cả đơn ứng tuyển ({filtered.length})</h3><div className="application-table"><div className="application-table-head"><span>Vị trí ứng tuyển</span><span>Công ty</span><span>Ngày nộp</span><span>Trạng thái hiện tại</span><span>Bước tiếp theo</span></div>{filtered.map((application) => <button className={`application-row ${application.id === selected.id ? "selected" : ""}`} key={application.id} onClick={() => setSelectedId(application.id)}><strong>{application.job.title}</strong><span>{application.job.company.name}</span><span>{formatDate(application.submittedAt)}</span><span><i className="status-tag pending">{applicationStatusLabels[application.status]}</i></span><span>Xem chi tiết <CaretRight size={15} /></span></button>)}</div></section>

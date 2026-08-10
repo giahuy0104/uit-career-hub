@@ -15,10 +15,10 @@ describe("loadMigrationFiles", () => {
     expect(migrations[0]?.checksum).toMatch(/^[a-f0-9]{64}$/);
     expect(migrations[0]?.sql).toContain("CREATE TABLE applications");
     expect(migrations.at(-1)).toMatchObject({
-      version: "0016",
-      name: "internship_placement_lifecycle",
-      fileName: "0016_internship_placement_lifecycle.sql",
+      version: "0017",
+      name: "internship_evaluations",
+      fileName: "0017_internship_evaluations.sql",
     });
-    expect(migrations.at(-1)?.sql).toContain("CREATE TABLE internship_placements");
+    expect(migrations.at(-1)?.sql).toContain("CREATE TABLE internship_evaluations");
   });
 });

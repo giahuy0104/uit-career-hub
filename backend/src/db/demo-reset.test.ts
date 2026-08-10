@@ -37,6 +37,15 @@ describe("resetDemoDatabase", () => {
     );
   });
 
+  it("should_delete_evaluations_before_demo_placements", async () => {
+    const sql = await readFile(`${getDatabaseDirectory("seeds")}/demo-reset.sql`, "utf8");
+
+    expect(sql.indexOf("DELETE FROM internship_evaluations")).toBeGreaterThan(-1);
+    expect(sql.indexOf("DELETE FROM internship_evaluations")).toBeLessThan(
+      sql.indexOf("DELETE FROM internship_placements"),
+    );
+  });
+
   it("should_cleanup_every_demo_offer_object_when_storage_is_enabled", async () => {
     const deleted: string[] = [];
     const logs: string[] = [];

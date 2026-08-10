@@ -419,6 +419,36 @@ button { cursor: pointer; }
 .placement-lifecycle-detail .review-actions { padding:15px 16px 0; justify-content:flex-end; }
 .placement-finished { display:flex; align-items:center; gap:7px; color:var(--green); font-size:9px; font-weight:800; }
 .placement-transition-modal { width:min(570px,calc(100vw - 30px)); }
+.internship-evaluation-panel { margin:18px 0; padding:18px; border:1px solid #cbdcf1; border-radius:9px; background:#f8fbff; }
+.candidate-detail-modal .internship-evaluation-panel { margin:18px 0 0; }
+.internship-evaluation-panel > header { display:flex; align-items:flex-start; gap:10px; }
+.internship-evaluation-panel > header > span { width:35px; height:35px; flex:0 0 auto; display:grid; place-items:center; border-radius:8px; color:#1e5fa7; background:#e8f2ff; }
+.internship-evaluation-panel > header h3 { margin:0; color:#173b66; font-size:12px; }
+.internship-evaluation-panel > header p { margin:5px 0 0; color:var(--muted); font-size:8px; line-height:1.5; }
+.internship-evaluation-status,.internship-evaluation-locked,.internship-feedback-received,.internship-evaluation-success { margin-top:13px; padding:10px 12px; display:flex; align-items:flex-start; gap:8px; border-radius:7px; color:#36516f; background:white; font-size:8px; }
+.internship-evaluation-status svg,.internship-evaluation-locked svg { flex:0 0 auto; color:var(--blue); }
+.internship-evaluation-status strong,.internship-evaluation-status small { display:block; }.internship-evaluation-status small { margin-top:4px; color:var(--muted); }
+.internship-evaluation-success,.internship-feedback-received { color:var(--green); background:var(--green-bg); font-weight:750; }
+.internship-evaluation-form { margin-top:14px; display:grid; gap:11px; }
+.internship-rating-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.internship-evaluation-form label > span { margin-bottom:5px; display:block; color:#344b66; font-size:8px; font-weight:750; }
+.internship-evaluation-form select,.internship-evaluation-form textarea { width:100%; padding:9px; border:1px solid var(--line-strong); border-radius:6px; color:var(--text); background:white; font:inherit; font-size:9px; }
+.internship-evaluation-form select { min-height:38px; }.internship-evaluation-form textarea { min-height:78px; resize:vertical; line-height:1.5; }
+.internship-evaluation-form .internship-recommendation { padding:10px; display:flex; align-items:flex-start; gap:8px; border-radius:6px; background:white; }
+.internship-evaluation-form .internship-recommendation input { margin-top:1px; }.internship-evaluation-form .internship-recommendation span { margin:0; }
+.internship-evaluation-form .primary-button { justify-self:start; }
+.internship-evaluation-immutable { color:var(--muted); font-size:7.5px; }
+.internship-evaluation-privacy { margin:0; display:flex; align-items:center; gap:6px; color:#556d89; font-size:8px; line-height:1.5; }
+.internship-evaluation-privacy svg { flex:0 0 auto; color:var(--blue); }
+.internship-evaluation-result { margin-top:13px; padding:13px; border:1px solid #d8e5f3; border-radius:7px; background:white; }
+.internship-evaluation-result > header { display:flex; align-items:center; gap:8px; }.internship-evaluation-result > header > span { color:var(--green); }.internship-evaluation-result > header > div { flex:1; }
+.internship-evaluation-result > header strong,.internship-evaluation-result > header small { display:block; }.internship-evaluation-result > header strong { font-size:9px; }.internship-evaluation-result > header small { margin-top:3px; color:var(--muted); font-size:7.5px; }
+.internship-evaluation-result > header i { padding:4px 6px; border-radius:5px; color:var(--green); background:var(--green-bg); font-size:7px; font-style:normal; font-weight:800; }
+.internship-rating-summary { margin-top:11px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }.internship-rating-summary span { padding:8px; border-radius:5px; background:#f5f8fc; text-align:center; }.internship-rating-summary small,.internship-rating-summary strong { display:block; }.internship-rating-summary small { color:var(--muted); font-size:7px; }.internship-rating-summary strong { margin-top:3px; color:#174d8b; font-size:10px; }
+.internship-evaluation-copy { margin-top:10px; }.internship-evaluation-copy small { color:var(--muted); font-size:7px; font-weight:800; text-transform:uppercase; }.internship-evaluation-copy p { margin:4px 0 0; color:#3f526a; font-size:8px; line-height:1.55; }
+.internship-evaluation-result > .internship-evaluation-privacy { margin-top:10px; }
+.admin-placement-evaluations { margin:20px 16px 8px; padding-top:15px; border-top:1px solid var(--line); }.admin-placement-evaluations h4 { margin:0 0 10px; font-size:10px; }.admin-placement-evaluations > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.admin-evaluation-card { padding:11px; border:1px solid #d7e4f2; border-radius:7px; background:#f8fbff; }.admin-evaluation-card.empty { display:grid; place-items:center; min-height:95px; color:var(--muted); text-align:center; }.admin-evaluation-card > header { display:flex; justify-content:space-between; gap:8px; }.admin-evaluation-card > header span { color:var(--blue); font-weight:850; }.admin-evaluation-card strong { font-size:8.5px; }.admin-evaluation-card small { margin-top:4px; display:block; color:var(--muted); font-size:7px; }.admin-evaluation-card p { margin:7px 0 0; color:#40546c; font-size:7.5px; line-height:1.45; }.admin-evaluation-card i { margin-top:8px; display:inline-block; color:var(--green); font-size:7px; font-style:normal; font-weight:750; }
 
 @media (max-width: 900px) {
   .placement-lifecycle-workspace { grid-template-columns:1fr; }
@@ -433,6 +463,8 @@ button { cursor: pointer; }
   .placement-lifecycle-filters { grid-template-columns:1fr; }
   .placement-lifecycle-filters .primary-button { grid-column:auto; }
   .placement-date-grid { grid-template-columns:1fr; }
+  .internship-rating-grid,.admin-placement-evaluations > div { grid-template-columns:1fr; }
+  .internship-rating-summary { grid-template-columns:repeat(2,1fr); }
 }
 .company-create-modal { width:min(760px,calc(100vw - 30px)); max-height:92vh; overflow:auto; }
 .company-form .form-divider { padding:14px 0 3px; border-top:1px solid var(--line); }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.2.0
+  version: 1.3.0
   description: Contract skeleton cho happy flow MVP của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -1813,6 +1813,97 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /applications/{applicationId}/internship-evaluations:
+    get:
+      tags: [Placements]
+      operationId: getStudentInternshipEvaluations
+      summary: Sinh viên xem vòng đời và các phiếu của kỳ thực tập thuộc chính mình
+      description: Sinh viên thấy đánh giá doanh nghiệp và phản hồi của chính mình.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: Trạng thái placement và phiếu đánh giá hiện có
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipEvaluationViewEnvelope' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Placements]
+      operationId: submitStudentInternshipEvaluation
+      summary: Sinh viên gửi phản hồi bất biến sau khi kỳ thực tập hoàn thành
+      description: Nội dung phản hồi chỉ hiển thị cho sinh viên và UIT; doanh nghiệp chỉ biết phiếu đã được gửi.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipEvaluationRequest' }
+      responses:
+        '201':
+          description: Đã lưu phản hồi sinh viên
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipEvaluationViewEnvelope' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /companies/me/applications/{applicationId}/internship-evaluations:
+    get:
+      tags: [Placements]
+      operationId: getCompanyInternshipEvaluations
+      summary: Doanh nghiệp xem phiếu đánh giá của mình cho kỳ thực tập thuộc doanh nghiệp
+      description: Không trả nội dung phản hồi riêng của sinh viên; chỉ trả cờ studentEvaluationSubmitted.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: Trạng thái placement và phiếu doanh nghiệp đã gửi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipEvaluationViewEnvelope' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Placements]
+      operationId: submitCompanyInternshipEvaluation
+      summary: Doanh nghiệp gửi đánh giá bất biến sau khi kỳ thực tập hoàn thành
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipEvaluationRequest' }
+      responses:
+        '201':
+          description: Đã lưu đánh giá doanh nghiệp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipEvaluationViewEnvelope' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /notifications:
     get:
       tags: [Notifications]
@@ -3223,6 +3314,93 @@ components:
         effectiveDate: { type: string, format: date }
         note: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }
+    InternshipEvaluationRole:
+      type: string
+      enum: [STUDENT, COMPANY]
+    InternshipEvaluationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - workQualityRating
+        - collaborationRating
+        - professionalismRating
+        - overallRating
+        - recommendation
+        - strengths
+      properties:
+        workQualityRating: { type: integer, minimum: 1, maximum: 5 }
+        collaborationRating: { type: integer, minimum: 1, maximum: 5 }
+        professionalismRating: { type: integer, minimum: 1, maximum: 5 }
+        overallRating: { type: integer, minimum: 1, maximum: 5 }
+        recommendation: { type: boolean }
+        strengths: { type: string, minLength: 10, maxLength: 2000 }
+        improvements: { type: string, minLength: 5, maxLength: 2000 }
+    InternshipEvaluation:
+      type: object
+      required:
+        - id
+        - respondentRole
+        - workQualityRating
+        - collaborationRating
+        - professionalismRating
+        - overallRating
+        - recommendation
+        - strengths
+        - improvements
+        - submittedBy
+        - submittedAt
+      properties:
+        id: { type: string, format: uuid }
+        respondentRole: { $ref: '#/components/schemas/InternshipEvaluationRole' }
+        workQualityRating: { type: integer, minimum: 1, maximum: 5 }
+        collaborationRating: { type: integer, minimum: 1, maximum: 5 }
+        professionalismRating: { type: integer, minimum: 1, maximum: 5 }
+        overallRating: { type: integer, minimum: 1, maximum: 5 }
+        recommendation: { type: boolean }
+        strengths: { type: string }
+        improvements: { type: [string, 'null'] }
+        submittedBy:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        submittedAt: { type: string, format: date-time }
+    InternshipEvaluationView:
+      type: object
+      required:
+        - placement
+        - companyEvaluation
+        - studentEvaluation
+        - studentEvaluationSubmitted
+        - canSubmit
+      properties:
+        placement:
+          type: object
+          required: [id, applicationId, status, expectedStartDate, actualStartDate, completedDate]
+          properties:
+            id: { type: string, format: uuid }
+            applicationId: { type: string, format: uuid }
+            status: { $ref: '#/components/schemas/PlacementStatus' }
+            expectedStartDate: { type: string, format: date }
+            actualStartDate: { type: [string, 'null'], format: date }
+            completedDate: { type: [string, 'null'], format: date }
+        companyEvaluation:
+          oneOf:
+            - { $ref: '#/components/schemas/InternshipEvaluation' }
+            - { type: 'null' }
+        studentEvaluation:
+          description: Luôn null trong response cho COMPANY để bảo vệ nội dung phản hồi sinh viên.
+          oneOf:
+            - { $ref: '#/components/schemas/InternshipEvaluation' }
+            - { type: 'null' }
+        studentEvaluationSubmitted: { type: boolean }
+        canSubmit: { type: boolean }
+    InternshipEvaluationViewEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/InternshipEvaluationView' }
     InternshipPlacement:
       type: object
       required:
@@ -3240,6 +3418,7 @@ components:
         - student
         - job
         - history
+        - evaluations
       properties:
         id: { type: string, format: uuid }
         applicationId: { type: string, format: uuid }
@@ -3281,6 +3460,18 @@ components:
         history:
           type: array
           items: { $ref: '#/components/schemas/PlacementHistory' }
+        evaluations:
+          type: object
+          required: [company, student]
+          properties:
+            company:
+              oneOf:
+                - { $ref: '#/components/schemas/InternshipEvaluation' }
+                - { type: 'null' }
+            student:
+              oneOf:
+                - { $ref: '#/components/schemas/InternshipEvaluation' }
+                - { type: 'null' }
     PlacementEnvelope:
       type: object
       required: [data]

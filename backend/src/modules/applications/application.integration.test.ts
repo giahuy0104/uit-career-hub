@@ -76,6 +76,15 @@ describeWithDatabase("student job application flow", () => {
       [userIds, studentProfileIds],
     );
     await client.query(
+      `DELETE FROM internship_evaluations
+       WHERE placement_id IN (
+         SELECT ip.id FROM internship_placements ip
+         JOIN applications a ON a.id = ip.application_id
+         WHERE a.student_profile_id = ANY($1::uuid[])
+       )`,
+      [studentProfileIds],
+    );
+    await client.query(
       `DELETE FROM internship_placement_history
        WHERE placement_id IN (
          SELECT ip.id FROM internship_placements ip
@@ -1781,7 +1790,7 @@ describeWithDatabase("student job application flow", () => {
     expect(forbidden.status).toBe(403);
   }, 30_000);
 
-  it("tracks HIRED to STARTED to COMPLETED with history, audit, notifications, and idempotency", async () => {
+  it("tracks placement lifecycle and immutable two-sided evaluations with privacy and idempotency", async () => {
     const accepted = await prepareAcceptedOffer();
     const confirmed = await request(app)
       .post(`/api/v1/uit/applications/${accepted.applicationId}/confirm-placement`)
@@ -1832,6 +1841,21 @@ describeWithDatabase("student job application flow", () => {
       effectiveDate: today,
     });
 
+    const prematureEvaluation = await request(app)
+      .post(`/api/v1/companies/me/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${accepted.recruiter.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send({
+        workQualityRating: 5,
+        collaborationRating: 4,
+        professionalismRating: 5,
+        overallRating: 5,
+        recommendation: true,
+        strengths: "Sinh viên hoàn thành công việc đúng cam kết.",
+      });
+    expect(prematureEvaluation.status).toBe(409);
+    expect(prematureEvaluation.body.error.code).toBe("INTERNSHIP_EVALUATION_NOT_AVAILABLE");
+
     const repeated = await request(app)
       .post(`/api/v1/uit/placements/${placement.id}/start`)
       .set("Authorization", `Bearer ${accepted.admin.token}`)
@@ -1875,6 +1899,109 @@ describeWithDatabase("student job application flow", () => {
       "COMPLETED",
     ]);
 
+    const companyCommand = randomUUID();
+    const companyPayload = {
+      workQualityRating: 5,
+      collaborationRating: 4,
+      professionalismRating: 5,
+      overallRating: 5,
+      recommendation: true,
+      strengths: "Sinh viên chủ động, hoàn thành công việc đúng cam kết.",
+      improvements: "Cần trình bày kết quả ngắn gọn hơn trong các buổi review.",
+    };
+    const companyEvaluation = await request(app)
+      .post(`/api/v1/companies/me/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${accepted.recruiter.token}`)
+      .set("Idempotency-Key", companyCommand)
+      .send(companyPayload);
+    expect(companyEvaluation.status).toBe(201);
+    expect(companyEvaluation.body.data).toMatchObject({
+      placement: { id: placement.id, status: "COMPLETED" },
+      companyEvaluation: {
+        respondentRole: "COMPANY",
+        overallRating: 5,
+        strengths: companyPayload.strengths,
+      },
+      studentEvaluation: null,
+      studentEvaluationSubmitted: false,
+      canSubmit: false,
+    });
+
+    const repeatedCompanyEvaluation = await request(app)
+      .post(`/api/v1/companies/me/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${accepted.recruiter.token}`)
+      .set("Idempotency-Key", companyCommand)
+      .send(companyPayload);
+    expect(repeatedCompanyEvaluation.status).toBe(201);
+    expect(repeatedCompanyEvaluation.body.data.companyEvaluation.id).toBe(
+      companyEvaluation.body.data.companyEvaluation.id,
+    );
+
+    const duplicateCompanyEvaluation = await request(app)
+      .post(`/api/v1/companies/me/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${accepted.recruiter.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send(companyPayload);
+    expect(duplicateCompanyEvaluation.status).toBe(409);
+    expect(duplicateCompanyEvaluation.body.error.code).toBe("INTERNSHIP_EVALUATION_ALREADY_SUBMITTED");
+
+    const studentPayload = {
+      workQualityRating: 4,
+      collaborationRating: 5,
+      professionalismRating: 4,
+      overallRating: 4,
+      recommendation: true,
+      strengths: "Doanh nghiệp hướng dẫn tận tình và giao công việc sát chuyên môn.",
+      improvements: "Nên thống nhất lịch phản hồi công việc sớm hơn.",
+    };
+    const studentEvaluation = await request(app)
+      .post(`/api/v1/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${accepted.student.token}`)
+      .set("Idempotency-Key", randomUUID())
+      .send(studentPayload);
+    expect(studentEvaluation.status).toBe(201);
+    expect(studentEvaluation.body.data).toMatchObject({
+      companyEvaluation: { respondentRole: "COMPANY", overallRating: 5 },
+      studentEvaluation: {
+        respondentRole: "STUDENT",
+        overallRating: 4,
+        strengths: studentPayload.strengths,
+      },
+      studentEvaluationSubmitted: true,
+      canSubmit: false,
+    });
+
+    const companyPrivateView = await request(app)
+      .get(`/api/v1/companies/me/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${accepted.recruiter.token}`);
+    expect(companyPrivateView.status).toBe(200);
+    expect(companyPrivateView.body.data.studentEvaluation).toBeNull();
+    expect(companyPrivateView.body.data.studentEvaluationSubmitted).toBe(true);
+    expect(JSON.stringify(companyPrivateView.body)).not.toContain(studentPayload.strengths);
+
+    const otherCompany = await createScenario();
+    const hiddenFromOtherCompany = await request(app)
+      .get(`/api/v1/companies/me/applications/${accepted.applicationId}/internship-evaluations`)
+      .set("Authorization", `Bearer ${otherCompany.recruiter.token}`);
+    expect(hiddenFromOtherCompany.status).toBe(404);
+
+    const placementWithEvaluations = await request(app)
+      .get("/api/v1/uit/placements?page=1&pageSize=100&status=COMPLETED")
+      .set("Authorization", `Bearer ${accepted.admin.token}`);
+    const evaluatedPlacement = placementWithEvaluations.body.data.find(
+      (item: { applicationId: string }) => item.applicationId === accepted.applicationId,
+    );
+    expect(evaluatedPlacement.evaluations).toMatchObject({
+      company: { respondentRole: "COMPANY", overallRating: 5 },
+      student: { respondentRole: "STUDENT", overallRating: 4 },
+    });
+
+    const applicationState = await client.query<{ status: string }>(
+      "SELECT status FROM applications WHERE id = $1",
+      [accepted.applicationId],
+    );
+    expect(applicationState.rows[0]?.status).toBe("HIRED");
+
     const invalidRestart = await request(app)
       .post(`/api/v1/uit/placements/${placement.id}/start`)
       .set("Authorization", `Bearer ${accepted.admin.token}`)
@@ -1893,6 +2020,17 @@ describeWithDatabase("student job application flow", () => {
       "INTERNSHIP_PLACEMENT_STARTED",
       "INTERNSHIP_PLACEMENT_COMPLETED",
     ]);
+    const evaluationAudit = await client.query<{ action: string }>(
+      `SELECT action FROM audit_logs
+       WHERE target_type = 'INTERNSHIP_EVALUATION'
+         AND metadata->>'placementId' = $1
+       ORDER BY created_at`,
+      [placement.id],
+    );
+    expect(evaluationAudit.rows.map((row) => row.action)).toEqual([
+      "COMPANY_INTERNSHIP_EVALUATION_SUBMITTED",
+      "STUDENT_INTERNSHIP_EVALUATION_SUBMITTED",
+    ]);
     const notifications = await client.query<{ recipient_user_id: string; type: string }>(
       `SELECT recipient_user_id, type FROM notifications
        WHERE resource_type = 'INTERNSHIP_PLACEMENT' AND resource_id = $1`,
@@ -1903,6 +2041,18 @@ describeWithDatabase("student job application flow", () => {
       { recipient_user_id: accepted.student.id, type: "INTERNSHIP_PLACEMENT_COMPLETED" },
       { recipient_user_id: accepted.recruiter.id, type: "INTERNSHIP_PLACEMENT_STARTED" },
       { recipient_user_id: accepted.recruiter.id, type: "INTERNSHIP_PLACEMENT_COMPLETED" },
+    ]));
+    const evaluationNotifications = await client.query<{ recipient_user_id: string; type: string }>(
+      `SELECT recipient_user_id, type FROM notifications
+       WHERE resource_type = 'INTERNSHIP_EVALUATION'
+         AND payload->>'placementId' = $1`,
+      [placement.id],
+    );
+    expect(evaluationNotifications.rows).toEqual(expect.arrayContaining([
+      { recipient_user_id: accepted.student.id, type: "COMPANY_INTERNSHIP_EVALUATION_SUBMITTED" },
+      { recipient_user_id: accepted.recruiter.id, type: "STUDENT_INTERNSHIP_EVALUATION_SUBMITTED" },
+      { recipient_user_id: accepted.admin.id, type: "COMPANY_INTERNSHIP_EVALUATION_SUBMITTED" },
+      { recipient_user_id: accepted.admin.id, type: "STUDENT_INTERNSHIP_EVALUATION_SUBMITTED" },
     ]));
   }, 30_000);
 });

@@ -31,6 +31,12 @@ import { JobService } from "./modules/jobs/job.service.js";
 import { NotificationRepository, type NotificationDatabase } from "./modules/notifications/notification.repository.js";
 import { createNotificationRouter } from "./modules/notifications/notification.routes.js";
 import { NotificationService } from "./modules/notifications/notification.service.js";
+import {
+  InternshipEvaluationRepository,
+  type InternshipEvaluationDatabase,
+} from "./modules/placements/evaluation.repository.js";
+import { createInternshipEvaluationRouter } from "./modules/placements/evaluation.routes.js";
+import { InternshipEvaluationService } from "./modules/placements/evaluation.service.js";
 import { PlacementRepository, type PlacementDatabase } from "./modules/placements/placement.repository.js";
 import { createPlacementRouter } from "./modules/placements/placement.routes.js";
 import { PlacementService } from "./modules/placements/placement.service.js";
@@ -64,6 +70,8 @@ type AppDependencies = {
   notificationService?: NotificationService;
   placementDatabase?: PlacementDatabase;
   placementService?: PlacementService;
+  internshipEvaluationDatabase?: InternshipEvaluationDatabase;
+  internshipEvaluationService?: InternshipEvaluationService;
   emailDeliveryDatabase?: EmailDeliveryDatabase;
   emailDeliveryService?: EmailDeliveryService;
   dailyPendingDatabase?: DailyPendingDatabase;
@@ -175,9 +183,16 @@ export function createApp(dependencies: AppDependencies = {}) {
     new PlacementService(
       new PlacementRepository(dependencies.placementDatabase ?? databasePool),
     );
+  const internshipEvaluationService =
+    dependencies.internshipEvaluationService ??
+    new InternshipEvaluationService(
+      new InternshipEvaluationRepository(
+        dependencies.internshipEvaluationDatabase ?? dependencies.placementDatabase ?? databasePool,
+      ),
+    );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.15.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.16.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
@@ -193,6 +208,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use("/api/v1", createTaxonomyRouter(taxonomyService, tokenService));
   app.use("/api/v1", createReportingRouter(reportingService, tokenService));
   app.use("/api/v1", createPlacementRouter(placementService, tokenService));
+  app.use("/api/v1", createInternshipEvaluationRouter(internshipEvaluationService, tokenService));
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

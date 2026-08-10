@@ -36,6 +36,8 @@ type PlacementRow = QueryResultRow & {
   company_code: string;
   company_name: string;
   history: PlacementDto["history"] | null;
+  company_evaluation: PlacementDto["evaluations"]["company"];
+  student_evaluation: PlacementDto["evaluations"]["student"];
 };
 
 const placementSelect = `
@@ -61,7 +63,51 @@ const placementSelect = `
            FROM internship_placement_history iph
            LEFT JOIN uit_staff us ON us.user_id = iph.actor_user_id
            WHERE iph.placement_id = ip.id
-         ), '[]'::jsonb) AS history
+         ), '[]'::jsonb) AS history,
+         (
+           SELECT jsonb_build_object(
+             'id', ie.id,
+             'respondentRole', ie.respondent_role,
+             'workQualityRating', ie.work_quality_rating,
+             'collaborationRating', ie.collaboration_rating,
+             'professionalismRating', ie.professionalism_rating,
+             'overallRating', ie.overall_rating,
+             'recommendation', ie.recommendation,
+             'strengths', ie.strengths,
+             'improvements', ie.improvements,
+             'submittedBy', jsonb_build_object(
+               'id', ie.submitted_by_user_id,
+               'name', COALESCE(cu.full_name, eu.email)
+             ),
+             'submittedAt', ie.created_at
+           )
+           FROM internship_evaluations ie
+           JOIN users eu ON eu.id = ie.submitted_by_user_id
+           LEFT JOIN company_users cu ON cu.user_id = eu.id
+           WHERE ie.placement_id = ip.id AND ie.respondent_role = 'COMPANY'
+         ) AS company_evaluation,
+         (
+           SELECT jsonb_build_object(
+             'id', ie.id,
+             'respondentRole', ie.respondent_role,
+             'workQualityRating', ie.work_quality_rating,
+             'collaborationRating', ie.collaboration_rating,
+             'professionalismRating', ie.professionalism_rating,
+             'overallRating', ie.overall_rating,
+             'recommendation', ie.recommendation,
+             'strengths', ie.strengths,
+             'improvements', ie.improvements,
+             'submittedBy', jsonb_build_object(
+               'id', ie.submitted_by_user_id,
+               'name', COALESCE(esp.full_name, eu.email)
+             ),
+             'submittedAt', ie.created_at
+           )
+           FROM internship_evaluations ie
+           JOIN users eu ON eu.id = ie.submitted_by_user_id
+           LEFT JOIN student_profiles esp ON esp.user_id = eu.id
+           WHERE ie.placement_id = ip.id AND ie.respondent_role = 'STUDENT'
+         ) AS student_evaluation
   FROM internship_placements ip
   JOIN applications a ON a.id = ip.application_id
   JOIN student_profiles sp ON sp.id = a.student_profile_id
@@ -76,6 +122,9 @@ function availableActions(status: PlacementStatus) {
 }
 
 function mapPlacement(row: PlacementRow): PlacementDto {
+  const normalizeEvaluation = (evaluation: PlacementDto["evaluations"]["company"]) => (
+    evaluation ? { ...evaluation, submittedAt: new Date(evaluation.submittedAt).toISOString() } : null
+  );
   return {
     id: row.id,
     applicationId: row.application_id,
@@ -107,6 +156,10 @@ function mapPlacement(row: PlacementRow): PlacementDto {
       effectiveDate: String(item.effectiveDate).slice(0, 10),
       createdAt: new Date(item.createdAt).toISOString(),
     })),
+    evaluations: {
+      company: normalizeEvaluation(row.company_evaluation),
+      student: normalizeEvaluation(row.student_evaluation),
+    },
   };
 }
 

@@ -44,6 +44,7 @@ import {
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
 import { AdminReports } from "./reports/AdminReports.jsx";
 import { AdminPlacementLifecycle } from "./placements/AdminPlacementLifecycle.jsx";
+import { InternshipEvaluationPanel } from "./placements/InternshipEvaluationPanel.jsx";
 import { AdminTaxonomyManagement } from "./taxonomy/TaxonomyManagement.jsx";
 import {
   LiveAdminDashboard,
@@ -1325,6 +1326,9 @@ function CompanyCandidateDetailModal({
     <div className="modal-backdrop" onMouseDown={close}>
       <div
         className="modal portal-modal candidate-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="candidate-detail-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button className="modal-close" aria-label="Đóng" onClick={close} disabled={Boolean(busyDocumentId) || offerDocumentBusy}>
@@ -1335,7 +1339,7 @@ function CompanyCandidateDetailModal({
             {userInitials(application.student.fullName)}
           </span>
           <div>
-            <h2>{application.student.fullName}</h2>
+            <h2 id="candidate-detail-title">{application.student.fullName}</h2>
             <p>
               {application.student.studentCode} · {application.student.major}
             </p>
@@ -1412,6 +1416,7 @@ function CompanyCandidateDetailModal({
             )}
           </section>
         )}
+        {application.status === "HIRED" && <InternshipEvaluationPanel role="company" applicationId={application.id} />}
         <section className="candidate-timeline">
           <h3>Lịch sử xử lý</h3>
           {application.timeline.map((event, index) => {
