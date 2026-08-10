@@ -30,9 +30,24 @@ stateDiagram-v2
 - Mỗi transition ghi audit và notification cho sinh viên cùng tất cả recruiter đang hoạt động của doanh nghiệp.
 - Các application khác đã được đóng ở transaction confirm placement trước đó không bị tác động bởi lifecycle này.
 
+## Phiếu đánh giá sau hoàn thành
+
+Khi placement ở `COMPLETED`, mỗi bên được gửi tối đa một phiếu bất biến:
+
+- `COMPANY` đánh giá sinh viên; recruiter phải thuộc đúng doanh nghiệp sở hữu job.
+- `STUDENT` phản hồi về kỳ thực tập; application phải thuộc đúng hồ sơ sinh viên đang đăng nhập.
+- Mỗi phiếu có bốn điểm từ 1–5, lựa chọn khuyến nghị, điểm nổi bật và nội dung cần cải thiện tùy chọn.
+- Unique `(placement_id, respondent_role)` ngăn gửi phiếu thứ hai; retry cùng `Idempotency-Key` trả phiếu đã tạo mà không lặp audit/notification.
+- Không có API sửa/xóa. Gửi trước `COMPLETED` trả `409 INTERNSHIP_EVALUATION_NOT_AVAILABLE`.
+- UIT xem đủ hai phiếu. Student xem phiếu của mình và đánh giá Company. Company chỉ xem phiếu của mình cùng cờ Student đã phản hồi, không nhận nội dung phản hồi riêng của Student.
+- Việc gửi phiếu không chuyển trạng thái placement và không sửa application terminal `HIRED`; mỗi lần gửi vẫn có audit và notification đúng tenant.
+
 ## API và UI
 
 - `GET /api/v1/uit/placements`: tìm kiếm, lọc trạng thái, xem số liệu và actor history.
 - `POST /api/v1/uit/placements/{placementId}/start`: `HIRED → STARTED`.
 - `POST /api/v1/uit/placements/{placementId}/complete`: `STARTED → COMPLETED`.
+- `GET/POST /api/v1/applications/{applicationId}/internship-evaluations`: Student xem/gửi phiếu thuộc chính mình.
+- `GET/POST /api/v1/companies/me/applications/{applicationId}/internship-evaluations`: Company xem/gửi phiếu thuộc đúng doanh nghiệp.
 - Portal UIT **Theo dõi kết quả** dùng các API trên và không hiển thị CTA ngoài `availableActions` từ backend.
+- Portal UIT hiển thị cả hai phiếu trong placement; portal Student và Company chỉ mở form khi backend trả `canSubmit=true`.

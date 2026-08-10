@@ -10,7 +10,8 @@ database/
 │   ├── 0001_initial_mvp_schema.sql
 │   ├── ...
 │   ├── 0010_email_delivery_outbox.sql
-│   └── 0016_internship_placement_lifecycle.sql
+│   ├── 0016_internship_placement_lifecycle.sql
+│   └── 0017_internship_evaluations.sql
 └── seeds/
     ├── development.sql
     └── demo-reset.sql
@@ -32,6 +33,10 @@ doanh nghiệp/loại cơ hội. Migration không đổi enum, constraint hoặc
 Migration `0016` tạo aggregate `internship_placements` và history riêng cho vòng đời
 `HIRED → STARTED → COMPLETED`. Application vẫn giữ `HIRED` terminal; dữ liệu `HIRED` cũ được backfill
 an toàn từ offer và application history, không reset hoặc ghi đè dữ liệu production.
+
+Migration `0017` tạo `internship_evaluations` cho phiếu Company và Student sau `COMPLETED`. Database khóa điểm
+trong khoảng 1–5, một phiếu cho mỗi vai trò/placement và một command cho mỗi placement; phiếu chỉ có API tạo/đọc,
+không có API sửa hoặc xóa.
 
 ## Lệnh
 

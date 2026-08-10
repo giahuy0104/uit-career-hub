@@ -118,6 +118,10 @@ Kết quả mong đợi trong cùng một transaction:
 Kết quả mong đợi: application vẫn ở `HIRED`; aggregate kỳ thực tập chuyển độc lập, sinh viên và recruiter nhận
 thông báo cho từng mốc.
 
+Nếu demo dài, tiếp tục đăng nhập Company để gửi đánh giá, đăng nhập Student để xem đánh giá đó và gửi phản hồi riêng,
+sau đó quay lại UIT để đối chiếu hai phiếu. Nhấn mạnh mỗi bên chỉ gửi một lần, Company không thấy nội dung Student và
+việc gửi phiếu không mở lại application `HIRED`.
+
 ### 5:45–6:45 — Kiểm tra kết quả ở sinh viên
 
 1. Làm mới danh sách đơn của sinh viên.
@@ -146,4 +150,4 @@ thông báo cho từng mốc.
 
 ## 7. Luồng đầy đủ để quay video hoặc demo dài
 
-Khi có 15–20 phút, có thể chạy từ đầu: doanh nghiệp tạo tin → UIT duyệt → sinh viên ứng tuyển hai bước → UIT chuyển hồ sơ → doanh nghiệp sàng lọc/đặt lịch/phỏng vấn → doanh nghiệp gửi offer → sinh viên nhận offer → UIT xác nhận nơi thực tập. Checkpoint ngắn ở trên phù hợp hơn cho phần bảo vệ trực tiếp.
+Khi có 15–20 phút, có thể chạy từ đầu: doanh nghiệp tạo tin → UIT duyệt → sinh viên ứng tuyển hai bước → UIT chuyển hồ sơ → doanh nghiệp sàng lọc/đặt lịch/phỏng vấn → doanh nghiệp gửi offer → sinh viên nhận offer → UIT xác nhận nơi thực tập → hoàn thành kỳ thực tập → hai phía gửi phiếu → UIT đối chiếu. Checkpoint ngắn ở trên phù hợp hơn cho phần bảo vệ trực tiếp.

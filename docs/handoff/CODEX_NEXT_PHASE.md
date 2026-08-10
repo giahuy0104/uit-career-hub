@@ -1,6 +1,6 @@
 # UIT Career Hub — Bàn giao sau khi hoàn thành happy flow
 
-> Cập nhật: 10/08/2026
+> Cập nhật: 11/08/2026
 > Baseline ổn định: `v0.1.0`
 > Commit baseline `v0.1.0`: `0bce5df0a10afff65975116fa18ab5d58c0286bd`
 
@@ -39,6 +39,8 @@ Happy flow chính đã hoàn thành và chạy được trên môi trường pub
     `ACCEPTED_OTHER_JOB`; lịch sử, audit và thông báo được tạo đầy đủ.
 11. UIT theo dõi kỳ thực tập riêng qua `HIRED → STARTED → COMPLETED`; application vẫn giữ `HIRED`
     terminal và mỗi mốc có actor history, audit, notification cùng optimistic lock.
+12. Sau `COMPLETED`, Company và Student mỗi bên gửi một phiếu bất biến; UIT đối chiếu đủ hai phía, còn Company
+    chỉ biết Student đã phản hồi mà không đọc nội dung riêng.
 
 Đây là bản MVP ổn định để phát triển tiếp thành đồ án hoàn chỉnh, chưa phải hệ thống production
 cho người dùng thật.
@@ -73,8 +75,8 @@ mô tả đơn thuần là “website tìm việc”.
 
 Không ghi API key, connection string, cookie secret hoặc tài khoản thật vào Git/Markdown.
 
-Tại thời điểm bàn giao, `origin/develop` đang **chậm hơn `origin/main` 26 commit và không có commit
-riêng**. Không tạo feature branch từ `develop` cũ; phải fast-forward `develop` tới `main` trước.
+Tại thời điểm bắt đầu lát cắt phiếu đánh giá, `origin/develop` đang **đi trước `origin/main` 11 commit và không bị
+chậm**. Tiếp tục tạo nhánh từ `develop`; không merge thẳng vào `main` trước release candidate.
 
 ## 4. Kiến trúc hiện tại
 
@@ -92,14 +94,14 @@ uit-career-hub/
 │       ├── companies/        Doanh nghiệp đối tác và recruiter
 │       ├── jobs/             Tin tuyển dụng và hàng đợi UIT
 │       ├── applications/     Hồ sơ, phỏng vấn, offer, placement
-│       ├── placements/       Vòng đời kỳ thực tập sau HIRED
+│       ├── placements/       Vòng đời và phiếu đánh giá kỳ thực tập sau HIRED
 │       ├── notifications/    Thông báo trong hệ thống
 │       ├── scheduler/        Tổng hợp hồ sơ chờ hằng ngày
 │       ├── email/            Outbox và Resend provider
 │       ├── dashboard/        Số liệu ba vai trò
 │       └── storage/          Cloudflare R2
 ├── database/
-│   ├── migrations/           `0001` đến `0016`
+│   ├── migrations/           `0001` đến `0017`
 │   └── seeds/                Dữ liệu development/demo
 ├── docs/api/openapi.yaml     Hợp đồng API
 ├── docs/domain/              ERD và state machine
@@ -138,13 +140,14 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 | Offer | Hoàn thành | PDF private, student accept/decline, UIT tải và đối chiếu |
 | Placement nhiều đơn | Hoàn thành | UIT confirm, một `HIRED`, đơn khác tự `WITHDRAWN` trong transaction |
 | Vòng đời thực tập | Hoàn thành | Aggregate riêng `HIRED → STARTED → COMPLETED`, actor history, audit, notification và UI UIT |
+| Phiếu kỳ thực tập | Hoàn thành | Company/Student gửi một lần sau `COMPLETED`; UIT xem đủ, phản hồi Student riêng tư với Company |
 | Thông báo | Hoàn thành MVP | Inbox, unread badge, read/read-all, deep link, ownership, dedupe |
 | Cron tổng hợp | Đã hiện thực | Tổng hợp hàng đợi UIT/doanh nghiệp theo ngày, chống gửi trùng |
 | Email | Một phần | Outbox/provider/retry đã có; chưa mặc định bật Resend production |
 | Dashboard | Hoàn thành MVP | Ba dashboard đọc PostgreSQL thật và có RBAC |
 | Báo cáo UIT | Hoàn thành CSV/Excel | Lọc theo kỳ/khoa/ngành/doanh nghiệp/trạng thái; export có audit và giới hạn 10.000 dòng |
 | Deploy | Hoàn thành | Frontend/backend Vercel, Neon và R2 public happy flow đã test |
-| Test hiện tại | Đạt | 217 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
+| Test hiện tại | Đạt | 222 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
 
 ## 7. Phần chưa hoàn thành hoặc mới ở mức MVP
 
@@ -167,7 +170,7 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 - Chưa có UIT SSO hoặc đồng bộ tình trạng sinh viên đang còn hiệu lực từ hệ thống trường.
 - Quản trị danh mục ngành nghề/kỹ năng đã có migration, API UIT-only, audit/optimistic lock,
   màn UIT hoàn chỉnh và Playwright E2E; chưa nối bộ chọn taxonomy vào form tin tuyển dụng.
-- Vòng đời thực tập sau `HIRED` đã có bắt đầu/hoàn thành và actor history; chưa có phiếu đánh giá doanh nghiệp/sinh viên.
+- Vòng đời và phiếu thực tập đã hoàn thành: UIT quản lý `HIRED → STARTED → COMPLETED`, Company/Student gửi phiếu bất biến và UIT đối chiếu đủ hai phía.
 - Báo cáo hồ sơ theo khoa, ngành, doanh nghiệp và kỳ tuyển dụng đã có CSV/Excel; PDF chưa làm vì là phần tùy chọn sau ưu tiên chính.
 - Chưa có saved jobs, lịch sử xem tin và nhắc hạn nộp hoàn chỉnh.
 - Chưa có màn SchedulerLog, cấu hình ngưỡng, resend log và theo dõi delivered/bounced.
@@ -199,7 +202,7 @@ Mục tiêu: toàn bộ chức năng đã có phải trông như một sản ph�
 8. Rà keyboard/focus/ARIA/contrast và sửa lỗi P0/P1.
 9. Dùng lazy import theo portal hoặc route để giảm bundle ban đầu.
 
-Đây là **việc tiếp theo được khuyến nghị**.
+Giai đoạn này đã hoàn thành lát cắt audit/loại CTA tĩnh chính; tiếp tục giữ các tiêu chí trên khi mở rộng UI.
 
 ### Giai đoạn 2 — Tự động hóa kiểm thử happy flow
 
@@ -221,7 +224,7 @@ Mục tiêu: thay việc bấm tay bằng bằng chứng có thể chạy lại.
 1. Quản lý danh mục ngành nghề/kỹ năng cho UIT. **Đã hoàn thành.**
 2. Báo cáo có bộ lọc và xuất CSV/Excel; PDF chỉ làm nếu còn thời gian. **Đã hoàn thành CSV/Excel.**
 3. Mở rộng placement thành vòng đời thực tập: `HIRED → STARTED → COMPLETED`, có actor/history. **Đã hoàn thành.**
-4. Bổ sung đánh giá doanh nghiệp hoặc xác nhận hoàn thành thực tập nếu phù hợp quy trình thật.
+4. Bổ sung đánh giá doanh nghiệp và phản hồi sinh viên sau hoàn thành thực tập. **Đã hoàn thành.**
 5. Chỉ nghiên cứu UIT SSO sau khi có thông tin tích hợp chính thức; không giả lập SSO production.
 
 Mỗi mục phải có migration, OpenAPI, RBAC, service transaction, test và UI; không làm UI giả trước
@@ -269,6 +272,7 @@ rồi bỏ backend.
 - Category/skill admin. **Đã hoàn thành.**
 - Báo cáo và export CSV/Excel. **Đã hoàn thành; PDF tùy chọn chưa làm.**
 - Vòng đời thực tập sau `HIRED`. **Đã hoàn thành.**
+- Phiếu Company/Student sau `COMPLETED`. **Đã hoàn thành.**
 - Bundle splitting và frontend test coverage.
 - Resend production/SchedulerLog nếu nhóm cần trình bày vận hành.
 
@@ -350,27 +354,14 @@ Một tính năng chỉ được coi là hoàn thành khi đáp ứng đủ ph�
 - Cloudflare R2: `docs/deployment/cloudflare-r2.md`
 - Quy ước nhánh: `docs/branching.md` và `CONTRIBUTING.md`
 
-## 14. Nhiệm vụ đầu tiên đề xuất cho Codex
+## 14. Việc tiếp theo được khuyến nghị cho Codex
 
-Đồng bộ `develop` trước:
+Chuyển sang **Giai đoạn 4 — Security, privacy và vận hành**, bắt đầu bằng threat model có bằng chứng cho đăng nhập,
+CV/offer, presigned URL, IDOR và truy cập chéo doanh nghiệp. Không thêm chức năng nghiệp vụ mới trong cùng PR.
 
-```powershell
-git fetch origin
-git switch develop
-git pull --ff-only origin develop
-git merge --ff-only origin/main
-git push origin develop
-git switch -c feature/ui-live-data-audit
-```
-
-Chỉ chạy `git push origin develop` khi người dùng đã cho phép cập nhật remote. Sau đó:
-
-1. Lập bảng inventory route/màn hình cho ba vai trò ngay trong một tài liệu mới.
-2. Chỉ ra màn nào còn dữ liệu tĩnh hoặc CTA chưa hoạt động bằng bằng chứng từ mã nguồn và browser.
-3. Chọn một lát cắt nhỏ có ảnh hưởng cao, ưu tiên Student Dashboard/Jobs/Applications hoặc các
-   màn được dùng trong demo.
-4. Chuyển lát cắt đó sang dữ liệu thật và chuẩn hóa loading/empty/error/responsive.
-5. Không thay đổi state machine hoặc API nếu chưa có lý do nghiệp vụ.
-6. Chạy toàn bộ kiểm tra và mở PR kèm ảnh trước/sau.
-
-Sau khi lát cắt đầu tiên đạt, lặp lại cho UIT và Doanh nghiệp rồi mới chuyển sang E2E automation.
+1. Đọc lại `docs/security/rbac-matrix.md`, cấu hình auth/cookie/CORS/Helmet và các endpoint download private.
+2. Lập bảng tài sản, actor, trust boundary, threat và mitigation; liên kết từng mitigation với code/test hiện có.
+3. Chọn một nhóm hardening nhỏ, ưu tiên kiểm tra trạng thái user trên access token hoặc rate limit API nghiệp vụ.
+4. Bổ sung test âm cho IDOR, payload quá cỡ, MIME/file và dữ liệu nhạy cảm trong log/notification.
+5. Không reset Neon production; backup/restore phải dùng branch/database thử nghiệm riêng và ghi rõ bằng chứng.
+6. Chạy toàn bộ test, Playwright smoke/full và mở PR vào `develop`; chỉ đưa vào `main` khi có release candidate.

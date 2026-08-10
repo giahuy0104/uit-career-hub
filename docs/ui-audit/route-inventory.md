@@ -35,7 +35,7 @@ Quy ước:
 | Tổng quan | Live | `GET /students/me/dashboard` | Có loading/error/retry/empty; CTA điều hướng hoạt động. |
 | Việc làm | Live | `GET /jobs`, `GET /applications` | Tìm kiếm, lọc thực tập, chọn tin và ứng tuyển dùng dữ liệu thật. Lát cắt này bổ sung retry và empty state theo bộ lọc. |
 | Doanh nghiệp | Live | `GET /companies`, `GET /companies/{id}` | Tìm kiếm, lọc và mở cơ hội theo doanh nghiệp hoạt động. |
-| Đơn ứng tuyển | Live | `GET /applications` và các endpoint action | Hành động lấy từ `availableActions`; lát cắt này sửa việc hiển thị chi tiết ngoài kết quả lọc. |
+| Đơn ứng tuyển | Live | `GET /applications`, các endpoint action và `/applications/{id}/internship-evaluations` | Hành động lấy từ `availableActions`; sau `COMPLETED`, sinh viên xem đánh giá Company và gửi phản hồi riêng cho UIT. |
 | Ứng tuyển hai bước | Live | `GET /students/me`, `GET /students/me/documents`, `POST /applications` | Đúng contract hai bước; chỉ dùng tài liệu đã xác minh. |
 | Hồ sơ & CV | Live | `/students/me`, `/students/me/documents/**` | Có upload/download/default/delete và phản hồi trạng thái. |
 | Lịch phỏng vấn | Live | `/students/me/interviews/**` | Xác nhận/hủy dùng API và state machine hiện tại. |
@@ -50,7 +50,7 @@ Quy ước:
 | Duyệt tin tuyển dụng | Live | `/uit/jobs/**` | Approve/revision/reject theo action endpoint. |
 | Xác minh tài liệu | Live | `/uit/student-documents/**` | Danh sách, tải PDF private và review. |
 | Duyệt hồ sơ sinh viên | Live | `/uit/applications/**` | Supplement/reject/forward và tải snapshot tài liệu. |
-| Theo dõi kết quả | Live | placement queue, confirm placement, `GET/POST /uit/placements/**` | Bảo toàn transaction nhiều đơn; theo dõi tiếp `HIRED → STARTED → COMPLETED` với actor history và optimistic lock. |
+| Theo dõi kết quả | Live | placement queue, confirm placement, `GET/POST /uit/placements/**` | Bảo toàn transaction nhiều đơn; theo dõi `HIRED → STARTED → COMPLETED`, actor history và đối chiếu phiếu Company/Student. |
 | Nhắc việc & tác vụ | Ẩn khỏi portal | Chưa có API quản trị | Không còn xuất hiện trong điều hướng bảo vệ; chỉ mở lại khi có API và dữ liệu vận hành thật. |
 | Thông báo | Live | `/notifications/**` | Dùng inbox chung theo ownership. |
 | Báo cáo tuyển dụng | Live | `GET /uit/reports/applications`, `POST /uit/reports/applications/exports` | Lọc dữ liệu thật theo kỳ/khoa/ngành/doanh nghiệp/trạng thái và xuất CSV/XLSX có audit. |
@@ -63,7 +63,7 @@ Quy ước:
 | Tổng quan tuyển dụng | Live | `GET /companies/me/dashboard` | Số liệu, ứng viên và hiệu quả tin lấy từ API. |
 | Hồ sơ doanh nghiệp | Live | `GET/PATCH /companies/me/profile` | Form dùng version để cập nhật an toàn. |
 | Tin tuyển dụng | Live | `/companies/me/jobs/**` | Tạo/lưu/gửi và sửa theo phản hồi UIT. |
-| Ứng viên | Live | `/companies/me/candidates` và action endpoints | Ownership, tải tài liệu, phỏng vấn và PASS/FAIL dùng API thật. |
+| Ứng viên | Live | `/companies/me/candidates`, action endpoints và `/internship-evaluations` | Ownership, tài liệu, phỏng vấn, PASS/FAIL và đánh giá sau `COMPLETED` dùng API thật; nội dung phản hồi Student không hiển thị cho Company. |
 | Lịch phỏng vấn | Live | `GET /companies/me/interviews` | Danh sách và deep link về đúng application. |
 | Thông báo | Live | `/notifications/**` | Dùng inbox chung theo ownership. |
 
@@ -165,7 +165,7 @@ Jobs/Candidates/Interviews tiếp tục lấy dữ liệu API.
 
 ### Bước 12 — Bundle theo portal: tốt
 
-Build production tách `RolePortals` thành chunk khoảng **181 kB** và chunk khởi tạo khoảng **346 kB**; cảnh báo chunk
+Build production hiện tách `RolePortals` thành chunk khoảng **227 kB** và chunk khởi tạo khoảng **362 kB**; cảnh báo chunk
 535 kB trước đó không còn xuất hiện.
 
 ## 7. Giới hạn bằng chứng
@@ -179,11 +179,11 @@ Build production tách `RolePortals` thành chunk khoảng **181 kB** và chunk 
 ## 8. Xác minh trước bàn giao
 
 - `pnpm typecheck`: đạt.
-- `pnpm openapi:validate`: đạt, OpenAPI 3.1.0 có 71 paths.
-- `pnpm test`: đạt; frontend **9/9**, backend **187/187** (gồm integration tests trên Neon test riêng).
+- `pnpm openapi:validate`: đạt, OpenAPI 3.1.0 có 86 paths.
+- `pnpm test`: đạt; frontend **9/9**, backend **222/222** trên PostgreSQL test riêng.
 - `pnpm build`: đạt; portal đã được lazy-load và không còn cảnh báo chunk 535 kB.
+- Playwright đạt **3 smoke + 11 full**; happy flow full đi qua `COMPLETED`, hai phiếu và màn UIT đối chiếu.
 - Ba health check trong handoff đều trả HTTP 200: backend, kết nối database qua backend và kết nối database qua
   frontend proxy.
-- PostgreSQL local riêng tại `localhost:55432` và Neon `DATABASE_URL_TEST` riêng đều đã được migrate, chạy
-  `db:demo:reset` với email/R2 tắt và đạt **12/12** checkpoint. Guard trước lệnh reset xác nhận host test khác host
-  runtime/production; không có mutation nào chạy trên `DATABASE_URL` production.
+- PostgreSQL local riêng tại `localhost:55432` đã được migrate và đạt **12/12** checkpoint chỉ đọc. E2E reset đúng
+  database có tên `e2e`; không có mutation nào chạy trên `DATABASE_URL` production.

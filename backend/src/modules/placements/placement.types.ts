@@ -41,6 +41,10 @@ export type PlacementDto = {
     company: { id: string; code: string; name: string };
   };
   history: PlacementHistoryDto[];
+  evaluations: {
+    company: InternshipEvaluationDto | null;
+    student: InternshipEvaluationDto | null;
+  };
 };
 
 export type PlacementListInput = {
@@ -62,3 +66,4 @@ export type RequestMetadata = {
   ipAddress: string | null;
   userAgent: string | null;
 };
+import type { InternshipEvaluationDto } from "./evaluation.types.js";

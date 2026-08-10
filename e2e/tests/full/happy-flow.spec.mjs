@@ -156,11 +156,55 @@ test("@full happy flow ba vai trò đến placement", async ({ page }) => {
     await expect(page.getByText("Kỳ thực tập đã hoàn tất")).toBeVisible();
   });
 
-  await test.step("Student thấy trạng thái đã nhận việc", async () => {
+  await test.step("Company gửi đánh giá kỳ thực tập", async () => {
+    await logout(page);
+    await login(page, accounts.company);
+    await openPortalSection(page, "Ứng viên", "Ứng viên");
+    const candidate = await selectCompanyCandidate(page, jobTitle);
+    await candidate.getByRole("button", { name: "Xem", exact: true }).click();
+    const panel = page.getByTestId("company-internship-evaluation");
+    await expect(panel).toContainText("Đã hoàn thành thực tập");
+    await panel.getByTestId("rating-workQualityRating").selectOption("5");
+    await panel.getByTestId("rating-collaborationRating").selectOption("4");
+    await panel.getByTestId("rating-professionalismRating").selectOption("5");
+    await panel.getByTestId("rating-overallRating").selectOption("5");
+    await panel.getByTestId("evaluation-strengths").fill("Sinh viên chủ động và hoàn thành tốt công việc được giao.");
+    await panel.getByTestId("evaluation-improvements").fill("Cần trình bày kết quả ngắn gọn hơn.");
+    const evaluationResponse = waitForApi(page, "POST", "/internship-evaluations");
+    await panel.getByTestId("submit-internship-evaluation").click();
+    expect((await evaluationResponse).status()).toBe(201);
+    await expect(panel.getByTestId("evaluation-company-result")).toContainText("5/5");
+    await page.locator(".candidate-detail-modal .modal-close").click();
+  });
+
+  await test.step("Student xem đánh giá và gửi phản hồi riêng", async () => {
     await logout(page);
     await login(page, accounts.student);
     await page.getByRole("button", { name: "Đơn ứng tuyển", exact: true }).first().click();
     await selectApplication(page, jobTitle);
     await expect(page.locator(".active-application .status-pill")).toHaveText("Đã nhận việc");
+    const panel = page.getByTestId("student-internship-evaluation");
+    await expect(panel.getByTestId("evaluation-company-result")).toContainText("5/5");
+    await panel.getByTestId("rating-workQualityRating").selectOption("4");
+    await panel.getByTestId("rating-collaborationRating").selectOption("5");
+    await panel.getByTestId("rating-professionalismRating").selectOption("4");
+    await panel.getByTestId("rating-overallRating").selectOption("4");
+    await panel.getByTestId("evaluation-strengths").fill("Doanh nghiệp hướng dẫn tận tình và giao việc sát chuyên môn.");
+    await panel.getByTestId("evaluation-improvements").fill("Nên thống nhất lịch phản hồi công việc sớm hơn.");
+    const feedbackResponse = waitForApi(page, "POST", "/internship-evaluations");
+    await panel.getByTestId("submit-internship-evaluation").click();
+    expect((await feedbackResponse).status()).toBe(201);
+    await expect(panel.getByTestId("evaluation-student-result")).toContainText("4/5");
+    await expect(panel).toContainText("chỉ hiển thị cho bạn và UIT");
+  });
+
+  await test.step("UIT đối chiếu đủ hai phiếu", async () => {
+    await logout(page);
+    await login(page, accounts.admin);
+    await openPortalSection(page, "Theo dõi kết quả", "Theo dõi kết quả tuyển dụng");
+    const placementRow = page.locator(".placement-lifecycle-list").getByRole("button").filter({ hasText: jobTitle });
+    await placementRow.click();
+    await expect(page.getByTestId("admin-evaluation-company")).toContainText("5/5");
+    await expect(page.getByTestId("admin-evaluation-student")).toContainText("4/5");
   });
 });

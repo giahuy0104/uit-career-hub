@@ -27,6 +27,8 @@ erDiagram
     APPLICATIONS ||--o| RECRUITMENT_RESULTS : concludes
     APPLICATIONS ||--o| INTERNSHIP_PLACEMENTS : creates
     INTERNSHIP_PLACEMENTS ||--o{ INTERNSHIP_PLACEMENT_HISTORY : records
+    INTERNSHIP_PLACEMENTS ||--o{ INTERNSHIP_EVALUATIONS : receives
+    USERS ||--o{ INTERNSHIP_EVALUATIONS : submits
     USERS ||--o{ NOTIFICATIONS : receives
     USERS o|--o{ AUDIT_LOGS : performs
 
@@ -191,6 +193,21 @@ erDiagram
       date effective_date
       text note
     }
+    INTERNSHIP_EVALUATIONS {
+      uuid id PK
+      uuid placement_id FK
+      text respondent_role
+      uuid submitted_by_user_id FK
+      uuid command_id UK
+      integer work_quality_rating
+      integer collaboration_rating
+      integer professionalism_rating
+      integer overall_rating
+      boolean recommendation
+      text strengths
+      text improvements
+      timestamptz created_at
+    }
     NOTIFICATIONS {
       uuid id PK
       uuid recipient_user_id FK
@@ -217,10 +234,11 @@ erDiagram
 - Company chỉ đọc/sửa `companies`, `job_posts` thuộc company và chỉ thấy application sau khi UIT chuyển đến.
 - UIT_ADMIN quản lý đối tác, duyệt job/application và xác nhận placement; không tự gán kết quả tuyển dụng khi chưa có căn cứ.
 - UIT_ADMIN theo dõi kỳ thực tập sau `HIRED`; mỗi transition có version, command id, actor history, audit và notification.
+- Student và Company chỉ gửi một `internship_evaluations` cho placement thuộc mình sau `COMPLETED`; UIT đọc đủ hai phía, còn Company không đọc nội dung phản hồi Student.
 - UIT_ADMIN là vai trò duy nhất được tạo, đổi tên, ngừng hoặc kích hoạt lại category/skill; khóa nghiệp vụ không đổi và bản ghi không bị xóa cứng.
 - UIT_ADMIN là vai trò duy nhất được tổng hợp và xuất báo cáo toàn trường; export chỉ đọc các quan hệ hiện có và ghi một `AUDIT_LOGS` với `target_type = REPORT`.
 - `application_documents` là snapshot độc lập; thay đổi tài liệu gốc không làm đổi hồ sơ đã gửi.
-- `application_status_history`, `job_post_status_history` và `audit_logs` không có API cập nhật/xóa.
+- `application_status_history`, `job_post_status_history`, `internship_evaluations` và `audit_logs` không có API cập nhật/xóa.
 - `notifications` chỉ chứa metadata/deep link, không chứa CV hay internal note.
 
 ## Quyết định schema

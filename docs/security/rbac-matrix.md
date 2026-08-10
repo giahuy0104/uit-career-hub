@@ -31,6 +31,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Sinh viên | `GET /students/me/dashboard` | ✓ | — | — |
 | Sinh viên | `GET/POST /applications` và `GET /applications/{id}` | ✓ | — | — |
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |
+| Sinh viên | xem/gửi phiếu kỳ thực tập của chính mình `/applications/{id}/internship-evaluations` | ✓ | — | — |
 | UIT | hàng đợi và quyết định duyệt tin `/uit/jobs/**` | — | ✓ | — |
 | UIT | danh sách, tải xuống và xác minh tài liệu `/uit/student-documents/**` | — | ✓ | — |
 | UIT | `GET /uit/dashboard` | — | ✓ | — |
@@ -44,6 +45,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Doanh nghiệp | `GET /companies/me/dashboard` | — | — | ✓ |
 | Doanh nghiệp | xem/cập nhật hồ sơ `/companies/me/profile` | — | — | ✓ |
 | Doanh nghiệp | danh sách và xử lý ứng viên `/companies/me/**` | — | — | ✓ |
+| Doanh nghiệp | xem/gửi đánh giá placement thuộc đúng công ty `/companies/me/applications/{id}/internship-evaluations` | — | — | ✓ |
 | Doanh nghiệp | mở tài liệu đơn đã được UIT chuyển và thuộc đúng công ty | — | — | ✓ |
 
 Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không phụ thuộc payload gửi lên có hợp lệ hay không.
@@ -55,7 +57,7 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 - `backend/src/middleware/auth.test.ts`: kiểm tra độc lập middleware role/context/ownership.
 - `backend/src/modules/jobs/job.integration.test.ts`: xác nhận doanh nghiệp không đọc hoặc sửa tin của doanh nghiệp khác.
 - `backend/src/modules/applications/application.integration.test.ts`: xác nhận sinh viên và doanh nghiệp không truy cập chéo hồ sơ, tài liệu hoặc đơn ứng tuyển.
-- Cùng bộ application integration xác nhận lifecycle placement là UIT-only, khóa version/state, idempotent và thông báo đúng tenant.
+- Cùng bộ application integration xác nhận lifecycle placement là UIT-only; phiếu hai phía chỉ mở sau `COMPLETED`, idempotent, không truy cập chéo công ty và không làm lộ nội dung phản hồi Student cho Company.
 - `backend/src/modules/notifications/notification.integration.test.ts`: xác nhận người dùng chỉ đọc/cập nhật thông báo của mình.
 - `backend/src/modules/companies/company.integration.test.ts`: xác nhận tạo đối tác, kích hoạt một lần, optimistic lock, phân quyền và quy tắc tạm ngưng/khôi phục tài khoản.
 - `backend/src/modules/taxonomy/taxonomy.integration.test.ts`: xác nhận CRUD có audit/optimistic lock, UIT-only RBAC, chặn archive mục đang được job mở sử dụng và từ chối tham chiếu đã inactive.

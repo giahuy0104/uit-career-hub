@@ -30,6 +30,21 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("vi-VN").format(new Date(`${String(value).slice(0, 10)}T00:00:00`));
 }
 
+function EvaluationSummary({ title, evaluation }) {
+  if (!evaluation) {
+    return <article className="admin-evaluation-card empty"><strong>{title}</strong><span>Chưa gửi phiếu</span></article>;
+  }
+  return (
+    <article className="admin-evaluation-card" data-testid={`admin-evaluation-${evaluation.respondentRole.toLowerCase()}`}>
+      <header><strong>{title}</strong><span>{evaluation.overallRating}/5</span></header>
+      <small>{evaluation.submittedBy.name} · {formatDate(evaluation.submittedAt)}</small>
+      <p>{evaluation.strengths}</p>
+      {evaluation.improvements && <p><b>Cần cải thiện:</b> {evaluation.improvements}</p>}
+      <i>{evaluation.recommendation ? "Có khuyến nghị" : "Không khuyến nghị"}</i>
+    </article>
+  );
+}
+
 function todayInVietnam() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",
@@ -289,6 +304,13 @@ export function AdminPlacementLifecycle() {
                     </div>
                   </article>
                 ))}
+              </section>
+              <section className="admin-placement-evaluations">
+                <h4>Phiếu đánh giá kỳ thực tập</h4>
+                <div>
+                  <EvaluationSummary title="Đánh giá doanh nghiệp" evaluation={selected.evaluations?.company} />
+                  <EvaluationSummary title="Phản hồi sinh viên" evaluation={selected.evaluations?.student} />
+                </div>
               </section>
               <div className="review-actions">
                 {selected.availableActions.includes("START") && (

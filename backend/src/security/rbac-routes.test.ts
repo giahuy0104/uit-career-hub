@@ -31,6 +31,8 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "get", path: "/api/v1/applications", role: "STUDENT" },
   { method: "post", path: "/api/v1/applications", role: "STUDENT" },
   { method: "get", path: `/api/v1/applications/${resourceId}`, role: "STUDENT" },
+  { method: "get", path: `/api/v1/applications/${resourceId}/internship-evaluations`, role: "STUDENT" },
+  { method: "post", path: `/api/v1/applications/${resourceId}/internship-evaluations`, role: "STUDENT" },
   { method: "post", path: `/api/v1/applications/${resourceId}/resubmit`, role: "STUDENT" },
   { method: "post", path: `/api/v1/applications/${resourceId}/withdraw`, role: "STUDENT" },
   { method: "post", path: `/api/v1/applications/${resourceId}/cancel-interview`, role: "STUDENT" },
@@ -96,6 +98,8 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/reject`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/interviews`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/results`, role: "COMPANY" },
+  { method: "get", path: `/api/v1/companies/me/applications/${resourceId}/internship-evaluations`, role: "COMPANY" },
+  { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/internship-evaluations`, role: "COMPANY" },
   { method: "get", path: "/api/v1/companies/me/profile", role: "COMPANY" },
   { method: "patch", path: "/api/v1/companies/me/profile", role: "COMPANY" },
 ];
