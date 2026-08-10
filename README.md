@@ -14,6 +14,7 @@ uit-career-hub/
 ├── docs/domain/     ERD và state machine
 ├── docs/api/        OpenAPI 3.1
 ├── docs/demo/       Checkpoint dữ liệu và kịch bản bảo vệ E2E
+├── docs/handoff/    Bàn giao trạng thái và roadmap cho giai đoạn tiếp theo
 ├── docs/releases/   Checklist, phạm vi và ghi chú phát hành
 ├── docs/deployment/ Cấu hình Vercel và Neon production
 ├── docs/security/   Ma trận phân quyền và ghi chú hardening
@@ -141,6 +142,7 @@ pnpm db:down
 - `docs/api/openapi.yaml`
 - `docs/security/rbac-matrix.md`
 - `docs/demo/e2e-defense-script.md`
+- `docs/handoff/CODEX_NEXT_PHASE.md`
 - `docs/releases/v0.1.0.md`
 - `docs/deployment/vercel-neon.md`
 - `docs/decisions/001-modular-monolith-neon.md`
