@@ -96,3 +96,7 @@ Trạng thái `ACCEPTED_PENDING_UIT_CONFIRMATION` hiện thực đúng hai xác 
 ## Terminal status
 
 `NOT_SUITABLE`, `INTERVIEW_FAILED`, `OFFER_DECLINED`, `UIT_REJECTED`, `WITHDRAWN`, `HIRED`.
+
+## Trạng thái lịch phỏng vấn
+
+Lịch mới ở `PENDING_STUDENT_CONFIRMATION`. Sinh viên sở hữu lịch có thể chuyển sang `CONFIRMED`; thao tác này khóa bản ghi, tăng `version`, ghi audit và thông báo doanh nghiệp. Gọi xác nhận lại khi đã `CONFIRMED` trả cùng kết quả mà không tạo thêm side effect. Hủy tham gia vẫn dùng transition của application sang `WITHDRAWN`, bắt buộc lý do và đồng thời chuyển lịch đang hoạt động sang `CANCELLED`.

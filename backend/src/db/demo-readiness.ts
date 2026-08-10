@@ -76,6 +76,16 @@ const readinessSql = `
   WHERE id = '00000000-0000-4000-8000-000000008002'
     AND status = 'COMPANY_REVIEWING'
   UNION ALL
+  SELECT 'đơn demo sẵn sàng ghi kết quả và tải PDF offer', count(*)::int, 1
+  FROM applications
+  WHERE id = '00000000-0000-4000-8000-000000008004'
+    AND status = 'INTERVIEW_INVITED'
+  UNION ALL
+  SELECT 'đơn demo phụ sẵn sàng tự đóng sau khi nhận việc', count(*)::int, 1
+  FROM applications
+  WHERE id = '00000000-0000-4000-8000-000000008005'
+    AND status = 'COMPANY_REVIEWING'
+  UNION ALL
   SELECT 'đơn VNG Frontend chờ UIT', count(*)::int, 1
   FROM applications
   WHERE id = '00000000-0000-4000-8000-000000008003'

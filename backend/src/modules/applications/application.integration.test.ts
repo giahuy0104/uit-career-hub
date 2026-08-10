@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../../app.js";
 import { env } from "../../config/env.js";
@@ -9,6 +9,8 @@ import { runMigrations } from "../../db/migrate.js";
 import { createDatabasePool } from "../../db/pool.js";
 import type { AuthUser, UserRole } from "../auth/auth.types.js";
 import { TokenService } from "../auth/token.service.js";
+import type { EmailDeliveryService } from "../email/email-delivery.service.js";
+import type { ObjectStorage } from "../storage/object-storage.js";
 
 const { Client } = pg;
 const describeWithDatabase = env.databaseUrlTest ? describe : describe.skip;
@@ -20,12 +22,31 @@ describeWithDatabase("student job application flow", () => {
     application_name: "uit-career-hub-application-flow-test",
   });
   const tokenService = new TokenService();
+  const dispatchPending = vi.fn(async () => ({ enabled: true, claimed: 1, sent: 1, failed: 0 }));
+  const createUploadUrl = vi.fn(async () => "https://r2.example.test/signed-upload");
+  const createDownloadUrl = vi.fn(async () => "https://r2.example.test/signed-download");
+  const headObject = vi.fn(async () => ({
+    contentLength: 4096,
+    contentType: "application/pdf",
+    etag: "test-etag",
+  }));
+  const readObjectPrefix = vi.fn(async () => new TextEncoder().encode("%PDF-"));
+  const deleteObject = vi.fn(async () => undefined);
+  const objectStorage = {
+    createUploadUrl,
+    createDownloadUrl,
+    headObject,
+    readObjectPrefix,
+    deleteObject,
+  } as ObjectStorage;
   const app = createApp({
     database,
     authDatabase: database,
     jobDatabase: database,
     applicationDatabase: database,
     tokenService,
+    emailDeliveryService: { dispatchPending } as unknown as EmailDeliveryService,
+    objectStorage,
   });
   const userIds: string[] = [];
   const companyIds: string[] = [];
@@ -37,6 +58,14 @@ describeWithDatabase("student job application flow", () => {
   });
 
   afterEach(async () => {
+    dispatchPending.mockClear();
+    createUploadUrl.mockClear();
+    createDownloadUrl.mockClear();
+    headObject.mockClear();
+    readObjectPrefix.mockClear();
+    deleteObject.mockClear();
+    headObject.mockResolvedValue({ contentLength: 4096, contentType: "application/pdf", etag: "test-etag" });
+    readObjectPrefix.mockResolvedValue(new TextEncoder().encode("%PDF-"));
     if (!userIds.length) return;
     await client.query("DELETE FROM notifications WHERE recipient_user_id = ANY($1::uuid[])", [userIds]);
     await client.query(
@@ -47,6 +76,10 @@ describeWithDatabase("student job application flow", () => {
     );
     await client.query(
       "DELETE FROM recruitment_results WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
+      [studentProfileIds],
+    );
+    await client.query(
+      "DELETE FROM offer_document_uploads WHERE application_id IN (SELECT id FROM applications WHERE student_profile_id = ANY($1::uuid[]))",
       [studentProfileIds],
     );
     await client.query(
@@ -62,6 +95,7 @@ describeWithDatabase("student job application flow", () => {
       [studentProfileIds],
     );
     await client.query("DELETE FROM applications WHERE student_profile_id = ANY($1::uuid[])", [studentProfileIds]);
+    await client.query("DELETE FROM student_document_uploads WHERE student_profile_id = ANY($1::uuid[])", [studentProfileIds]);
     await client.query("DELETE FROM student_documents WHERE student_profile_id = ANY($1::uuid[])", [studentProfileIds]);
     await client.query("DELETE FROM student_profiles WHERE id = ANY($1::uuid[])", [studentProfileIds]);
     if (companyIds.length) {
@@ -74,6 +108,7 @@ describeWithDatabase("student job application flow", () => {
       await client.query("DELETE FROM companies WHERE id = ANY($1::uuid[])", [companyIds]);
     }
     await client.query("DELETE FROM uit_staff WHERE user_id = ANY($1::uuid[])", [userIds]);
+    await client.query("DELETE FROM notifications WHERE recipient_user_id = ANY($1::uuid[])", [userIds]);
     await client.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [userIds]);
     userIds.length = 0;
     companyIds.length = 0;
@@ -272,6 +307,12 @@ describeWithDatabase("student job application flow", () => {
       });
   }
 
+  function confirmInterview(token: string, interviewId: string) {
+    return request(app)
+      .post(`/api/v1/students/me/interviews/${interviewId}/confirm`)
+      .set("Authorization", `Bearer ${token}`);
+  }
+
   function withdrawApplication(
     token: string,
     applicationId: string,
@@ -309,6 +350,28 @@ describeWithDatabase("student job application flow", () => {
       .set("Authorization", `Bearer ${token}`)
       .set("Idempotency-Key", commandId)
       .send(body);
+  }
+
+  async function uploadOffer(token: string, applicationId: string) {
+    const intent = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/offer-document/uploads`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        fileName: "offer-thuc-tap-2026.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 4096,
+      });
+    expect(intent.status).toBe(201);
+    const completed = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/offer-document/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(completed.status).toBe(200);
+    expect(completed.body.data).toEqual({
+      fileName: "offer-thuc-tap-2026.pdf",
+      mimeType: "application/pdf",
+      fileSizeBytes: 4096,
+    });
+    return intent.body.data.uploadId as string;
   }
 
   async function prepareInterview() {
@@ -359,6 +422,292 @@ describeWithDatabase("student job application flow", () => {
     expect(hidden.status).toBe(404);
   });
 
+  it("updates the student phone and selects only a verified CV as default", async () => {
+    const { admin, student } = await createScenario();
+    const replacementCvId = randomUUID();
+    await client.query(
+      `INSERT INTO student_documents
+       (id, student_profile_id, document_type, file_name, mime_type, file_size_bytes,
+        storage_key, version, is_default, verification_status)
+       VALUES ($1, $2, 'CV', 'cv-v2.pdf', 'application/pdf', 4096, $3, 2, false, 'VERIFIED')`,
+      [replacementCvId, student.studentProfileId, `test/${replacementCvId}`],
+    );
+
+    const updatedProfile = await request(app)
+      .patch("/api/v1/students/me")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({ phone: "+84 912 345 678" });
+    expect(updatedProfile.status).toBe(200);
+    expect(updatedProfile.body.data.phone).toBe("+84 912 345 678");
+
+    const selected = await request(app)
+      .post(`/api/v1/students/me/documents/${replacementCvId}/default`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(selected.status).toBe(200);
+    expect(selected.body.data.filter((document: { isDefault: boolean }) => document.isDefault)).toEqual([
+      expect.objectContaining({ id: replacementCvId, documentType: "CV" }),
+    ]);
+
+    const invalidType = await request(app)
+      .post(`/api/v1/students/me/documents/${student.transcriptId}/default`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(invalidType.status).toBe(409);
+    expect(invalidType.body.error.code).toBe("STUDENT_DOCUMENT_NOT_CV");
+
+    const audits = await client.query<{ action: string }>(
+      `SELECT action FROM audit_logs
+       WHERE actor_user_id = $1 AND action IN ('STUDENT_PROFILE_UPDATED', 'STUDENT_DEFAULT_CV_CHANGED')
+       ORDER BY created_at`,
+      [student.id],
+    );
+    expect(audits.rows.map((row) => row.action)).toEqual([
+      "STUDENT_PROFILE_UPDATED",
+      "STUDENT_DEFAULT_CV_CHANGED",
+    ]);
+  });
+
+  it("creates, verifies and downloads a private R2 student document", async () => {
+    const { admin, student } = await createScenario();
+    const intent = await request(app)
+      .post("/api/v1/students/me/documents/uploads")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({
+        documentType: "CV",
+        fileName: "cv-thuc-tap-2026.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 4096,
+      });
+
+    expect(intent.status).toBe(201);
+    expect(intent.body.data).toMatchObject({
+      uploadId: expect.any(String),
+      uploadUrl: "https://r2.example.test/signed-upload",
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+    });
+    expect(createUploadUrl).toHaveBeenCalledWith(expect.objectContaining({
+      contentType: "application/pdf",
+      key: expect.stringMatching(new RegExp(`^students/${student.studentProfileId}/cv/.+\\.pdf$`)),
+    }));
+
+    const completed = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(completed.status).toBe(201);
+    const uploaded = completed.body.data.find(
+      (document: { fileName: string }) => document.fileName === "cv-thuc-tap-2026.pdf",
+    );
+    expect(uploaded).toMatchObject({
+      documentType: "CV",
+      mimeType: "application/pdf",
+      fileSizeBytes: 4096,
+      version: 2,
+      isDefault: false,
+      verificationStatus: "PENDING",
+    });
+    expect(headObject).toHaveBeenCalledOnce();
+    expect(readObjectPrefix).toHaveBeenCalledOnce();
+    const pendingReviewNotification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM notifications
+       WHERE recipient_user_id = $1 AND resource_id = $2
+         AND type = 'STUDENT_DOCUMENT_PENDING_REVIEW'`,
+      [admin.id, uploaded.id],
+    );
+    expect(Number(pendingReviewNotification.rows[0]?.count)).toBe(1);
+
+    const repeated = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(repeated.status).toBe(201);
+    expect(repeated.body.data.filter(
+      (document: { fileName: string }) => document.fileName === "cv-thuc-tap-2026.pdf",
+    )).toHaveLength(1);
+
+    const download = await request(app)
+      .post(`/api/v1/students/me/documents/${uploaded.id}/download`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(download.status).toBe(200);
+    expect(download.body.data).toMatchObject({
+      downloadUrl: "https://r2.example.test/signed-download",
+      expiresAt: expect.any(String),
+    });
+    expect(createDownloadUrl).toHaveBeenCalledWith(expect.objectContaining({
+      fileName: "cv-thuc-tap-2026.pdf",
+    }));
+  });
+
+  it("lets UIT list, inspect and decide pending student documents with audit and notification", async () => {
+    const { admin, student } = await createScenario();
+    const rejectedStudent = await createStudent();
+
+    const queue = await request(app)
+      .get("/api/v1/uit/student-documents?status=PENDING&page=1&pageSize=100")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(queue.status).toBe(200);
+    expect(queue.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: student.pendingDocumentId,
+        verificationStatus: "PENDING",
+        student: expect.objectContaining({
+          id: student.studentProfileId,
+          fullName: "Sinh viên kiểm thử",
+        }),
+      }),
+    ]));
+
+    const forbidden = await request(app)
+      .get("/api/v1/uit/student-documents")
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(forbidden.status).toBe(403);
+
+    const download = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/download`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(download.status).toBe(200);
+    expect(download.body.data.downloadUrl).toBe("https://r2.example.test/signed-download");
+    expect(createDownloadUrl).toHaveBeenCalledWith(expect.objectContaining({
+      key: `test/${student.pendingDocumentId}`,
+      fileName: "chua-xac-minh.pdf",
+    }));
+
+    const verified = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "VERIFY", note: "Tài liệu rõ ràng và đúng thông tin sinh viên." });
+    expect(verified.status).toBe(200);
+    expect(verified.body.data).toMatchObject({
+      id: student.pendingDocumentId,
+      verificationStatus: "VERIFIED",
+    });
+
+    const repeated = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "VERIFY" });
+    expect(repeated.status).toBe(200);
+
+    const conflicting = await request(app)
+      .post(`/api/v1/uit/student-documents/${student.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "REJECT", note: "Không thể thay đổi quyết định đã hoàn tất." });
+    expect(conflicting.status).toBe(409);
+    expect(conflicting.body.error.code).toBe("STUDENT_DOCUMENT_REVIEW_CONFLICT");
+
+    const rejected = await request(app)
+      .post(`/api/v1/uit/student-documents/${rejectedStudent.pendingDocumentId}/review`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ decision: "REJECT", note: "Tệp mờ, chưa thể đối chiếu đầy đủ thông tin." });
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.data.verificationStatus).toBe("REJECTED");
+
+    const notifications = await client.query<{ type: string; recipient_user_id: string }>(
+      `SELECT type, recipient_user_id FROM notifications
+       WHERE resource_id = ANY($1::uuid[]) ORDER BY created_at`,
+      [[student.pendingDocumentId, rejectedStudent.pendingDocumentId]],
+    );
+    expect(notifications.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "STUDENT_DOCUMENT_VERIFIED", recipient_user_id: student.id }),
+      expect.objectContaining({ type: "STUDENT_DOCUMENT_REJECTED", recipient_user_id: rejectedStudent.id }),
+    ]));
+    const audits = await client.query<{ action: string }>(
+      `SELECT action FROM audit_logs
+       WHERE actor_user_id = $1 AND target_id = ANY($2::uuid[])`,
+      [admin.id, [student.pendingDocumentId, rejectedStudent.pendingDocumentId]],
+    );
+    expect(audits.rows.map((row) => row.action)).toEqual(expect.arrayContaining([
+      "STUDENT_DOCUMENT_VERIFIED_BY_UIT",
+      "STUDENT_DOCUMENT_REJECTED_BY_UIT",
+    ]));
+  });
+
+  it("deletes only unused non-default documents and preserves application history", async () => {
+    const { jobId, student } = await createScenario();
+    const uploadId = randomUUID();
+    await client.query(
+      `INSERT INTO student_document_uploads
+       (id, student_profile_id, student_document_id, document_type, file_name, mime_type,
+        file_size_bytes, storage_key, status, etag, expires_at, completed_at)
+       VALUES ($1, $2, $3, 'OTHER', 'chua-xac-minh.pdf', 'application/pdf', 512,
+               $4, 'COMPLETED', 'test-etag', now() + interval '10 minutes', now())`,
+      [uploadId, student.studentProfileId, student.pendingDocumentId, `test/${student.pendingDocumentId}`],
+    );
+
+    const deleted = await request(app)
+      .delete(`/api/v1/students/me/documents/${student.pendingDocumentId}`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.data.map((document: { id: string }) => document.id)).not.toContain(student.pendingDocumentId);
+    expect(deleteObject).toHaveBeenCalledWith(`test/${student.pendingDocumentId}`);
+    const remainingUpload = await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM student_document_uploads WHERE id = $1",
+      [uploadId],
+    );
+    expect(Number(remainingUpload.rows[0]?.count)).toBe(0);
+
+    const defaultCv = await request(app)
+      .delete(`/api/v1/students/me/documents/${student.cvId}`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(defaultCv.status).toBe(409);
+    expect(defaultCv.body.error.code).toBe("STUDENT_DOCUMENT_DEFAULT_CV");
+
+    const submitted = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
+    expect(submitted.status).toBe(201);
+    const usedDocument = await request(app)
+      .delete(`/api/v1/students/me/documents/${student.transcriptId}`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(usedDocument.status).toBe(409);
+    expect(usedDocument.body.error.code).toBe("STUDENT_DOCUMENT_IN_USE");
+    expect(deleteObject).toHaveBeenCalledTimes(1);
+
+    const audit = await client.query<{ action: string }>(
+      "SELECT action FROM audit_logs WHERE actor_user_id = $1 AND target_id = $2",
+      [student.id, student.pendingDocumentId],
+    );
+    expect(audit.rows).toEqual([{ action: "STUDENT_DOCUMENT_DELETED" }]);
+  });
+
+  it("rejects an R2 object whose actual size does not match the upload intent", async () => {
+    const { student } = await createScenario();
+    const intent = await request(app)
+      .post("/api/v1/students/me/documents/uploads")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({
+        documentType: "TRANSCRIPT",
+        fileName: "bang-diem.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 2048,
+      });
+    expect(intent.status).toBe(201);
+
+    const completed = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(completed.status).toBe(409);
+    expect(completed.body.error.code).toBe("STUDENT_DOCUMENT_UPLOAD_MISMATCH");
+    expect(deleteObject).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an uploaded object without a PDF signature", async () => {
+    const { student } = await createScenario();
+    const intent = await request(app)
+      .post("/api/v1/students/me/documents/uploads")
+      .set("Authorization", `Bearer ${student.token}`)
+      .send({
+        documentType: "CV",
+        fileName: "fake.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 4096,
+      });
+    readObjectPrefix.mockResolvedValue(new TextEncoder().encode("hello"));
+
+    const completed = await request(app)
+      .post(`/api/v1/students/me/documents/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${student.token}`);
+    expect(completed.status).toBe(409);
+    expect(completed.body.error.code).toBe("STUDENT_DOCUMENT_INVALID_PDF");
+    expect(deleteObject).toHaveBeenCalledOnce();
+  });
+
   it("submits a two-step application idempotently and notifies UIT", async () => {
     const { admin, jobId, student } = await createScenario();
     const commandId = randomUUID();
@@ -372,6 +721,8 @@ describeWithDatabase("student job application flow", () => {
     const created = await submit(student.token, jobId, [student.cvId, student.transcriptId], commandId);
     expect(created.status).toBe(201);
     expect(created.body.data).toMatchObject({ status: "UIT_REVIEWING", version: 1 });
+    expect(dispatchPending).toHaveBeenCalledOnce();
+    expect(dispatchPending).toHaveBeenCalledWith(created.body.data.id);
     expect(created.body.data.documents).toHaveLength(2);
     expect(created.body.data.timeline).toHaveLength(1);
 
@@ -731,6 +1082,7 @@ describeWithDatabase("student job application flow", () => {
     const created = await submit(student.token, jobId, [student.cvId, student.transcriptId]);
     const applicationId = created.body.data.id as string;
     const commandId = randomUUID();
+    dispatchPending.mockClear();
 
     const forwarded = await request(app)
       .post(`/api/v1/uit/applications/${applicationId}/forward`)
@@ -738,6 +1090,8 @@ describeWithDatabase("student job application flow", () => {
       .set("Idempotency-Key", commandId);
     expect(forwarded.status).toBe(200);
     expect(forwarded.body.data).toMatchObject({ status: "FORWARDED_TO_COMPANY", version: 2 });
+    expect(dispatchPending).toHaveBeenCalledOnce();
+    expect(dispatchPending).toHaveBeenCalledWith(applicationId);
 
     const companyNotification = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM notifications
@@ -797,6 +1151,64 @@ describeWithDatabase("student job application flow", () => {
       .get("/api/v1/companies/me/candidates")
       .set("Authorization", `Bearer ${first.student.token}`);
     expect(forbidden.status).toBe(403);
+  });
+
+  it("creates short-lived application document URLs only for UIT and the owning company after forwarding", async () => {
+    const { admin, recruiter, student, jobId } = await createScenario();
+    const created = await submit(student.token, jobId, [student.cvId]);
+    expect(created.status).toBe(201);
+    const applicationId = created.body.data.id as string;
+    const documentId = created.body.data.documents[0].id as string;
+
+    const uitDownload = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(uitDownload.status).toBe(200);
+    expect(uitDownload.body.data).toMatchObject({ downloadUrl: "https://r2.example.test/signed-download" });
+    expect(createDownloadUrl).toHaveBeenLastCalledWith({
+      key: `test/${student.cvId}`,
+      fileName: "cv.pdf",
+      expiresInSeconds: 300,
+    });
+
+    const companyBeforeForward = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${recruiter.token}`);
+    expect(companyBeforeForward.status).toBe(404);
+
+    await forward(admin.token, applicationId);
+    const companyDownload = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${recruiter.token}`);
+    expect(companyDownload.status).toBe(200);
+    expect(companyDownload.body.data.downloadUrl).toBe("https://r2.example.test/signed-download");
+
+    const otherCompanyId = randomUUID();
+    companyIds.push(otherCompanyId);
+    await client.query(
+      `INSERT INTO companies (id, code, name, industry, partner_status, created_by_user_id)
+       VALUES ($1, $2, 'Doanh nghiệp không sở hữu hồ sơ', 'Công nghệ', 'ACTIVE', $3)`,
+      [otherCompanyId, `TEST-${randomUUID()}`, admin.id],
+    );
+    const otherRecruiter = await createUser("COMPANY", null, otherCompanyId);
+    const crossCompanyDownload = await request(app)
+      .post(`/api/v1/companies/me/applications/${applicationId}/documents/${documentId}/download`)
+      .set("Authorization", `Bearer ${otherRecruiter.token}`);
+    expect(crossCompanyDownload.status).toBe(404);
+
+    const mismatchedDocument = await request(app)
+      .post(`/api/v1/uit/applications/${applicationId}/documents/${randomUUID()}/download`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(mismatchedDocument.status).toBe(404);
+
+    const audit = await client.query<{ actor_type: string }>(
+      `SELECT metadata->>'actorType' AS actor_type
+       FROM audit_logs
+       WHERE target_id = $1 AND action = 'APPLICATION_DOCUMENT_DOWNLOAD_URL_CREATED'
+       ORDER BY created_at`,
+      [documentId],
+    );
+    expect(audit.rows.map((row) => row.actor_type)).toEqual(["UIT_ADMIN", "COMPANY"]);
   });
 
   it("starts company review idempotently and hides applications owned by another company", async () => {
@@ -930,6 +1342,49 @@ describeWithDatabase("student job application flow", () => {
     expect(Number(notification.rows[0]?.count)).toBe(1);
   });
 
+  it("lists interviews by tenant and lets the owning student confirm idempotently", async () => {
+    const scenario = await prepareInterview();
+    const interview = await request(app)
+      .get("/api/v1/students/me/interviews?page=1&pageSize=100&scope=all")
+      .set("Authorization", `Bearer ${scenario.student.token}`);
+    expect(interview.status).toBe(200);
+    expect(interview.body.meta.totalItems).toBe(1);
+    expect(interview.body.data[0]).toMatchObject({
+      applicationId: scenario.applicationId,
+      status: "PENDING_STUDENT_CONFIRMATION",
+      applicationStatus: "INTERVIEW_INVITED",
+      student: { id: scenario.student.studentProfileId },
+      job: { company: { id: scenario.recruiter.companyId } },
+    });
+
+    const companyList = await request(app)
+      .get("/api/v1/companies/me/interviews?page=1&pageSize=100&scope=all")
+      .set("Authorization", `Bearer ${scenario.recruiter.token}`);
+    expect(companyList.status).toBe(200);
+    expect(companyList.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: interview.body.data[0].id, applicationId: scenario.applicationId }),
+    ]));
+
+    const confirmed = await confirmInterview(scenario.student.token, interview.body.data[0].id);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.data).toMatchObject({
+      id: interview.body.data[0].id,
+      status: "CONFIRMED",
+      version: 2,
+    });
+    const repeated = await confirmInterview(scenario.student.token, interview.body.data[0].id);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data).toMatchObject({ status: "CONFIRMED", version: 2 });
+
+    const companyNotification = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+       WHERE n.resource_id = $1 AND n.type = 'INTERVIEW_CONFIRMED_BY_STUDENT' AND u.role = 'COMPANY'`,
+      [interview.body.data[0].id],
+    );
+    expect(Number(companyNotification.rows[0]?.count)).toBe(1);
+  });
+
   it("allows only one company decision while an application is being screened", async () => {
     const { admin, recruiter, jobId, student } = await createScenario();
     const secondRecruiter = await createUser("COMPANY", null, recruiter.companyId, false);
@@ -965,10 +1420,11 @@ describeWithDatabase("student job application flow", () => {
   it("records a PASS result idempotently, creates an offer and notifies student and UIT", async () => {
     const scenario = await prepareInterview();
     const commandId = randomUUID();
+    const offerUploadId = await uploadOffer(scenario.recruiter.token, scenario.applicationId);
     const body = {
       outcome: "PASS",
       startDate: "2099-12-28",
-      offerStorageKey: "offers/offer-result-test.pdf",
+      offerUploadId,
       internalNote: "Mức phụ cấp theo chính sách thực tập sinh.",
     };
 
@@ -981,9 +1437,14 @@ describeWithDatabase("student job application flow", () => {
         outcome: "PASS",
         studentDecision: null,
         startDate: body.startDate,
-        offerStorageKey: body.offerStorageKey,
+        offerDocument: {
+          fileName: "offer-thuc-tap-2026.pdf",
+          mimeType: "application/pdf",
+          fileSizeBytes: 4096,
+        },
       },
     });
+    expect(passed.body.data.recruitmentResult).not.toHaveProperty("offerStorageKey");
     expect(passed.body.data.timeline.at(-1)).toMatchObject({
       fromStatus: "INTERVIEW_INVITED",
       toStatus: "OFFER_PENDING_STUDENT",
@@ -993,6 +1454,30 @@ describeWithDatabase("student job application flow", () => {
     const repeated = await recordResult(scenario.recruiter.token, scenario.applicationId, body, commandId);
     expect(repeated.status).toBe(200);
     expect(repeated.body.data.version).toBe(5);
+
+    for (const [token, path] of [
+      [scenario.student.token, `/api/v1/applications/${scenario.applicationId}/offer-document/download`],
+      [scenario.admin.token, `/api/v1/uit/applications/${scenario.applicationId}/offer-document/download`],
+      [scenario.recruiter.token, `/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/download`],
+    ]) {
+      const download = await request(app).post(path).set("Authorization", `Bearer ${token}`);
+      expect(download.status).toBe(200);
+      expect(download.body.data.downloadUrl).toBe("https://r2.example.test/signed-download");
+    }
+    expect(createDownloadUrl).toHaveBeenCalledTimes(3);
+
+    const otherStudent = await createStudent();
+    const hiddenFromStudent = await request(app)
+      .post(`/api/v1/applications/${scenario.applicationId}/offer-document/download`)
+      .set("Authorization", `Bearer ${otherStudent.token}`);
+    expect(hiddenFromStudent.status).toBe(404);
+
+    const otherCompany = await createScenario();
+    const hiddenFromCompany = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/download`)
+      .set("Authorization", `Bearer ${otherCompany.recruiter.token}`);
+    expect(hiddenFromCompany.status).toBe(404);
+    expect(createDownloadUrl).toHaveBeenCalledTimes(3);
 
     const interview = await client.query<{ status: string }>(
       "SELECT status FROM interviews WHERE application_id = $1",
@@ -1008,6 +1493,33 @@ describeWithDatabase("student job application flow", () => {
       { type: "OFFER_AVAILABLE", role: "STUDENT" },
       { type: "INTERVIEW_RESULT_RECORDED", role: "UIT_ADMIN" },
     ]));
+  });
+
+  it("rejects a foreign company and an invalid R2 object during offer upload", async () => {
+    const scenario = await prepareInterview();
+    const intent = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/uploads`)
+      .set("Authorization", `Bearer ${scenario.recruiter.token}`)
+      .send({ fileName: "offer.pdf", mimeType: "application/pdf", fileSizeBytes: 4096 });
+    expect(intent.status).toBe(201);
+
+    const otherCompany = await createScenario();
+    const foreignCompletion = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${otherCompany.recruiter.token}`);
+    expect(foreignCompletion.status).toBe(404);
+
+    headObject.mockResolvedValueOnce({
+      contentLength: 1024,
+      contentType: "application/pdf",
+      etag: "mismatched-offer",
+    });
+    const invalidCompletion = await request(app)
+      .post(`/api/v1/companies/me/applications/${scenario.applicationId}/offer-document/uploads/${intent.body.data.uploadId}/complete`)
+      .set("Authorization", `Bearer ${scenario.recruiter.token}`);
+    expect(invalidCompletion.status).toBe(409);
+    expect(invalidCompletion.body.error.code).toBe("OFFER_DOCUMENT_UPLOAD_MISMATCH");
+    expect(deleteObject).toHaveBeenCalledWith(expect.stringMatching(/^offers\//));
   });
 
   it("records a FAIL result with a required reason and closes the interview step", async () => {

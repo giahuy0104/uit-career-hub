@@ -15,6 +15,15 @@ import { TokenService } from "./modules/auth/token.service.js";
 import { ApplicationRepository, type ApplicationDatabase } from "./modules/applications/application.repository.js";
 import { createApplicationRouter } from "./modules/applications/application.routes.js";
 import { ApplicationService } from "./modules/applications/application.service.js";
+import { CompanyRepository, type CompanyDatabase } from "./modules/companies/company.repository.js";
+import { createCompanyRouter } from "./modules/companies/company.routes.js";
+import { CompanyService } from "./modules/companies/company.service.js";
+import { DashboardRepository, type DashboardDatabase } from "./modules/dashboard/dashboard.repository.js";
+import { createDashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { DashboardService } from "./modules/dashboard/dashboard.service.js";
+import { EmailDeliveryRepository, type EmailDeliveryDatabase } from "./modules/email/email-delivery.repository.js";
+import { EmailDeliveryService } from "./modules/email/email-delivery.service.js";
+import { ResendEmailProvider } from "./modules/email/resend-email.provider.js";
 import { createHealthRouter } from "./modules/health/health.routes.js";
 import { JobRepository, type JobDatabase } from "./modules/jobs/job.repository.js";
 import { createJobRouter } from "./modules/jobs/job.routes.js";
@@ -25,6 +34,8 @@ import { NotificationService } from "./modules/notifications/notification.servic
 import { DailyPendingRepository, type DailyPendingDatabase } from "./modules/scheduler/daily-pending.repository.js";
 import { createDailyPendingRouter } from "./modules/scheduler/daily-pending.routes.js";
 import { DailyPendingService } from "./modules/scheduler/daily-pending.service.js";
+import type { ObjectStorage } from "./modules/storage/object-storage.js";
+import { R2ObjectStorage } from "./modules/storage/r2-object-storage.js";
 import { AppError } from "./shared/app-error.js";
 
 type AppDependencies = {
@@ -36,11 +47,18 @@ type AppDependencies = {
   jobService?: JobService;
   applicationDatabase?: ApplicationDatabase;
   applicationService?: ApplicationService;
+  companyDatabase?: CompanyDatabase;
+  companyService?: CompanyService;
+  dashboardDatabase?: DashboardDatabase;
+  dashboardService?: DashboardService;
   notificationDatabase?: NotificationDatabase;
   notificationService?: NotificationService;
+  emailDeliveryDatabase?: EmailDeliveryDatabase;
+  emailDeliveryService?: EmailDeliveryService;
   dailyPendingDatabase?: DailyPendingDatabase;
   dailyPendingService?: DailyPendingService;
   cronSecret?: string;
+  objectStorage?: ObjectStorage;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -67,10 +85,50 @@ export function createApp(dependencies: AppDependencies = {}) {
   const jobService =
     dependencies.jobService ??
     new JobService(new JobRepository(dependencies.jobDatabase ?? databasePool));
+  const companyService =
+    dependencies.companyService ??
+    new CompanyService(
+      new CompanyRepository(dependencies.companyDatabase ?? databasePool),
+      tokenService,
+    );
+  const dashboardService =
+    dependencies.dashboardService ??
+    new DashboardService(
+      new DashboardRepository(dependencies.dashboardDatabase ?? dependencies.database ?? databasePool),
+    );
+  const emailDeliveryService =
+    dependencies.emailDeliveryService ??
+    new EmailDeliveryService(
+      new EmailDeliveryRepository(
+        dependencies.emailDeliveryDatabase ?? dependencies.database ?? databasePool,
+      ),
+      env.emailEnabled
+        ? new ResendEmailProvider(env.resendApiKey!, env.emailFrom!)
+        : null,
+      {
+        appBaseUrl: env.publicAppUrl,
+        batchSize: env.emailBatchSize,
+        maxAttempts: env.emailMaxAttempts,
+      },
+    );
   const applicationService =
     dependencies.applicationService ??
     new ApplicationService(
       new ApplicationRepository(dependencies.applicationDatabase ?? databasePool),
+      emailDeliveryService,
+      dependencies.objectStorage ??
+        (env.objectStorageEnabled
+          ? new R2ObjectStorage({
+              accountId: env.r2AccountId!,
+              accessKeyId: env.r2AccessKeyId!,
+              secretAccessKey: env.r2SecretAccessKey!,
+              bucket: env.r2Bucket!,
+            })
+          : undefined),
+      {
+        uploadUrlTtlSeconds: env.objectUploadUrlTtlSeconds,
+        downloadUrlTtlSeconds: env.objectDownloadUrlTtlSeconds,
+      },
     );
   const notificationService =
     dependencies.notificationService ??
@@ -81,10 +139,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     dependencies.dailyPendingService ??
     new DailyPendingService(
       new DailyPendingRepository(dependencies.dailyPendingDatabase ?? databasePool),
+      emailDeliveryService,
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.9.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.12.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
@@ -93,6 +152,8 @@ export function createApp(dependencies: AppDependencies = {}) {
   );
   app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
   app.use("/api/v1", createJobRouter(jobService, tokenService));
+  app.use("/api/v1", createCompanyRouter(companyService, tokenService));
+  app.use("/api/v1", createDashboardRouter(dashboardService, tokenService));
   app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
   app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
 

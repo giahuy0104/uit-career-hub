@@ -1,9 +1,63 @@
 import { z } from "zod";
 
-import { applicationStatuses } from "./application.types.js";
+import {
+  applicationStatuses,
+  studentDocumentTypes,
+  studentDocumentVerificationStatuses,
+} from "./application.types.js";
 
 export const applicationIdSchema = z.string().uuid();
+export const applicationDocumentIdSchema = z.string().uuid();
+export const interviewIdSchema = z.string().uuid();
+export const studentDocumentIdSchema = z.string().uuid();
+export const studentDocumentUploadIdSchema = z.string().uuid();
+export const offerDocumentUploadIdSchema = z.string().uuid();
 export const applicationIdempotencyKeySchema = z.string().uuid("Idempotency-Key phải là UUID.");
+
+export const studentProfileUpdateSchema = z
+  .object({
+    phone: z
+      .string()
+      .trim()
+      .min(8, "Số điện thoại phải có ít nhất 8 ký tự.")
+      .max(30, "Số điện thoại không được vượt quá 30 ký tự.")
+      .regex(/^\+?[0-9][0-9 .()-]*$/, "Số điện thoại không đúng định dạng.")
+      .nullable(),
+  })
+  .strict();
+
+export const studentDocumentUploadSchema = z
+  .object({
+    documentType: z.enum(studentDocumentTypes),
+    fileName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .refine((value) => !/[\\/\r\n\0]/.test(value), "Tên tệp không hợp lệ.")
+      .refine((value) => value.toLowerCase().endsWith(".pdf"), "Chỉ chấp nhận tệp PDF."),
+    mimeType: z.literal("application/pdf"),
+    fileSizeBytes: z.coerce.number().int().positive().max(10 * 1024 * 1024),
+  })
+  .strict();
+
+export const studentDocumentReviewListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  status: z.enum(studentDocumentVerificationStatuses).optional().default("PENDING"),
+  query: z.string().trim().max(120).optional(),
+});
+
+export const studentDocumentReviewSchema = z.discriminatedUnion("decision", [
+  z.object({
+    decision: z.literal("VERIFY"),
+    note: z.string().trim().max(2_000).optional(),
+  }),
+  z.object({
+    decision: z.literal("REJECT"),
+    note: z.string().trim().min(5).max(2_000),
+  }),
+]);
 
 export const applicationSubmitSchema = z.object({
   jobId: z.string().uuid(),
@@ -57,6 +111,12 @@ export const companyCandidateListQuerySchema = z.object({
   status: z.enum(applicationStatuses).optional(),
 });
 
+export const interviewListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
+  scope: z.enum(["upcoming", "history", "all"]).optional().default("all"),
+});
+
 export const applicationReviewReasonSchema = z.object({
   reasonCode: z.string().trim().min(2).max(80),
   note: z.string().trim().min(5).max(2_000),
@@ -89,16 +149,30 @@ export const interviewRequestSchema = z
     }
   });
 
+export const offerDocumentUploadSchema = z
+  .object({
+    fileName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .refine((value) => !/[\\/\r\n\0]/.test(value), "Tên tệp không hợp lệ.")
+      .refine((value) => value.toLowerCase().endsWith(".pdf"), "Tệp offer phải có phần mở rộng .pdf."),
+    mimeType: z.literal("application/pdf"),
+    fileSizeBytes: z.number().int().positive().max(10 * 1024 * 1024),
+  })
+  .strict();
+
 const recruitmentPassSchema = z.object({
   outcome: z.literal("PASS"),
   startDate: z.iso.date(),
-  offerStorageKey: z.string().trim().min(3).max(2_000).optional(),
+  offerUploadId: z.string().uuid().optional(),
   internalNote: z.string().trim().max(2_000).optional(),
-});
+}).strict();
 
 const recruitmentFailSchema = applicationReviewReasonSchema.extend({
   outcome: z.literal("FAIL"),
-});
+}).strict();
 
 export const recruitmentResultSchema = z.discriminatedUnion("outcome", [
   recruitmentPassSchema,

@@ -5,6 +5,7 @@ import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import {
+  applicationDocumentIdSchema,
   applicationIdSchema,
   applicationIdempotencyKeySchema,
   applicationListQuerySchema,
@@ -14,9 +15,19 @@ import {
   applicationSubmitSchema,
   applicationSupplementRequestSchema,
   companyCandidateListQuerySchema,
+  interviewIdSchema,
+  interviewListQuerySchema,
   interviewRequestSchema,
+  offerDocumentUploadIdSchema,
+  offerDocumentUploadSchema,
   placementConfirmationSchema,
   recruitmentResultSchema,
+  studentDocumentIdSchema,
+  studentDocumentReviewListQuerySchema,
+  studentDocumentReviewSchema,
+  studentDocumentUploadIdSchema,
+  studentDocumentUploadSchema,
+  studentProfileUpdateSchema,
 } from "./application.schemas.js";
 import { ApplicationService } from "./application.service.js";
 
@@ -44,8 +55,88 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.json({ data: await service.getStudentProfile(principal(request).studentProfileId) });
   });
 
+  router.patch("/students/me", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.updateStudentProfile(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentProfileUpdateSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
   router.get("/students/me/documents", studentOnly, async (request, response) => {
     response.json({ data: await service.listStudentDocuments(principal(request).studentProfileId) });
+  });
+
+  router.post("/students/me/documents/uploads", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.status(201).json({
+      data: await service.createStudentDocumentUploadIntent(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentUploadSchema.parse(request.body),
+      ),
+    });
+  });
+
+  router.post("/students/me/documents/uploads/:uploadId/complete", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.status(201).json({
+      data: await service.completeStudentDocumentUpload(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentUploadIdSchema.parse(request.params.uploadId),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/students/me/documents/:documentId/download", studentOnly, async (request, response) => {
+    response.json({
+      data: await service.createStudentDocumentDownload(
+        principal(request).studentProfileId,
+        studentDocumentIdSchema.parse(request.params.documentId),
+      ),
+    });
+  });
+
+  router.delete("/students/me/documents/:documentId", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.deleteStudentDocument(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentIdSchema.parse(request.params.documentId),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.post("/students/me/documents/:documentId/default", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.setDefaultStudentCv(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        studentDocumentIdSchema.parse(request.params.documentId),
+        metadata(request),
+      ),
+    });
+  });
+
+  router.get("/students/me/interviews", studentOnly, async (request, response) => {
+    const query = interviewListQuerySchema.parse(request.query);
+    const result = await service.listStudentInterviews(principal(request).studentProfileId, query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post("/students/me/interviews/:interviewId/confirm", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.confirmInterview(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        interviewIdSchema.parse(request.params.interviewId),
+        metadata(request),
+      ),
+    });
   });
 
   router.get("/applications", studentOnly, async (request, response) => {
@@ -71,6 +162,17 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
       data: await service.getApplication(
         principal(request).studentProfileId,
         applicationIdSchema.parse(request.params.applicationId),
+      ),
+    });
+  });
+
+  router.post("/applications/:applicationId/offer-document/download", studentOnly, async (request, response) => {
+    const auth = principal(request);
+    response.json({
+      data: await service.createStudentOfferDocumentDownload(
+        { userId: auth.userId, studentProfileId: auth.studentProfileId },
+        applicationIdSchema.parse(request.params.applicationId),
+        metadata(request),
       ),
     });
   });
@@ -150,10 +252,61 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
 
+  router.post(
+    "/uit/applications/:applicationId/documents/:documentId/download",
+    uitOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.createUitApplicationDocumentDownload(
+          auth.userId,
+          applicationIdSchema.parse(request.params.applicationId),
+          applicationDocumentIdSchema.parse(request.params.documentId),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
+  router.get("/uit/student-documents", uitOnly, async (request, response) => {
+    const query = studentDocumentReviewListQuerySchema.parse(request.query);
+    const result = await service.listStudentDocumentsForReview(query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post("/uit/student-documents/:documentId/download", uitOnly, async (request, response) => {
+    response.json({
+      data: await service.createUitStudentDocumentDownload(
+        studentDocumentIdSchema.parse(request.params.documentId),
+      ),
+    });
+  });
+
+  router.post("/uit/student-documents/:documentId/review", uitOnly, async (request, response) => {
+    response.json({
+      data: await service.reviewStudentDocument(
+        principal(request).userId,
+        studentDocumentIdSchema.parse(request.params.documentId),
+        studentDocumentReviewSchema.parse(request.body),
+        metadata(request),
+      ),
+    });
+  });
+
   router.get("/uit/applications/placement-queue", uitOnly, async (request, response) => {
     const query = applicationReviewQueueQuerySchema.parse(request.query);
     const result = await service.listPlacementQueue(query);
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post("/uit/applications/:applicationId/offer-document/download", uitOnly, async (request, response) => {
+    response.json({
+      data: await service.createUitOfferDocumentDownload(
+        principal(request).userId,
+        applicationIdSchema.parse(request.params.applicationId),
+        metadata(request),
+      ),
+    });
   });
 
   router.post("/uit/applications/:applicationId/request-supplement", uitOnly, async (request, response) => {
@@ -218,6 +371,75 @@ export function createApplicationRouter(service: ApplicationService, tokenServic
     const result = await service.listCompanyCandidates(auth.companyId, query);
     response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
   });
+
+  router.get("/companies/me/interviews", companyOnly, async (request, response) => {
+    const auth = principal(request);
+    const query = interviewListQuerySchema.parse(request.query);
+    const result = await service.listCompanyInterviews(auth.companyId, query);
+    response.json({ data: result.items, meta: pageMeta(query.page, query.pageSize, result.total) });
+  });
+
+  router.post(
+    "/companies/me/applications/:applicationId/documents/:documentId/download",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.createCompanyApplicationDocumentDownload(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          applicationDocumentIdSchema.parse(request.params.documentId),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
+  router.post(
+    "/companies/me/applications/:applicationId/offer-document/uploads",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.status(201).json({
+        data: await service.createOfferDocumentUploadIntent(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          offerDocumentUploadSchema.parse(request.body),
+        ),
+      });
+    },
+  );
+
+  router.post(
+    "/companies/me/applications/:applicationId/offer-document/uploads/:uploadId/complete",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.completeOfferDocumentUpload(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          offerDocumentUploadIdSchema.parse(request.params.uploadId),
+          metadata(request),
+        ),
+      });
+    },
+  );
+
+  router.post(
+    "/companies/me/applications/:applicationId/offer-document/download",
+    companyOnly,
+    async (request, response) => {
+      const auth = principal(request);
+      response.json({
+        data: await service.createCompanyOfferDocumentDownload(
+          { userId: auth.userId, companyId: auth.companyId },
+          applicationIdSchema.parse(request.params.applicationId),
+          metadata(request),
+        ),
+      });
+    },
+  );
 
   router.post(
     "/companies/me/applications/:applicationId/start-review",

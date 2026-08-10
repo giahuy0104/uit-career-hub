@@ -81,7 +81,7 @@ describeWithDatabase("database constraints", () => {
       [firstJobId, secondJobId, companyId, companyUserId],
     );
 
-    return { studentProfileId, studentUserId, firstJobId, secondJobId };
+    return { adminId, studentProfileId, studentUserId, firstJobId, secondJobId };
   }
 
   it("should_prevent_two_active_applications_for_same_student_and_job", async () => {
@@ -140,5 +140,36 @@ describeWithDatabase("database constraints", () => {
 
     await client.query(sql, values);
     await expect(client.query(sql, values)).rejects.toMatchObject({ code: "23505" });
+  });
+
+  it("should_queue_email_only_for_selected_notification_types", async () => {
+    const scenario = await createScenario();
+    const selectedNotification = await client.query<{ id: string }>(
+      `INSERT INTO notifications
+       (recipient_user_id, type, title, body, resource_type, deep_link, dedupe_key)
+       VALUES ($1, 'APPLICATION_SUBMITTED', 'Có hồ sơ mới', 'Cần UIT xử lý',
+               'APPLICATION', '/uit/applications', $2)
+       RETURNING id`,
+      [scenario.adminId, `email-selected:${randomUUID()}`],
+    );
+    await client.query(
+      `INSERT INTO notifications
+       (recipient_user_id, type, title, body, resource_type, deep_link, dedupe_key)
+       VALUES ($1, 'JOB_APPROVED', 'Tin đã duyệt', 'Thông báo chỉ trong ứng dụng',
+               'JOB_POST', '/company/jobs', $2)`,
+      [scenario.adminId, `email-ignored:${randomUUID()}`],
+    );
+
+    const deliveries = await client.query<{ notification_id: string; status: string }>(
+      `SELECT notification_id, status
+       FROM email_deliveries
+       WHERE recipient_user_id = $1`,
+      [scenario.adminId],
+    );
+
+    expect(deliveries.rows).toEqual([{
+      notification_id: selectedNotification.rows[0]!.id,
+      status: "PENDING",
+    }]);
   });
 });

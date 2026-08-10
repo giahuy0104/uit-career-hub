@@ -156,23 +156,236 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/StudentDocument'
+  /students/me/documents/uploads:
     post:
       tags: [Students]
-      operationId: createDocumentMetadata
-      description: Tạo metadata sau khi luồng upload object storage hoàn tất.
+      operationId: createMyDocumentUploadIntent
+      description: Tạo URL PUT ký trước để trình duyệt tải PDF trực tiếp vào Cloudflare R2 private.
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/StudentDocumentCreateRequest'
+            schema: { $ref: '#/components/schemas/StudentDocumentUploadRequest' }
       responses:
         '201':
-          description: Metadata tài liệu đã tạo
+          description: Upload intent có thời hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentUploadIntentEnvelope' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/uploads/{uploadId}/complete:
+    post:
+      tags: [Students]
+      operationId: completeMyDocumentUpload
+      description: Kiểm tra object trên R2 bằng HEAD, tạo tài liệu ở trạng thái PENDING và thông báo cho UIT xử lý.
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Danh sách tài liệu sau khi xác nhận upload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentListEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: Upload intent đã hết hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/{documentId}:
+    delete:
+      tags: [Students]
+      operationId: deleteMyDocument
+      description: Xóa vĩnh viễn tài liệu khỏi hồ sơ và R2. Không cho xóa CV mặc định hoặc tài liệu đã dùng trong đơn ứng tuyển.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách tài liệu còn lại sau khi xóa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentListEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/{documentId}/download:
+    post:
+      tags: [Students]
+      operationId: createMyDocumentDownloadUrl
+      description: Tạo URL GET ký trước ngắn hạn cho tài liệu thuộc sinh viên đang đăng nhập.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: URL tải xuống có thời hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /students/me/documents/{documentId}/default:
+    post:
+      tags: [Students]
+      operationId: setMyDefaultCv
+      description: Chỉ CV đã được UIT xác minh mới có thể được chọn làm CV mặc định.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách tài liệu sau khi cập nhật CV mặc định
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StudentDocumentEnvelope'
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentDocument'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /uit/student-documents:
+    get:
+      tags: [UIT]
+      operationId: listStudentDocumentsForReview
+      description: Danh sách tài liệu sinh viên theo trạng thái, sắp xếp tài liệu cũ nhất trước.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, VERIFIED, REJECTED], default: PENDING }
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 120 }
+      responses:
+        '200':
+          description: Hàng đợi xác minh tài liệu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UitStudentDocumentListEnvelope' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /uit/student-documents/{documentId}/download:
+    post:
+      tags: [UIT]
+      operationId: createUitStudentDocumentDownloadUrl
+      description: Tạo URL GET ký trước ngắn hạn để UIT đối chiếu tài liệu PDF private.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: URL tải xuống có thời hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /uit/student-documents/{documentId}/review:
+    post:
+      tags: [UIT]
+      operationId: reviewStudentDocument
+      description: Chỉ cho phép chuyển một lần từ PENDING sang VERIFIED hoặc REJECTED; quyết định và lý do được lưu audit log.
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StudentDocumentReviewRequest' }
+      responses:
+        '200':
+          description: Tài liệu sau khi xử lý
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/UitStudentDocument' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /students/me/interviews:
+    get:
+      tags: [Students, Interviews]
+      operationId: listMyInterviews
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: scope
+          in: query
+          schema: { type: string, enum: [upcoming, history, all], default: all }
+      responses:
+        '200':
+          description: Lịch phỏng vấn thuộc sinh viên đang đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /students/me/interviews/{interviewId}/confirm:
+    post:
+      tags: [Students, Interviews]
+      operationId: confirmMyInterview
+      description: Xác nhận tự nhiên idempotent; gọi lại khi đã CONFIRMED trả cùng trạng thái và không tạo thông báo trùng.
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+      responses:
+        '200':
+          description: Sinh viên đã xác nhận tham gia và doanh nghiệp được thông báo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewListItemEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /jobs:
     get:
@@ -279,6 +492,22 @@ paths:
                 $ref: '#/components/schemas/ApplicationEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
+  /applications/{applicationId}/offer-document/download:
+    post:
+      tags: [Applications]
+      operationId: createStudentOfferDocumentDownload
+      summary: Tạo URL tạm thời để sinh viên mở PDF offer của chính mình
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /applications/{applicationId}/resubmit:
     post:
       tags: [Applications]
@@ -402,7 +631,49 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /companies/me:
+  /companies:
+    get:
+      tags: [Students, Companies]
+      operationId: listActivePartnerCompanies
+      description: Danh bạ dành cho sinh viên; chỉ trả doanh nghiệp đối tác đang hoạt động và không chứa dữ liệu quản trị hoặc tài khoản recruiter.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: industry
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: hasRecruitingJobs
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Danh sách đối tác UIT đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDirectoryListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /companies/{companyId}:
+    get:
+      tags: [Students, Companies]
+      operationId: getActivePartnerCompany
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      responses:
+        '200':
+          description: Hồ sơ công khai của đối tác UIT đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDirectoryEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /companies/me/profile:
     get:
       tags: [Companies]
       operationId: getMyCompany
@@ -412,7 +683,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyEnvelope'
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
     patch:
       tags: [Companies]
       operationId: updateMyCompany
@@ -428,7 +699,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyEnvelope'
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
   /companies/me/jobs:
     get:
       tags: [Companies]
@@ -436,6 +707,12 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, ENDED] }
         - name: status
           in: query
           schema:
@@ -512,6 +789,25 @@ paths:
                 $ref: '#/components/schemas/JobEnvelope'
         '409':
           $ref: '#/components/responses/Conflict'
+  /companies/me/interviews:
+    get:
+      tags: [Companies, Interviews]
+      operationId: listCompanyInterviews
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: scope
+          in: query
+          schema: { type: string, enum: [upcoming, history, all], default: all }
+      responses:
+        '200':
+          description: Lịch phỏng vấn của đúng doanh nghiệp đang đăng nhập
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterviewListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /companies/me/candidates:
     get:
       tags: [Companies]
@@ -535,6 +831,89 @@ paths:
                 $ref: '#/components/schemas/ApplicationListEnvelope'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /companies/me/applications/{applicationId}/documents/{documentId}/download:
+    post:
+      tags: [Companies, Applications]
+      operationId: createCompanyApplicationDocumentDownload
+      summary: Tạo URL tạm thời để doanh nghiệp mở tài liệu ứng viên đã được UIT chuyển
+      description: Trả 404 nếu đơn chưa từng được UIT chuyển hoặc không thuộc doanh nghiệp đang đăng nhập.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/ApplicationDocumentId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /companies/me/applications/{applicationId}/offer-document/uploads:
+    post:
+      tags: [Companies, Applications]
+      operationId: createOfferDocumentUploadIntent
+      summary: Tạo URL R2 ký trước để doanh nghiệp tải PDF offer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OfferDocumentUploadRequest' }
+      responses:
+        '201':
+          description: Phiên upload riêng tư có hạn dùng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentUploadIntentEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /companies/me/applications/{applicationId}/offer-document/uploads/{uploadId}/complete:
+    post:
+      tags: [Companies, Applications]
+      operationId: completeOfferDocumentUpload
+      summary: Xác minh PDF trên R2 trước khi gắn vào kết quả PASS
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - name: uploadId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: PDF offer đã được xác minh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OfferDocumentEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: Phiên upload đã hết hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /companies/me/applications/{applicationId}/offer-document/download:
+    post:
+      tags: [Companies, Applications]
+      operationId: createCompanyOfferDocumentDownload
+      summary: Tạo URL tạm thời để doanh nghiệp sở hữu mở lại PDF offer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /companies/me/applications/{applicationId}/start-review:
     post:
       tags: [Companies, Applications]
@@ -677,11 +1056,42 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyEnvelope'
-  /uit/companies/{companyId}/accounts:
+                $ref: '#/components/schemas/CompanyCreateResultEnvelope'
+  /uit/companies/{companyId}:
+    parameters:
+      - $ref: '#/components/parameters/CompanyId'
+    get:
+      tags: [UIT]
+      operationId: getPartnerCompany
+      responses:
+        '200':
+          description: Hồ sơ đối tác và danh sách tài khoản tuyển dụng
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+    patch:
+      tags: [UIT]
+      operationId: updatePartnerCompany
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyAdminUpdateRequest'
+      responses:
+        '200':
+          description: Hồ sơ đối tác đã cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /uit/companies/{companyId}/suspend:
     post:
       tags: [UIT]
-      operationId: createCompanyAccount
+      operationId: suspendPartnerCompany
       parameters:
         - $ref: '#/components/parameters/CompanyId'
       requestBody:
@@ -689,14 +1099,101 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompanyAccountRequest'
+              $ref: '#/components/schemas/CompanyStateChangeRequest'
+      responses:
+        '200':
+          description: Tạm ngưng đối tác, tài khoản liên quan và refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+  /uit/companies/{companyId}/reactivate:
+    post:
+      tags: [UIT]
+      operationId: reactivatePartnerCompany
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyStateChangeRequest'
+      responses:
+        '200':
+          description: Kích hoạt lại đối tác và các tài khoản bị ngưng theo doanh nghiệp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyDetailEnvelope'
+  /uit/companies/{companyId}/recruiters:
+    post:
+      tags: [UIT]
+      operationId: createCompanyRecruiter
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRecruiterRequest'
       responses:
         '201':
           description: Tài khoản chờ kích hoạt; token chỉ trả/gửi một lần
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserEnvelope'
+                $ref: '#/components/schemas/CompanyRecruiterCreateResultEnvelope'
+  /uit/companies/{companyId}/recruiters/{userId}/suspend:
+    post:
+      tags: [UIT]
+      operationId: suspendCompanyRecruiter
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200':
+          description: Tạm ngưng tài khoản và thu hồi refresh token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyDetailEnvelope' }
+  /uit/companies/{companyId}/recruiters/{userId}/reactivate:
+    post:
+      tags: [UIT]
+      operationId: reactivateCompanyRecruiter
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReasonRequest' }
+      responses:
+        '200':
+          description: Kích hoạt lại tài khoản do UIT tạm ngưng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyDetailEnvelope' }
+  /uit/companies/{companyId}/recruiters/{userId}/activation-link:
+    post:
+      tags: [UIT]
+      operationId: regenerateCompanyActivationLink
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Token thô chỉ trả một lần; database chỉ lưu SHA-256 hash
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyActivationResultEnvelope' }
   /uit/jobs/review-queue:
     get:
       tags: [UIT]
@@ -781,6 +1278,39 @@ paths:
                 $ref: '#/components/schemas/ApplicationListEnvelope'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /uit/applications/{applicationId}/documents/{documentId}/download:
+    post:
+      tags: [UIT, Applications]
+      operationId: createUitApplicationDocumentDownload
+      summary: Tạo URL tạm thời để UIT mở đúng bản chụp tài liệu trong đơn
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+        - $ref: '#/components/parameters/ApplicationDocumentId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /uit/applications/{applicationId}/offer-document/download:
+    post:
+      tags: [UIT, Applications]
+      operationId: createUitOfferDocumentDownload
+      summary: Tạo URL tạm thời để UIT đối chiếu PDF offer
+      parameters:
+        - $ref: '#/components/parameters/ApplicationId'
+      responses:
+        '200':
+          description: URL ký trước có hiệu lực ngắn hạn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDocumentDownloadEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /uit/applications/{applicationId}/request-supplement:
     post:
       tags: [UIT]
@@ -975,6 +1505,48 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /students/me/dashboard:
+    get:
+      tags: [Students]
+      operationId: getStudentDashboard
+      summary: Số liệu và việc cần làm của sinh viên hiện tại
+      responses:
+        '200':
+          description: Dashboard sinh viên được tổng hợp từ hồ sơ, đơn, lịch phỏng vấn và tin đang tuyển
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentDashboardEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /uit/dashboard:
+    get:
+      tags: [UIT]
+      operationId: getUitDashboard
+      summary: Số liệu vận hành toàn trường dành cho UIT
+      responses:
+        '200':
+          description: Dashboard hàng đợi, SLA, phễu ứng tuyển và doanh nghiệp hoạt động
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminDashboardEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /companies/me/dashboard:
+    get:
+      tags: [Companies]
+      operationId: getCompanyDashboard
+      summary: Số liệu tuyển dụng của doanh nghiệp hiện tại
+      responses:
+        '200':
+          description: Dashboard tin tuyển dụng, ứng viên và lịch phỏng vấn theo doanh nghiệp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompanyDashboardEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /cron/daily-pending-notifications:
     get:
       tags: [Scheduler]
@@ -982,12 +1554,13 @@ paths:
       summary: Tổng hợp hồ sơ còn chờ UIT/doanh nghiệp xử lý
       description: |
         Vercel Cron gọi một lần mỗi ngày. Request lặp lại trong cùng ngày không tạo
-        thông báo trùng nhờ dedupe key theo ngày và người nhận.
+        thông báo trùng nhờ dedupe key theo ngày và người nhận. Sau khi tạo in-app
+        notification, hệ thống xử lý email đang chờ và retry các lần gửi lỗi đến hạn.
       security:
         - cronBearerAuth: []
       responses:
         '200':
-          description: Đã quét hàng đợi và tạo các in-app notification cần thiết
+          description: Đã quét hàng đợi, tạo notification và xử lý email cần thiết
           content:
             application/json:
               schema:
@@ -1004,6 +1577,7 @@ paths:
                       - uitRecipientCount
                       - companyRecipientCount
                       - notificationsCreated
+                      - emailDelivery
                     properties:
                       summaryDate: { type: string, format: date }
                       uitPendingCount: { type: integer, minimum: 0 }
@@ -1012,6 +1586,14 @@ paths:
                       uitRecipientCount: { type: integer, minimum: 0 }
                       companyRecipientCount: { type: integer, minimum: 0 }
                       notificationsCreated: { type: integer, minimum: 0 }
+                      emailDelivery:
+                        type: object
+                        required: [enabled, claimed, sent, failed]
+                        properties:
+                          enabled: { type: boolean }
+                          claimed: { type: integer, minimum: 0 }
+                          sent: { type: integer, minimum: 0 }
+                          failed: { type: integer, minimum: 0 }
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -1054,8 +1636,23 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ApplicationDocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InterviewId:
+      name: interviewId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     CompanyId:
       name: companyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1098,6 +1695,11 @@ components:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     TooManyRequests:
       description: Quá nhiều yêu cầu xác thực
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ServiceUnavailable:
+      description: Tích hợp hạ tầng cần thiết chưa được cấu hình hoặc tạm thời không khả dụng
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -1212,8 +1814,10 @@ components:
         email: { type: string, format: email }
     StudentProfileUpdateRequest:
       type: object
+      required: [phone]
+      additionalProperties: false
       properties:
-        phone: { type: string, maxLength: 30 }
+        phone: { type: [string, 'null'], minLength: 8, maxLength: 30 }
     StudentProfileEnvelope:
       type: object
       required: [data]
@@ -1232,22 +1836,271 @@ components:
         isDefault: { type: boolean }
         verificationStatus: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
         createdAt: { type: string, format: date-time }
-    StudentDocumentCreateRequest:
-      type: object
-      required: [documentType, fileName, mimeType, fileSizeBytes, storageKey]
-      properties:
-        documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
-        fileName: { type: string, maxLength: 255 }
-        mimeType: { type: string }
-        fileSizeBytes: { type: integer, minimum: 1 }
-        storageKey: { type: string }
-        checksum: { type: string }
-        isDefault: { type: boolean, default: false }
-    StudentDocumentEnvelope:
+    StudentDocumentListEnvelope:
       type: object
       required: [data]
       properties:
-        data: { $ref: '#/components/schemas/StudentDocument' }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/StudentDocument' }
+    UitStudentDocument:
+      allOf:
+        - $ref: '#/components/schemas/StudentDocument'
+        - type: object
+          required: [student]
+          properties:
+            student:
+              type: object
+              required: [id, studentCode, fullName, email, faculty, major]
+              properties:
+                id: { type: string, format: uuid }
+                studentCode: { type: string }
+                fullName: { type: string }
+                email: { type: string, format: email }
+                faculty: { type: string }
+                major: { type: string }
+    UitStudentDocumentListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/UitStudentDocument' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    StudentDocumentReviewRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [decision]
+          properties:
+            decision: { type: string, const: VERIFY }
+            note: { type: string, maxLength: 2000 }
+        - type: object
+          additionalProperties: false
+          required: [decision, note]
+          properties:
+            decision: { type: string, const: REJECT }
+            note: { type: string, minLength: 5, maxLength: 2000 }
+    StudentDocumentUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [documentType, fileName, mimeType, fileSizeBytes]
+      properties:
+        documentType: { type: string, enum: [CV, TRANSCRIPT, STUDENT_CONFIRMATION, OTHER] }
+        fileName: { type: string, minLength: 1, maxLength: 255, pattern: '\\.[pP][dD][fF]$' }
+        mimeType: { type: string, const: application/pdf }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    OfferDocumentUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [fileName, mimeType, fileSizeBytes]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 255, pattern: '\\.[pP][dD][fF]$' }
+        mimeType: { type: string, const: application/pdf }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    OfferDocument:
+      type: object
+      required: [fileName, mimeType, fileSizeBytes]
+      properties:
+        fileName: { type: string }
+        mimeType: { type: string, const: application/pdf }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 10485760 }
+    OfferDocumentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OfferDocument' }
+    StudentDocumentUploadIntentEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [uploadId, uploadUrl, method, headers, expiresAt]
+          properties:
+            uploadId: { type: string, format: uuid }
+            uploadUrl: { type: string, format: uri }
+            method: { type: string, const: PUT }
+            headers:
+              type: object
+              required: [Content-Type]
+              properties:
+                Content-Type: { type: string, const: application/pdf }
+            expiresAt: { type: string, format: date-time }
+    StudentDocumentDownloadEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [downloadUrl, expiresAt]
+          properties:
+            downloadUrl: { type: string, format: uri }
+            expiresAt: { type: string, format: date-time }
+    DashboardMetricValue:
+      type: integer
+      minimum: 0
+    StudentDashboardEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [metrics, profile, tasks, latestApplication, opportunities]
+          properties:
+            metrics:
+              type: object
+              required: [profileCompleteness, activeApplications, upcomingInterviews, pendingOffers]
+              properties:
+                profileCompleteness: { type: integer, minimum: 0, maximum: 100 }
+                activeApplications: { $ref: '#/components/schemas/DashboardMetricValue' }
+                upcomingInterviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                pendingOffers: { $ref: '#/components/schemas/DashboardMetricValue' }
+            profile:
+              type: object
+              required: [missingItems]
+              properties:
+                missingItems: { type: array, items: { type: string } }
+            tasks:
+              type: array
+              items:
+                type: object
+                required: [type, applicationId, title, description, dueAt]
+                properties:
+                  type: { type: string, enum: [SUPPLEMENT_DOCUMENTS, RESPOND_OFFER, UPCOMING_INTERVIEW] }
+                  applicationId: { type: string, format: uuid }
+                  title: { type: string }
+                  description: { type: string }
+                  dueAt: { type: [string, 'null'], format: date-time }
+            latestApplication:
+              type: [object, 'null']
+              required: [applicationId, status, jobTitle, companyName, lastTransitionAt]
+              properties:
+                applicationId: { type: string, format: uuid }
+                status: { $ref: '#/components/schemas/ApplicationStatus' }
+                jobTitle: { type: string }
+                companyName: { type: string }
+                lastTransitionAt: { type: string, format: date-time }
+            opportunities:
+              type: array
+              items:
+                type: object
+                required: [jobId, title, companyName, workMode, deadline]
+                properties:
+                  jobId: { type: string, format: uuid }
+                  title: { type: string }
+                  companyName: { type: string }
+                  workMode: { $ref: '#/components/schemas/WorkMode' }
+                  deadline: { type: string, format: date }
+    AdminDashboardEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [metrics, queues, handledToday, applicationFunnel, topCompanies]
+          properties:
+            metrics:
+              type: object
+              required: [pendingJobReviews, pendingUitApplications, awaitingCompany, hiresThisMonth]
+              properties:
+                pendingJobReviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                pendingUitApplications: { $ref: '#/components/schemas/DashboardMetricValue' }
+                awaitingCompany: { $ref: '#/components/schemas/DashboardMetricValue' }
+                hiresThisMonth: { $ref: '#/components/schemas/DashboardMetricValue' }
+            queues:
+              type: object
+              required: [uitApplications, jobReviews, placementConfirmations]
+              properties:
+                uitApplications: { $ref: '#/components/schemas/DashboardQueue' }
+                jobReviews:
+                  allOf:
+                    - { $ref: '#/components/schemas/DashboardQueue' }
+                    - type: object
+                      required: [companyCount]
+                      properties:
+                        companyCount: { $ref: '#/components/schemas/DashboardMetricValue' }
+                placementConfirmations: { $ref: '#/components/schemas/DashboardQueue' }
+            handledToday:
+              type: object
+              required: [completed, incoming, completionRate]
+              properties:
+                completed: { $ref: '#/components/schemas/DashboardMetricValue' }
+                incoming: { $ref: '#/components/schemas/DashboardMetricValue' }
+                completionRate: { type: integer, minimum: 0, maximum: 100 }
+            applicationFunnel:
+              type: array
+              items:
+                type: object
+                required: [status, count]
+                properties:
+                  status: { type: string }
+                  count: { $ref: '#/components/schemas/DashboardMetricValue' }
+            topCompanies:
+              type: array
+              items:
+                type: object
+                required: [companyId, companyName, recruitingJobs, applications]
+                properties:
+                  companyId: { type: string, format: uuid }
+                  companyName: { type: string }
+                  recruitingJobs: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  applications: { $ref: '#/components/schemas/DashboardMetricValue' }
+    DashboardQueue:
+      type: object
+      required: [total, overdue, oldestWaitingHours]
+      properties:
+        total: { $ref: '#/components/schemas/DashboardMetricValue' }
+        overdue: { $ref: '#/components/schemas/DashboardMetricValue' }
+        oldestWaitingHours: { type: [integer, 'null'], minimum: 0 }
+    CompanyDashboardEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [metrics, actionQueue, recentCandidates, jobPerformance]
+          properties:
+            metrics:
+              type: object
+              required: [recruitingJobs, pendingJobReviews, newCandidates, interviewsThisWeek, hiresThisMonth]
+              properties:
+                recruitingJobs: { $ref: '#/components/schemas/DashboardMetricValue' }
+                pendingJobReviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                newCandidates: { $ref: '#/components/schemas/DashboardMetricValue' }
+                interviewsThisWeek: { $ref: '#/components/schemas/DashboardMetricValue' }
+                hiresThisMonth: { $ref: '#/components/schemas/DashboardMetricValue' }
+            actionQueue:
+              type: object
+              required: [overdueCandidates, revisionRequiredJobs]
+              properties:
+                overdueCandidates: { $ref: '#/components/schemas/DashboardMetricValue' }
+                revisionRequiredJobs: { $ref: '#/components/schemas/DashboardMetricValue' }
+            recentCandidates:
+              type: array
+              items:
+                type: object
+                required: [applicationId, studentName, studentCode, gpa, jobTitle, status, lastTransitionAt]
+                properties:
+                  applicationId: { type: string, format: uuid }
+                  studentName: { type: string }
+                  studentCode: { type: string }
+                  gpa: { type: [number, 'null'], minimum: 0, maximum: 4 }
+                  jobTitle: { type: string }
+                  status: { $ref: '#/components/schemas/ApplicationStatus' }
+                  lastTransitionAt: { type: string, format: date-time }
+            jobPerformance:
+              type: array
+              items:
+                type: object
+                required: [jobId, title, applications, forwarded, interviews, hires]
+                properties:
+                  jobId: { type: string, format: uuid }
+                  title: { type: string }
+                  applications: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  forwarded: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  interviews: { $ref: '#/components/schemas/DashboardMetricValue' }
+                  hires: { $ref: '#/components/schemas/DashboardMetricValue' }
     Company:
       type: object
       required: [id, code, name, partnerStatus]
@@ -1255,41 +2108,168 @@ components:
         id: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
+        legalName: { type: [string, 'null'] }
+        taxCode: { type: [string, 'null'] }
         industry: { type: [string, 'null'] }
+        companySize: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
         website: { type: [string, 'null'], format: uri }
         address: { type: [string, 'null'] }
         partnerStatus: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, ENDED] }
+        version: { type: integer, minimum: 1 }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        recruiterCount: { type: integer, minimum: 0 }
+        activeRecruiterCount: { type: integer, minimum: 0 }
+        recruitingJobCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PartnerDirectoryCompany:
+      type: object
+      required: [id, code, name, industry, companySize, description, website, address, verifiedAt, recruitingJobCount]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        industry: { type: [string, 'null'] }
+        companySize: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'] }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        recruitingJobCount: { type: integer, minimum: 0 }
+    PartnerDirectoryEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/PartnerDirectoryCompany' }
+    PartnerDirectoryListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/PartnerDirectoryCompany' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    CompanyRecruiter:
+      type: object
+      required: [userId, email, fullName, isPrimary, status, createdAt]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        title: { type: [string, 'null'] }
+        isPrimary: { type: boolean }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    CompanyDetail:
+      allOf:
+        - $ref: '#/components/schemas/Company'
+        - type: object
+          required: [recruiters]
+          properties:
+            recruiters:
+              type: array
+              items: { $ref: '#/components/schemas/CompanyRecruiter' }
     CompanyCreateRequest:
       type: object
-      required: [code, name]
+      required: [code, name, primaryRecruiter]
       properties:
         code: { type: string, pattern: '^[A-Z0-9_-]+$' }
-        name: { type: string, maxLength: 200 }
-        legalName: { type: string, maxLength: 250 }
-        industry: { type: string, maxLength: 150 }
-        website: { type: string, format: uri }
-        address: { type: string, maxLength: 500 }
+        name: { type: string, maxLength: 180 }
+        legalName: { type: [string, 'null'], maxLength: 255 }
+        taxCode: { type: [string, 'null'], maxLength: 50 }
+        industry: { type: [string, 'null'], maxLength: 120 }
+        companySize: { type: [string, 'null'], maxLength: 80 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'], maxLength: 500 }
+        primaryRecruiter: { $ref: '#/components/schemas/CompanyRecruiterRequest' }
     CompanyUpdateRequest:
       type: object
+      required: [name, expectedVersion]
       properties:
-        description: { type: string, maxLength: 3000 }
-        website: { type: string, format: uri }
-        address: { type: string, maxLength: 500 }
-        industry: { type: string, maxLength: 150 }
-        companySize: { type: string, maxLength: 100 }
-    CompanyAccountRequest:
+        name: { type: string, maxLength: 180 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'], maxLength: 500 }
+        industry: { type: [string, 'null'], maxLength: 120 }
+        companySize: { type: [string, 'null'], maxLength: 80 }
+        expectedVersion: { type: integer, minimum: 1 }
+    CompanyAdminUpdateRequest:
       type: object
-      required: [email, fullName, isPrimary]
+      required: [code, name, expectedVersion]
+      properties:
+        code: { type: string, pattern: '^[A-Z0-9_-]+$' }
+        name: { type: string, maxLength: 180 }
+        legalName: { type: [string, 'null'], maxLength: 255 }
+        taxCode: { type: [string, 'null'], maxLength: 50 }
+        industry: { type: [string, 'null'], maxLength: 120 }
+        companySize: { type: [string, 'null'], maxLength: 80 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        website: { type: [string, 'null'], format: uri }
+        address: { type: [string, 'null'], maxLength: 500 }
+        expectedVersion: { type: integer, minimum: 1 }
+    CompanyRecruiterRequest:
+      type: object
+      required: [email, fullName]
       properties:
         email: { type: string, format: email }
-        fullName: { type: string, maxLength: 150 }
-        title: { type: string, maxLength: 150 }
-        isPrimary: { type: boolean }
+        fullName: { type: string, maxLength: 180 }
+        title: { type: [string, 'null'], maxLength: 120 }
+    CompanyStateChangeRequest:
+      type: object
+      required: [expectedVersion, reason]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 5, maxLength: 1000 }
+    ActivationToken:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token: { type: string, minLength: 32 }
+        expiresAt: { type: string, format: date-time }
     CompanyEnvelope:
       type: object
       required: [data]
       properties:
         data: { $ref: '#/components/schemas/Company' }
+    CompanyDetailEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CompanyDetail' }
+    CompanyCreateResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [company, activation]
+          properties:
+            company: { $ref: '#/components/schemas/CompanyDetail' }
+            activation: { $ref: '#/components/schemas/ActivationToken' }
+    CompanyRecruiterCreateResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [userId, company, activation]
+          properties:
+            userId: { type: string, format: uuid }
+            company: { $ref: '#/components/schemas/CompanyDetail' }
+            activation: { $ref: '#/components/schemas/ActivationToken' }
+    CompanyActivationResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [company, activation]
+          properties:
+            company: { $ref: '#/components/schemas/CompanyDetail' }
+            activation: { $ref: '#/components/schemas/ActivationToken' }
     Job:
       type: object
       required: [id, company, title, opportunityType, workMode, location, description, requirements, positions, deadline, status, version, categories, skills, submittedAt, reviewedAt, createdAt, updatedAt]
@@ -1547,6 +2527,56 @@ components:
       required: [data]
       properties:
         data: { $ref: '#/components/schemas/Interview' }
+    InterviewListItem:
+      allOf:
+        - $ref: '#/components/schemas/Interview'
+        - type: object
+          required: [applicationStatus, student, job, recruitmentResult]
+          properties:
+            applicationStatus: { $ref: '#/components/schemas/ApplicationStatus' }
+            student:
+              type: object
+              required: [id, studentCode, fullName, major, gpa]
+              properties:
+                id: { type: string, format: uuid }
+                studentCode: { type: string }
+                fullName: { type: string }
+                major: { type: string }
+                gpa: { type: [number, 'null'] }
+            job:
+              type: object
+              required: [id, title, company]
+              properties:
+                id: { type: string, format: uuid }
+                title: { type: string }
+                company:
+                  type: object
+                  required: [id, code, name]
+                  properties:
+                    id: { type: string, format: uuid }
+                    code: { type: string }
+                    name: { type: string }
+            recruitmentResult:
+              oneOf:
+                - type: 'null'
+                - type: object
+                  required: [outcome, studentDecision]
+                  properties:
+                    outcome: { type: string, enum: [PASS, FAIL] }
+                    studentDecision: { type: [string, 'null'], enum: [ACCEPTED, DECLINED, null] }
+    InterviewListItemEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/InterviewListItem' }
+    InterviewListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/InterviewListItem' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
     RecruitmentResultRequest:
       oneOf:
         - $ref: '#/components/schemas/RecruitmentPassRequest'
@@ -1558,14 +2588,16 @@ components:
           FAIL: '#/components/schemas/RecruitmentFailRequest'
     RecruitmentPassRequest:
       type: object
+      additionalProperties: false
       required: [outcome, startDate]
       properties:
         outcome: { type: string, const: PASS }
         startDate: { type: string, format: date }
-        offerStorageKey: { type: string, minLength: 3, maxLength: 2000 }
+        offerUploadId: { type: string, format: uuid }
         internalNote: { type: string, maxLength: 2000 }
     RecruitmentFailRequest:
       type: object
+      additionalProperties: false
       required: [outcome, reasonCode, note]
       properties:
         outcome: { type: string, const: FAIL }
@@ -1573,7 +2605,7 @@ components:
         note: { type: string, minLength: 5, maxLength: 2000 }
     RecruitmentResult:
       type: object
-      required: [id, outcome, studentDecision, offeredAt, respondedAt, startDate, offerStorageKey]
+      required: [id, outcome, studentDecision, offeredAt, respondedAt, startDate, offerDocument]
       properties:
         id: { type: string, format: uuid }
         outcome: { type: string, enum: [PASS, FAIL] }
@@ -1583,7 +2615,15 @@ components:
         offeredAt: { type: [string, 'null'], format: date-time }
         respondedAt: { type: [string, 'null'], format: date-time }
         startDate: { type: [string, 'null'], format: date }
-        offerStorageKey: { type: [string, 'null'] }
+        offerDocument:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [fileName, mimeType, fileSizeBytes]
+              properties:
+                fileName: { type: string }
+                mimeType: { type: string, const: application/pdf }
+                fileSizeBytes: { type: [integer, 'null'], minimum: 1, maximum: 10485760 }
     PlacementConfirmationRequest:
       type: object
       required: [startDate]

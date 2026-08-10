@@ -6,6 +6,8 @@ import { createApp } from "../app.js";
 import type { ApplicationService } from "../modules/applications/application.service.js";
 import type { AuthUser, UserRole } from "../modules/auth/auth.types.js";
 import { TokenService } from "../modules/auth/token.service.js";
+import type { CompanyService } from "../modules/companies/company.service.js";
+import type { DashboardService } from "../modules/dashboard/dashboard.service.js";
 import type { JobService } from "../modules/jobs/job.service.js";
 import type { NotificationService } from "../modules/notifications/notification.service.js";
 
@@ -15,7 +17,17 @@ type RestrictedEndpoint = { method: HttpMethod; path: string; role: UserRole };
 const resourceId = randomUUID();
 const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "get", path: "/api/v1/students/me", role: "STUDENT" },
+  { method: "get", path: "/api/v1/companies", role: "STUDENT" },
+  { method: "get", path: `/api/v1/companies/${resourceId}`, role: "STUDENT" },
+  { method: "patch", path: "/api/v1/students/me", role: "STUDENT" },
+  { method: "get", path: "/api/v1/students/me/dashboard", role: "STUDENT" },
   { method: "get", path: "/api/v1/students/me/documents", role: "STUDENT" },
+  { method: "post", path: "/api/v1/students/me/documents/uploads", role: "STUDENT" },
+  { method: "post", path: `/api/v1/students/me/documents/uploads/${resourceId}/complete`, role: "STUDENT" },
+  { method: "post", path: `/api/v1/students/me/documents/${resourceId}/download`, role: "STUDENT" },
+  { method: "post", path: `/api/v1/students/me/documents/${resourceId}/default`, role: "STUDENT" },
+  { method: "get", path: "/api/v1/students/me/interviews", role: "STUDENT" },
+  { method: "post", path: `/api/v1/students/me/interviews/${resourceId}/confirm`, role: "STUDENT" },
   { method: "get", path: "/api/v1/applications", role: "STUDENT" },
   { method: "post", path: "/api/v1/applications", role: "STUDENT" },
   { method: "get", path: `/api/v1/applications/${resourceId}`, role: "STUDENT" },
@@ -24,28 +36,53 @@ const restrictedEndpoints: RestrictedEndpoint[] = [
   { method: "post", path: `/api/v1/applications/${resourceId}/cancel-interview`, role: "STUDENT" },
   { method: "post", path: `/api/v1/applications/${resourceId}/offer/accept`, role: "STUDENT" },
   { method: "post", path: `/api/v1/applications/${resourceId}/offer/decline`, role: "STUDENT" },
+  { method: "post", path: `/api/v1/applications/${resourceId}/offer-document/download`, role: "STUDENT" },
 
   { method: "get", path: "/api/v1/uit/jobs/review-queue", role: "UIT_ADMIN" },
+  { method: "get", path: "/api/v1/uit/dashboard", role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/jobs/${resourceId}/approve`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/jobs/${resourceId}/request-revision`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/jobs/${resourceId}/reject`, role: "UIT_ADMIN" },
+  { method: "get", path: "/api/v1/uit/student-documents", role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/student-documents/${resourceId}/download`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/student-documents/${resourceId}/review`, role: "UIT_ADMIN" },
   { method: "get", path: "/api/v1/uit/applications/review-queue", role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/applications/${resourceId}/documents/${resourceId}/download`, role: "UIT_ADMIN" },
   { method: "get", path: "/api/v1/uit/applications/placement-queue", role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/applications/${resourceId}/offer-document/download`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/request-supplement`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/reject`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/forward`, role: "UIT_ADMIN" },
   { method: "post", path: `/api/v1/uit/applications/${resourceId}/confirm-placement`, role: "UIT_ADMIN" },
+  { method: "get", path: "/api/v1/uit/companies", role: "UIT_ADMIN" },
+  { method: "post", path: "/api/v1/uit/companies", role: "UIT_ADMIN" },
+  { method: "get", path: `/api/v1/uit/companies/${resourceId}`, role: "UIT_ADMIN" },
+  { method: "patch", path: `/api/v1/uit/companies/${resourceId}`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/suspend`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/reactivate`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/suspend`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/reactivate`, role: "UIT_ADMIN" },
+  { method: "post", path: `/api/v1/uit/companies/${resourceId}/recruiters/${resourceId}/activation-link`, role: "UIT_ADMIN" },
 
   { method: "get", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
+  { method: "get", path: "/api/v1/companies/me/dashboard", role: "COMPANY" },
   { method: "post", path: "/api/v1/companies/me/jobs", role: "COMPANY" },
   { method: "get", path: `/api/v1/companies/me/jobs/${resourceId}`, role: "COMPANY" },
   { method: "patch", path: `/api/v1/companies/me/jobs/${resourceId}`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/jobs/${resourceId}/submit`, role: "COMPANY" },
   { method: "get", path: "/api/v1/companies/me/candidates", role: "COMPANY" },
+  { method: "get", path: "/api/v1/companies/me/interviews", role: "COMPANY" },
+  { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/documents/${resourceId}/download`, role: "COMPANY" },
+  { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/offer-document/uploads`, role: "COMPANY" },
+  { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/offer-document/uploads/${resourceId}/complete`, role: "COMPANY" },
+  { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/offer-document/download`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/start-review`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/reject`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/interviews`, role: "COMPANY" },
   { method: "post", path: `/api/v1/companies/me/applications/${resourceId}/results`, role: "COMPANY" },
+  { method: "get", path: "/api/v1/companies/me/profile", role: "COMPANY" },
+  { method: "patch", path: "/api/v1/companies/me/profile", role: "COMPANY" },
 ];
 
 function user(role: UserRole, withContext = true): AuthUser {
@@ -76,7 +113,16 @@ describe("HTTP RBAC matrix", () => {
     markAllRead: vi.fn(async () => undefined),
   } as unknown as NotificationService;
   const applicationService = {} as ApplicationService;
-  const app = createApp({ tokenService, jobService, applicationService, notificationService });
+  const companyService = {} as CompanyService;
+  const dashboardService = {} as DashboardService;
+  const app = createApp({
+    tokenService,
+    jobService,
+    applicationService,
+    notificationService,
+    companyService,
+    dashboardService,
+  });
   const tokens = new Map<UserRole, string>();
 
   beforeAll(async () => {
