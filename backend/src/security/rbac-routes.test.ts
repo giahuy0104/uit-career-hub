@@ -122,6 +122,7 @@ function user(role: UserRole, withContext = true): AuthUser {
 
 describe("HTTP RBAC matrix", () => {
   const tokenService = new TokenService();
+  const currentUsers = new Map<string, AuthUser>();
   const jobService = {
     listRecruitingJobs: vi.fn(async () => ({ items: [], total: 0 })),
   } as unknown as JobService;
@@ -141,12 +142,17 @@ describe("HTTP RBAC matrix", () => {
     notificationService,
     companyService,
     dashboardService,
+    accessPrincipalStore: {
+      findUserById: async (userId) => currentUsers.get(userId) ?? null,
+    },
   });
   const tokens = new Map<UserRole, string>();
 
   beforeAll(async () => {
     for (const role of ["STUDENT", "UIT_ADMIN", "COMPANY"] as const) {
-      const signed = await tokenService.signAccessToken(user(role));
+      const actor = user(role);
+      currentUsers.set(actor.id, actor);
+      const signed = await tokenService.signAccessToken(actor);
       tokens.set(role, signed.accessToken);
     }
   });
@@ -190,7 +196,9 @@ describe("HTTP RBAC matrix", () => {
   });
 
   it("requires a linked student profile for student-only endpoints", async () => {
-    const signed = await tokenService.signAccessToken(user("STUDENT", false));
+    const actor = user("STUDENT", false);
+    currentUsers.set(actor.id, actor);
+    const signed = await tokenService.signAccessToken(actor);
     const response = await invoke("get", "/api/v1/students/me", signed.accessToken);
 
     expect(response.status).toBe(403);
@@ -198,7 +206,9 @@ describe("HTTP RBAC matrix", () => {
   });
 
   it("requires a linked company for company-only endpoints", async () => {
-    const signed = await tokenService.signAccessToken(user("COMPANY", false));
+    const actor = user("COMPANY", false);
+    currentUsers.set(actor.id, actor);
+    const signed = await tokenService.signAccessToken(actor);
     const response = await invoke("get", "/api/v1/companies/me/jobs", signed.accessToken);
 
     expect(response.status).toBe(403);

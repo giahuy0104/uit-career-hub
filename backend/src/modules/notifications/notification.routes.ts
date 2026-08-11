@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import { Router } from "express";
 
-import { createAuthenticate } from "../../middleware/auth.js";
+import { createAuthenticate, type AccessPrincipalStore } from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import { notificationIdSchema, notificationListQuerySchema } from "./notification.schemas.js";
@@ -18,9 +18,13 @@ function pageMeta(page: number, pageSize: number, totalItems: number) {
   return { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) };
 }
 
-export function createNotificationRouter(service: NotificationService, tokenService = new TokenService()) {
+export function createNotificationRouter(
+  service: NotificationService,
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   const router = Router();
-  router.use(createAuthenticate(tokenService));
+  router.use(createAuthenticate(tokenService, accessPrincipalStore));
 
   router.get("/notifications", async (request, response) => {
     const query = notificationListQuerySchema.parse(request.query);

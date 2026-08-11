@@ -1,8 +1,58 @@
 import type { NextFunction, Request, Response } from "express";
 import { describe, expect, it, vi } from "vitest";
 
-import { requireCompanyOwnership, requireRoles, requireStudentOwnership } from "./auth.js";
+import {
+  createAuthenticate,
+  requireCompanyOwnership,
+  requireRoles,
+  requireStudentOwnership,
+  type AccessPrincipalStore,
+} from "./auth.js";
+import type { AuthPrincipal, AuthUser } from "../modules/auth/auth.types.js";
+import type { TokenService } from "../modules/auth/token.service.js";
 import { AppError } from "../shared/app-error.js";
+
+const principal: AuthPrincipal = {
+  userId: "user-1",
+  email: "user@example.com",
+  role: "STUDENT",
+  tokenId: "token-1",
+  studentProfileId: "student-1",
+  companyId: null,
+};
+
+function activeUser(overrides: Partial<AuthUser> = {}): AuthUser {
+  return {
+    id: principal.userId,
+    email: principal.email,
+    role: principal.role,
+    status: "ACTIVE",
+    passwordHash: null,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    displayName: "Student",
+    organization: null,
+    studentProfileId: principal.studentProfileId,
+    companyId: principal.companyId,
+    ...overrides,
+  };
+}
+
+async function authenticateWith(user: AuthUser | null) {
+  const request = {
+    header: vi.fn(() => "Bearer signed-token"),
+  } as unknown as Request;
+  const next = vi.fn() as NextFunction;
+  const tokenService = {
+    verifyAccessToken: vi.fn(async () => principal),
+  } as unknown as TokenService;
+  const accessPrincipalStore: AccessPrincipalStore = {
+    findUserById: vi.fn(async () => user),
+  };
+
+  await createAuthenticate(tokenService, accessPrincipalStore)(request, {} as Response, next);
+  return { request, next };
+}
 
 function requestWithAuth(role: "STUDENT" | "UIT_ADMIN" | "COMPANY") {
   return {
@@ -19,6 +69,48 @@ function requestWithAuth(role: "STUDENT" | "UIT_ADMIN" | "COMPANY") {
 }
 
 describe("RBAC middleware", () => {
+  it("accepts an active principal whose role and ownership context are current", async () => {
+    const { request, next } = await authenticateWith(activeUser());
+
+    expect(request.auth).toEqual(principal);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it.each([
+    ["missing user", null],
+    ["inactive user", activeUser({ status: "SUSPENDED" })],
+    ["changed role", activeUser({ role: "UIT_ADMIN", studentProfileId: null })],
+    ["changed ownership context", activeUser({ studentProfileId: "student-2" })],
+  ])("revokes access for a %s", async (_case, user) => {
+    const { request, next } = await authenticateWith(user);
+
+    expect(request.auth).toBeUndefined();
+    expect((next as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toMatchObject({
+      status: 401,
+      code: "AUTH_ACCESS_REVOKED",
+    });
+  });
+
+  it("fails closed when the current principal lookup fails", async () => {
+    const request = {
+      header: vi.fn(() => "Bearer signed-token"),
+    } as unknown as Request;
+    const next = vi.fn() as NextFunction;
+    const tokenService = {
+      verifyAccessToken: vi.fn(async () => principal),
+    } as unknown as TokenService;
+    const databaseError = new Error("database unavailable");
+
+    await createAuthenticate(tokenService, {
+      findUserById: vi.fn(async () => {
+        throw databaseError;
+      }),
+    })(request, {} as Response, next);
+
+    expect(request.auth).toBeUndefined();
+    expect(next).toHaveBeenCalledWith(databaseError);
+  });
+
   it("should_reject_a_request_without_an_authenticated_principal", () => {
     const next = vi.fn() as NextFunction;
     requireRoles("UIT_ADMIN")({} as Request, {} as Response, next);

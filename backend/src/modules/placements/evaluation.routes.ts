@@ -1,7 +1,11 @@
 import type { Request } from "express";
 import { Router } from "express";
 
-import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
+import {
+  createAuthenticate,
+  requireRoles,
+  type AccessPrincipalStore,
+} from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import {
@@ -22,10 +26,11 @@ function metadata(request: Request) {
 
 export function createInternshipEvaluationRouter(
   service: InternshipEvaluationService,
-  tokenService = new TokenService(),
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
 ) {
   const router = Router();
-  router.use(createAuthenticate(tokenService));
+  router.use(createAuthenticate(tokenService, accessPrincipalStore));
 
   router.get(
     "/applications/:applicationId/internship-evaluations",

@@ -28,6 +28,7 @@ describeWithDatabase("company partner management API", () => {
     tokenService,
   });
   const adminIds: string[] = [];
+  const studentIds: string[] = [];
   const companyCodes: string[] = [];
 
   beforeAll(async () => {
@@ -46,7 +47,7 @@ describeWithDatabase("company partner management API", () => {
           [companyIds],
         )
       : { rows: [] };
-    const userIds = [...adminIds, ...companyUsers.rows.map((row) => row.user_id)];
+    const userIds = [...adminIds, ...studentIds, ...companyUsers.rows.map((row) => row.user_id)];
     if (userIds.length) {
       await client.query(
         "DELETE FROM audit_logs WHERE actor_user_id = ANY($1::uuid[]) OR target_id = ANY($1::uuid[])",
@@ -66,10 +67,14 @@ describeWithDatabase("company partner management API", () => {
     if (adminIds.length) {
       await client.query("DELETE FROM uit_staff WHERE user_id = ANY($1::uuid[])", [adminIds]);
     }
+    if (studentIds.length) {
+      await client.query("DELETE FROM student_profiles WHERE user_id = ANY($1::uuid[])", [studentIds]);
+    }
     if (userIds.length) {
       await client.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [userIds]);
     }
     adminIds.length = 0;
+    studentIds.length = 0;
     companyCodes.length = 0;
   });
 
@@ -119,6 +124,22 @@ describeWithDatabase("company partner management API", () => {
       studentProfileId: randomUUID(),
       companyId: null,
     };
+    studentIds.push(user.id);
+    await client.query(
+      "INSERT INTO users (id, email, role, status) VALUES ($1, $2, 'STUDENT', 'ACTIVE')",
+      [user.id, user.email],
+    );
+    await client.query(
+      `INSERT INTO student_profiles
+       (id, user_id, student_code, full_name, faculty, major, cohort, academic_status)
+       VALUES ($1, $2, $3, $4, 'CNTT', 'Kỹ thuật phần mềm', '2026', 'ACTIVE')`,
+      [
+        user.studentProfileId,
+        user.id,
+        `DIR${user.id.replaceAll("-", "").slice(0, 8)}`,
+        user.displayName,
+      ],
+    );
     return (await tokenService.signAccessToken(user)).accessToken;
   }
 

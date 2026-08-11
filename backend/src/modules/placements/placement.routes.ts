@@ -1,7 +1,11 @@
 import type { Request } from "express";
 import { Router } from "express";
 
-import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
+import {
+  createAuthenticate,
+  requireRoles,
+  type AccessPrincipalStore,
+} from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import {
@@ -21,9 +25,13 @@ function metadata(request: Request) {
   return { ipAddress: request.ip || null, userAgent: request.get("user-agent")?.slice(0, 512) ?? null };
 }
 
-export function createPlacementRouter(service: PlacementService, tokenService = new TokenService()) {
+export function createPlacementRouter(
+  service: PlacementService,
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   const router = Router();
-  router.use(createAuthenticate(tokenService));
+  router.use(createAuthenticate(tokenService, accessPrincipalStore));
   router.use("/uit/placements", requireRoles("UIT_ADMIN"));
 
   router.get("/uit/placements", async (request, response) => {

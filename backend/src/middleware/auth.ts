@@ -1,10 +1,27 @@
 import type { NextFunction, Request, Response } from "express";
 
 import { AppError } from "../shared/app-error.js";
-import { TokenService } from "../modules/auth/token.service.js";
-import type { UserRole } from "../modules/auth/auth.types.js";
+import type { TokenService } from "../modules/auth/token.service.js";
+import type { AuthPrincipal, AuthUser, UserRole } from "../modules/auth/auth.types.js";
 
-export function createAuthenticate(tokenService = new TokenService()) {
+export type AccessPrincipalStore = {
+  findUserById(userId: string): Promise<AuthUser | null>;
+};
+
+function isCurrentPrincipal(user: AuthUser | null, principal: AuthPrincipal) {
+  return Boolean(
+    user &&
+      user.status === "ACTIVE" &&
+      user.role === principal.role &&
+      user.studentProfileId === principal.studentProfileId &&
+      user.companyId === principal.companyId,
+  );
+}
+
+export function createAuthenticate(
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   return async function authenticate(request: Request, _response: Response, next: NextFunction) {
     try {
       const authorization = request.header("authorization");
@@ -12,7 +29,16 @@ export function createAuthenticate(tokenService = new TokenService()) {
       if (scheme !== "Bearer" || !token || extra) {
         throw new AppError(401, "AUTH_ACCESS_TOKEN_MISSING", "Vui lòng đăng nhập để tiếp tục.");
       }
-      request.auth = await tokenService.verifyAccessToken(token);
+      const principal = await tokenService.verifyAccessToken(token);
+      const user = await accessPrincipalStore.findUserById(principal.userId);
+      if (!isCurrentPrincipal(user, principal)) {
+        throw new AppError(
+          401,
+          "AUTH_ACCESS_REVOKED",
+          "Phiên đăng nhập không còn hiệu lực. Vui lòng đăng nhập lại.",
+        );
+      }
+      request.auth = principal;
       next();
     } catch (error) {
       next(error);

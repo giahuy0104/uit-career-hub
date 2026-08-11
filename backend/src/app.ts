@@ -7,6 +7,7 @@ import type { Pool } from "pg";
 import { env } from "./config/env.js";
 import { databasePool } from "./db/pool.js";
 import { errorHandler } from "./middleware/error-handler.js";
+import type { AccessPrincipalStore } from "./middleware/auth.js";
 import { requestContext } from "./middleware/request-context.js";
 import { AuthRepository, type AuthDatabase } from "./modules/auth/auth.repository.js";
 import { createAuthRouter } from "./modules/auth/auth.routes.js";
@@ -58,6 +59,7 @@ type AppDependencies = {
   authDatabase?: AuthDatabase;
   authService?: AuthService;
   tokenService?: TokenService;
+  accessPrincipalStore?: AccessPrincipalStore;
   jobDatabase?: JobDatabase;
   jobService?: JobService;
   applicationDatabase?: ApplicationDatabase;
@@ -84,6 +86,14 @@ type AppDependencies = {
   objectStorage?: ObjectStorage;
 };
 
+function isAuthDatabase(database: Pick<Pool, "query"> | undefined): database is AuthDatabase {
+  return Boolean(
+    database &&
+      "connect" in database &&
+      typeof (database as Partial<AuthDatabase>).connect === "function",
+  );
+}
+
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
 
@@ -105,10 +115,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     next();
   });
 
+  const authRepository = new AuthRepository(
+    dependencies.authDatabase ??
+      (isAuthDatabase(dependencies.database) ? dependencies.database : databasePool),
+  );
+  const accessPrincipalStore = dependencies.accessPrincipalStore ?? authRepository;
   const tokenService = dependencies.tokenService ?? new TokenService();
   const authService =
     dependencies.authService ??
-    new AuthService(new AuthRepository(dependencies.authDatabase ?? databasePool), tokenService);
+    new AuthService(authRepository, tokenService);
   const jobService =
     dependencies.jobService ??
     new JobService(new JobRepository(dependencies.jobDatabase ?? databasePool));
@@ -192,23 +207,26 @@ export function createApp(dependencies: AppDependencies = {}) {
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.16.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.17.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(
     "/api/v1",
     createDailyPendingRouter(dailyPendingService, dependencies.cronSecret ?? env.cronSecret),
   );
-  app.use("/api/v1/auth", createAuthRouter(authService, tokenService));
-  app.use("/api/v1", createJobRouter(jobService, tokenService));
-  app.use("/api/v1", createCompanyRouter(companyService, tokenService));
-  app.use("/api/v1", createDashboardRouter(dashboardService, tokenService));
-  app.use("/api/v1", createApplicationRouter(applicationService, tokenService));
-  app.use("/api/v1", createNotificationRouter(notificationService, tokenService));
-  app.use("/api/v1", createTaxonomyRouter(taxonomyService, tokenService));
-  app.use("/api/v1", createReportingRouter(reportingService, tokenService));
-  app.use("/api/v1", createPlacementRouter(placementService, tokenService));
-  app.use("/api/v1", createInternshipEvaluationRouter(internshipEvaluationService, tokenService));
+  app.use("/api/v1/auth", createAuthRouter(authService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createJobRouter(jobService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createCompanyRouter(companyService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createDashboardRouter(dashboardService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createApplicationRouter(applicationService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createNotificationRouter(notificationService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createTaxonomyRouter(taxonomyService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createReportingRouter(reportingService, tokenService, accessPrincipalStore));
+  app.use("/api/v1", createPlacementRouter(placementService, tokenService, accessPrincipalStore));
+  app.use(
+    "/api/v1",
+    createInternshipEvaluationRouter(internshipEvaluationService, tokenService, accessPrincipalStore),
+  );
 
   app.use((_request, _response, next) => {
     next(new AppError(404, "RESOURCE_NOT_FOUND", "Không tìm thấy tài nguyên."));

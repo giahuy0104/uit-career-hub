@@ -1,7 +1,11 @@
 import type { Request } from "express";
 import { Router } from "express";
 
-import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
+import {
+  createAuthenticate,
+  requireRoles,
+  type AccessPrincipalStore,
+} from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import {
@@ -44,9 +48,13 @@ function pageMeta(page: number, pageSize: number, totalItems: number) {
   return { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) };
 }
 
-export function createApplicationRouter(service: ApplicationService, tokenService = new TokenService()) {
+export function createApplicationRouter(
+  service: ApplicationService,
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   const router = Router();
-  router.use(createAuthenticate(tokenService));
+  router.use(createAuthenticate(tokenService, accessPrincipalStore));
   const studentOnly = requireRoles("STUDENT");
   const uitOnly = requireRoles("UIT_ADMIN");
   const companyOnly = requireRoles("COMPANY");
