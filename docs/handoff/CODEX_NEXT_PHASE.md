@@ -147,7 +147,8 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 | Dashboard | Hoàn thành MVP | Ba dashboard đọc PostgreSQL thật và có RBAC |
 | Báo cáo UIT | Hoàn thành CSV/Excel | Lọc theo kỳ/khoa/ngành/doanh nghiệp/trạng thái; export có audit và giới hạn 10.000 dòng |
 | Deploy | Hoàn thành | Frontend/backend Vercel, Neon và R2 public happy flow đã test |
-| Test hiện tại | Đạt | 222 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
+| Security/vận hành | Đạt baseline | Threat model, principal revalidation, structured log/redaction, error monitor, backup/restore drill và production readiness gate |
+| Test hiện tại | Đạt | 253 backend tests; 9 frontend tests; Playwright 3 smoke + 11 full; typecheck/build/OpenAPI đạt |
 
 ## 7. Phần chưa hoàn thành hoặc mới ở mức MVP
 
@@ -164,6 +165,8 @@ chọn CV/tài liệu → xem lại consent và gửi; không có câu hỏi tuy
 - Chưa audit accessibility đầy đủ: keyboard, focus visible, screen reader, zoom 200%, contrast.
 - Cần kiểm tra responsive thực tế ở desktop, tablet và mobile.
 - Bundle đã tách theo portal và build hiện không còn cảnh báo chunk lớn hơn 500 kB; tiếp tục giữ lazy loading khi thêm portal mới.
+- Structured log/redaction, trace ID, error-monitor webhook tùy chọn, backup/restore drill và production readiness gate đã có test/runbook.
+  Webhook thật, xoay secret và vô hiệu hóa user demo trên production vẫn là thao tác vận hành cần chủ hệ thống thực hiện có kiểm soát.
 
 ### 7.2. Nghiệp vụ còn thiếu so với đề xuất ban đầu
 
@@ -232,11 +235,11 @@ rồi bỏ backend.
 
 ### Giai đoạn 4 — Security, privacy và vận hành
 
-1. Threat model cho đăng nhập, CV/offer, presigned URL, IDOR và phân quyền chéo doanh nghiệp.
-2. Rà rate limit, cookie flags, CORS, CSP/Helmet, log nhạy cảm và kích thước/MIME file.
-3. Kiểm tra backup/restore Neon bằng quy trình thử nghiệm có ghi nhận kết quả.
-4. Thêm error monitoring và trace ID; chuẩn bị dashboard/log truy vết cho demo.
-5. Tắt tài khoản demo, đổi toàn bộ secret trước khi có người dùng thật.
+1. Threat model cho đăng nhập, CV/offer, presigned URL, IDOR và phân quyền chéo doanh nghiệp. **Đã hoàn thành.**
+2. Rà rate limit, cookie flags, CORS, CSP/Helmet, log nhạy cảm và kích thước/MIME file. **Đã hoàn thành baseline; rate limit API nghiệp vụ và log retention tiếp tục trước rollout rộng.**
+3. Kiểm tra backup/restore Neon bằng quy trình thử nghiệm có ghi nhận kết quả. **Đã hoàn thành trên Neon test branch và PostgreSQL 17 restore riêng.**
+4. Thêm error monitoring và trace ID; chuẩn bị dashboard/log truy vết cho demo. **Đã hoàn thành phần code/runbook; cần cấu hình webhook thật theo môi trường.**
+5. Tắt tài khoản demo, đổi toàn bộ secret trước khi có người dùng thật. **Đã có production readiness gate và bundle gate; thao tác production thật còn chờ chủ hệ thống.**
 6. Nếu bật email: xác minh domain Resend, SPF/DKIM, test retry và tránh gửi dữ liệu CV trong email.
 
 ### Giai đoạn 5 — Hồ sơ bảo vệ
@@ -356,12 +359,12 @@ Một tính năng chỉ được coi là hoàn thành khi đáp ứng đủ ph�
 
 ## 14. Việc tiếp theo được khuyến nghị cho Codex
 
-Chuyển sang **Giai đoạn 4 — Security, privacy và vận hành**, bắt đầu bằng threat model có bằng chứng cho đăng nhập,
-CV/offer, presigned URL, IDOR và truy cập chéo doanh nghiệp. Không thêm chức năng nghiệp vụ mới trong cùng PR.
+Hoàn tất các thao tác **vận hành production còn lại của Giai đoạn 4**, sau đó chuyển sang **Giai đoạn 5 — Hồ sơ bảo vệ**.
+Không thay đổi dữ liệu hay secret production nếu chưa có chủ hệ thống phối hợp và phương án rollback.
 
-1. Đọc lại `docs/security/rbac-matrix.md`, cấu hình auth/cookie/CORS/Helmet và các endpoint download private.
-2. Lập bảng tài sản, actor, trust boundary, threat và mitigation; liên kết từng mitigation với code/test hiện có.
-3. Chọn một nhóm hardening nhỏ, ưu tiên kiểm tra trạng thái user trên access token hoặc rate limit API nghiệp vụ.
-4. Bổ sung test âm cho IDOR, payload quá cỡ, MIME/file và dữ liệu nhạy cảm trong log/notification.
-5. Không reset Neon production; backup/restore phải dùng branch/database thử nghiệm riêng và ghi rõ bằng chứng.
-6. Chạy toàn bộ test, Playwright smoke/full và mở PR vào `develop`; chỉ đưa vào `main` khi có release candidate.
+1. Chốt rate limit theo user/IP cho mutation nghiệp vụ tốn tài nguyên và quy định retention/quyền truy cập structured log.
+2. Cấu hình `ERROR_MONITOR_WEBHOOK_URL` thật trên production, tạo một lỗi 5xx có kiểm soát và xác nhận alert chỉ chứa dữ liệu allow-list.
+3. Xoay JWT, cron, database, R2 và email secret theo runbook; ghi `PRODUCTION_SECRETS_ROTATED_AT` và kiểm tra lại từng integration.
+4. Khóa/xóa các user demo trên production, giữ `VITE_SHOW_DEMO_ACCOUNTS=false`, rồi chạy `pnpm security:production:check` ở chế độ chỉ đọc và lưu bằng chứng.
+5. Nếu bật email production: xác minh domain/SPF/DKIM, test retry/bounce và không đưa dữ liệu CV vào nội dung email.
+6. Khi readiness gate xanh, bắt đầu Giai đoạn 5; tiếp tục mở PR vào `develop` và chỉ đưa vào `main` khi có release candidate.

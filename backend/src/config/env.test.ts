@@ -23,6 +23,8 @@ describe("parseEnvironment", () => {
     expect(result.objectStorageEnabled).toBe(false);
     expect(result.objectUploadUrlTtlSeconds).toBe(600);
     expect(result.objectDownloadUrlTtlSeconds).toBe(300);
+    expect(result.errorMonitorWebhookUrl).toBeUndefined();
+    expect(result.errorMonitorTimeoutMs).toBe(1_500);
   });
 
   it("should_accept_a_small_serverless_database_pool", () => {
@@ -132,5 +134,22 @@ describe("parseEnvironment", () => {
         DATABASE_URL: "postgresql://user:password@ep-demo-pooler.neon.tech/neondb",
       }),
     ).toThrow(/sslmode/);
+  });
+
+  it("should_require_an_https_error_monitor_webhook_in_production", () => {
+    expect(() => parseEnvironment({
+      NODE_ENV: "production",
+      JWT_ACCESS_SECRET: "a-production-secret-with-at-least-32-characters",
+      ERROR_MONITOR_WEBHOOK_URL: "http://monitor.example.test/events",
+    })).toThrow(/HTTPS/);
+
+    const result = parseEnvironment({
+      NODE_ENV: "production",
+      JWT_ACCESS_SECRET: "a-production-secret-with-at-least-32-characters",
+      ERROR_MONITOR_WEBHOOK_URL: "https://monitor.example.test/events",
+      ERROR_MONITOR_TIMEOUT_MS: "750",
+    });
+    expect(result.errorMonitorWebhookUrl).toBe("https://monitor.example.test/events");
+    expect(result.errorMonitorTimeoutMs).toBe(750);
   });
 });

@@ -15,9 +15,11 @@
     "db:demo:check": "tsx src/db/demo-readiness.ts",
     "db:e2e:provision": "tsx src/db/e2e-database.ts provision",
     "db:e2e:reset": "tsx src/db/e2e-database.ts reset",
+    "db:backup:restore:drill": "tsx src/db/backup-restore-drill.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "openapi:validate": "node scripts/validate-openapi.mjs"
+    "openapi:validate": "node scripts/validate-openapi.mjs",
+    "security:production:check": "tsx src/security/production-readiness.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1105.0",
