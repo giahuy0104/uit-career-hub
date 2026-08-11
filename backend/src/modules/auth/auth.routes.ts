@@ -3,7 +3,7 @@ import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 
 import { env } from "../../config/env.js";
-import { createAuthenticate } from "../../middleware/auth.js";
+import { createAuthenticate, type AccessPrincipalStore } from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { companyActivationSchema, loginSchema } from "./auth.schemas.js";
 import { AuthService } from "./auth.service.js";
@@ -52,7 +52,11 @@ const authLimiter = rateLimit({
   },
 });
 
-export function createAuthRouter(service: AuthService, tokenService = new TokenService()) {
+export function createAuthRouter(
+  service: AuthService,
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   const router = Router();
 
   router.post("/login", authLimiter, async (request, response) => {
@@ -88,7 +92,7 @@ export function createAuthRouter(service: AuthService, tokenService = new TokenS
     response.status(204).send();
   });
 
-  router.get("/me", createAuthenticate(tokenService), async (request, response) => {
+  router.get("/me", createAuthenticate(tokenService, accessPrincipalStore), async (request, response) => {
     if (!request.auth) {
       throw new AppError(401, "AUTH_ACCESS_TOKEN_MISSING", "Vui lòng đăng nhập để tiếp tục.");
     }

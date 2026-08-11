@@ -9,6 +9,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 3. `STUDENT` phải có `studentProfileId`; `COMPANY` phải có `companyId`. Đúng vai trò nhưng thiếu liên kết trả về `403 AUTH_CONTEXT_MISSING`.
 4. Quyền sở hữu được kiểm tra lại trong service/repository. Tài nguyên thuộc sinh viên hoặc doanh nghiệp khác trả về `404` để không làm lộ sự tồn tại của bản ghi.
 5. Mọi response `/api/v1` dùng `Cache-Control: private, no-store`. Helmet cung cấp các header bảo vệ trình duyệt cơ bản.
+6. Sau khi kiểm tra JWT, mỗi request được bảo vệ phải đối chiếu user hiện tại trong database. User phải còn `ACTIVE`; role, `studentProfileId` và `companyId` phải khớp claim trong token.
 
 ## Quy ước phản hồi từ chối
 
@@ -16,6 +17,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 |---|---:|---|
 | Không có Bearer token | 401 | `AUTH_ACCESS_TOKEN_MISSING` |
 | Token sai chữ ký, issuer, audience hoặc hết hạn | 401 | `AUTH_INVALID_ACCESS_TOKEN` |
+| User không còn active, đổi role hoặc đổi liên kết sở hữu sau khi token được cấp | 401 | `AUTH_ACCESS_REVOKED` |
 | Vai trò không được phép gọi endpoint | 403 | `AUTH_FORBIDDEN` |
 | Đúng vai trò nhưng thiếu hồ sơ sinh viên/doanh nghiệp liên kết | 403 | `AUTH_CONTEXT_MISSING` |
 | Truy cập tài nguyên thuộc chủ thể khác | 404 | mã `*_NOT_FOUND` tương ứng |
@@ -55,6 +57,7 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 - `backend/src/security/rbac-routes.test.ts`: kiểm tra HTTP thực tế cho toàn bộ endpoint giới hạn vai trò, token thiếu/sai, context thiếu, endpoint dùng chung và security headers.
 - `backend/src/modules/dashboard/dashboard.integration.test.ts`: xác nhận số liệu thật được giới hạn đúng theo UIT, doanh nghiệp và sinh viên đăng nhập.
 - `backend/src/middleware/auth.test.ts`: kiểm tra độc lập middleware role/context/ownership.
+- `backend/src/modules/auth/auth.integration.test.ts`: xác nhận access token đã cấp bị từ chối ngay khi user chuyển sang `SUSPENDED`.
 - `backend/src/modules/jobs/job.integration.test.ts`: xác nhận doanh nghiệp không đọc hoặc sửa tin của doanh nghiệp khác.
 - `backend/src/modules/applications/application.integration.test.ts`: xác nhận sinh viên và doanh nghiệp không truy cập chéo hồ sơ, tài liệu hoặc đơn ứng tuyển.
 - Cùng bộ application integration xác nhận lifecycle placement là UIT-only; phiếu hai phía chỉ mở sau `COMPLETED`, idempotent, không truy cập chéo công ty và không làm lộ nội dung phản hồi Student cho Company.
@@ -65,7 +68,7 @@ Ký hiệu `—` nghĩa là middleware phải từ chối bằng `403`, không p
 
 ## Rủi ro còn lại và giới hạn MVP
 
-- Access token đã cấp có hiệu lực tối đa 15 phút. Đăng xuất hoặc khóa tài khoản thu hồi refresh token, nhưng access token hiện tại chỉ hết hiệu lực khi tới hạn; phương án deny-list hoặc kiểm tra trạng thái người dùng trên từng request để dành cho giai đoạn hardening production.
+- Khóa/tạm ngưng tài khoản hoặc thay đổi role/liên kết sở hữu nay làm access token cũ bị từ chối ngay. Riêng logout chỉ thu hồi refresh token; access token cũ vẫn có thể dùng đến khi hết hạn tối đa 15 phút nếu user vẫn `ACTIVE`. Logout tức thì cần session version hoặc deny-list.
 - Rate limit hiện tập trung vào đăng nhập, refresh và kích hoạt. Rate limit theo người dùng/IP cho API nghiệp vụ sẽ được bổ sung khi triển khai production.
 - URL tải tài liệu đơn chỉ có hiệu lực ngắn hạn (mặc định 5 phút), không trả `storage_key` ra client và mỗi lần cấp URL đều được ghi audit. Doanh nghiệp chưa được UIT chuyển hồ sơ hoặc không sở hữu tin nhận `404`.
 - Phân quyền chi tiết theo từng chức danh trong phòng UIT hoặc nhiều recruiter của doanh nghiệp chưa thuộc MVP; hiện các tài khoản cùng vai trò có cùng tập quyền trong phạm vi tổ chức của mình.

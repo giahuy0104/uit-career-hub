@@ -72,6 +72,22 @@ describeWithDatabase("auth API", () => {
     expect(me.body.data.email).toBe(student.email);
   });
 
+  it("should_revoke_an_existing_access_token_when_the_user_becomes_inactive", async () => {
+    const student = await createStudent();
+    const login = await request(app)
+      .post("/api/v1/auth/login")
+      .send({ email: student.email, password: "Student@12345" });
+    expect(login.status).toBe(200);
+
+    await cleanupClient.query("UPDATE users SET status = 'SUSPENDED' WHERE id = $1", [student.id]);
+
+    const me = await request(app)
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${login.body.data.accessToken}`);
+    expect(me.status).toBe(401);
+    expect(me.body.error).toMatchObject({ code: "AUTH_ACCESS_REVOKED" });
+  });
+
   it("should_reject_an_invalid_password_with_the_standard_error_shape", async () => {
     const student = await createStudent();
     const response = await request(app)

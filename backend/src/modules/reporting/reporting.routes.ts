@@ -1,7 +1,11 @@
 import type { Request } from "express";
 import { Router } from "express";
 
-import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
+import {
+  createAuthenticate,
+  requireRoles,
+  type AccessPrincipalStore,
+} from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import { applicationReportExportSchema, applicationReportQuerySchema } from "./reporting.schemas.js";
@@ -21,9 +25,13 @@ function metadata(request: Request) {
   };
 }
 
-export function createReportingRouter(service: ReportingService, tokenService = new TokenService()) {
+export function createReportingRouter(
+  service: ReportingService,
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   const router = Router();
-  router.use(createAuthenticate(tokenService));
+  router.use(createAuthenticate(tokenService, accessPrincipalStore));
   router.use("/uit/reports", requireRoles("UIT_ADMIN"));
 
   router.get("/uit/reports/applications", async (request, response) => {

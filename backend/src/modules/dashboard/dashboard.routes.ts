@@ -1,7 +1,11 @@
 import type { Request } from "express";
 import { Router } from "express";
 
-import { createAuthenticate, requireRoles } from "../../middleware/auth.js";
+import {
+  createAuthenticate,
+  requireRoles,
+  type AccessPrincipalStore,
+} from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
 import { TokenService } from "../auth/token.service.js";
 import { DashboardService } from "./dashboard.service.js";
@@ -13,9 +17,13 @@ function principal(request: Request) {
   return request.auth;
 }
 
-export function createDashboardRouter(service: DashboardService, tokenService = new TokenService()) {
+export function createDashboardRouter(
+  service: DashboardService,
+  tokenService: TokenService,
+  accessPrincipalStore: AccessPrincipalStore,
+) {
   const router = Router();
-  router.use(createAuthenticate(tokenService));
+  router.use(createAuthenticate(tokenService, accessPrincipalStore));
 
   router.get("/uit/dashboard", requireRoles("UIT_ADMIN"), async (_request, response) => {
     response.json({ data: await service.adminDashboard() });

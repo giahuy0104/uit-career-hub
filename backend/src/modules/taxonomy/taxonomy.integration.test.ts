@@ -63,6 +63,7 @@ describeWithDatabase("UIT taxonomy administration API", () => {
     }
     if (userIds.length) {
       await client.query("DELETE FROM uit_staff WHERE user_id = ANY($1::uuid[])", [userIds]);
+      await client.query("DELETE FROM student_profiles WHERE user_id = ANY($1::uuid[])", [userIds]);
       await client.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [userIds]);
     }
     userIds.length = 0;
@@ -136,6 +137,12 @@ describeWithDatabase("UIT taxonomy administration API", () => {
   }
 
   async function tokenForRole(role: UserRole) {
+    if (role === "UIT_ADMIN") return (await createAdmin()).token;
+    if (role === "COMPANY") {
+      const creator = await createAdmin();
+      return (await createCompany(creator.id)).token;
+    }
+
     const user: AuthUser = {
       id: randomUUID(),
       email: `${role.toLowerCase()}-${randomUUID()}@example.com`,
@@ -146,9 +153,25 @@ describeWithDatabase("UIT taxonomy administration API", () => {
       lockedUntil: null,
       displayName: role,
       organization: null,
-      studentProfileId: role === "STUDENT" ? randomUUID() : null,
-      companyId: role === "COMPANY" ? randomUUID() : null,
+      studentProfileId: randomUUID(),
+      companyId: null,
     };
+    userIds.push(user.id);
+    await client.query(
+      "INSERT INTO users (id, email, role, status) VALUES ($1, $2, 'STUDENT', 'ACTIVE')",
+      [user.id, user.email],
+    );
+    await client.query(
+      `INSERT INTO student_profiles
+       (id, user_id, student_code, full_name, faculty, major, cohort, academic_status)
+       VALUES ($1, $2, $3, $4, 'CNTT', 'Kỹ thuật phần mềm', '2026', 'ACTIVE')`,
+      [
+        user.studentProfileId,
+        user.id,
+        `TAX${user.id.replaceAll("-", "").slice(0, 8)}`,
+        user.displayName,
+      ],
+    );
     return tokenFor(user);
   }
 
