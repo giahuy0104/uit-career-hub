@@ -207,7 +207,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     );
 
   app.get("/api", (_request, response) => {
-    response.json({ name: "UIT Career Hub API", version: "0.17.0" });
+    response.json({ name: "UIT Career Hub API", version: "0.18.0" });
   });
   app.use("/api/health", createHealthRouter(dependencies.database ?? databasePool));
   app.use(

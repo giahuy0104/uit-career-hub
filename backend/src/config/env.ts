@@ -70,6 +70,11 @@ const environmentSchema = z.object({
   R2_BUCKET: optionalString,
   OBJECT_UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
   OBJECT_DOWNLOAD_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
+  ERROR_MONITOR_WEBHOOK_URL: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().url().optional(),
+  ),
+  ERROR_MONITOR_TIMEOUT_MS: z.coerce.number().int().min(250).max(5_000).default(1_500),
 });
 
 function assertPostgresUrl(value: string, key: string) {
@@ -129,6 +134,13 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     );
   }
 
+  if (parsed.NODE_ENV === "production" && parsed.ERROR_MONITOR_WEBHOOK_URL) {
+    const monitorUrl = new URL(parsed.ERROR_MONITOR_WEBHOOK_URL);
+    if (monitorUrl.protocol !== "https:") {
+      throw new Error("ERROR_MONITOR_WEBHOOK_URL phải dùng HTTPS trong production.");
+    }
+  }
+
   assertPostgresUrl(parsed.DATABASE_URL, "DATABASE_URL");
   if (parsed.DATABASE_URL_DIRECT) {
     assertPostgresUrl(parsed.DATABASE_URL_DIRECT, "DATABASE_URL_DIRECT");
@@ -174,6 +186,8 @@ export function parseEnvironment(source: NodeJS.ProcessEnv) {
     r2Bucket: parsed.R2_BUCKET,
     objectUploadUrlTtlSeconds: parsed.OBJECT_UPLOAD_URL_TTL_SECONDS,
     objectDownloadUrlTtlSeconds: parsed.OBJECT_DOWNLOAD_URL_TTL_SECONDS,
+    errorMonitorWebhookUrl: parsed.ERROR_MONITOR_WEBHOOK_URL,
+    errorMonitorTimeoutMs: parsed.ERROR_MONITOR_TIMEOUT_MS,
   } as const;
 }
 

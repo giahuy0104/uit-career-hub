@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { appLogger, serializeError } from "../../observability/structured-logger.js";
 import { AppError } from "../../shared/app-error.js";
 import type { EmailDeliveryService } from "../email/email-delivery.service.js";
 import type { ObjectStorage } from "../storage/object-storage.js";
@@ -2192,13 +2193,13 @@ export class ApplicationService {
     try {
       const summary = await this.emailDeliveryService.dispatchPending(applicationId);
       if (summary.failed > 0) {
-        console.error(`Có ${summary.failed} email cho hồ sơ ${applicationId} được đưa vào hàng đợi retry.`);
+        appLogger.warn("email_delivery_retry_queued", { applicationId, failed: summary.failed });
       }
     } catch (error) {
-      console.error(
-        `Không thể xử lý email cho hồ sơ ${applicationId}:`,
-        error instanceof Error ? error.message : error,
-      );
+      appLogger.error("email_delivery_dispatch_failed", {
+        applicationId,
+        error: serializeError(error),
+      });
     }
   }
 }

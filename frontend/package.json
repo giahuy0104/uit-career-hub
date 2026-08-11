@@ -6,8 +6,8 @@
   "packageManager": "pnpm@11.16.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prepare-sites-build.mjs",
-    "build:vercel": "vite build",
+    "build": "vite build && node scripts/verify-production-bundle.mjs && node scripts/prepare-sites-build.mjs",
+    "build:vercel": "vite build && node scripts/verify-production-bundle.mjs",
     "preview": "vite preview",
     "test": "pnpm build && node --test tests/sites-worker.test.mjs tests/student-list-state.test.mjs tests/workspace-config.test.mjs",
     "test:sites": "pnpm test"

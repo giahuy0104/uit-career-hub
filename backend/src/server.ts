@@ -1,15 +1,16 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { databasePool } from "./db/pool.js";
+import { appLogger } from "./observability/structured-logger.js";
 
 const app = createApp();
 
 const server = app.listen(env.backendPort, () => {
-  console.log(`UIT Career Hub API đang chạy tại http://localhost:${env.backendPort}/api`);
+  appLogger.info("api_started", { port: env.backendPort, environment: env.nodeEnv });
 });
 
 async function shutdown(signal: string) {
-  console.log(`Nhận ${signal}, đang dừng ứng dụng...`);
+  appLogger.info("api_shutdown_started", { signal });
   server.close(async () => {
     await databasePool.end();
     process.exit(0);
@@ -18,4 +19,3 @@ async function shutdown(signal: string) {
 
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
-

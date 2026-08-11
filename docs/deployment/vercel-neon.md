@@ -41,6 +41,9 @@ Browser
 - `EMAIL_FROM`: sender hiển thị, ví dụ `UIT Career Hub <notifications@careers.example.edu.vn>`.
 - `PUBLIC_APP_URL=https://uit-career-hub-web-041204.vercel.app`: base URL để tạo link trong email.
 - `EMAIL_BATCH_SIZE=10`, `EMAIL_MAX_ATTEMPTS=5`.
+- `ERROR_MONITOR_WEBHOOK_URL`: webhook HTTPS nhận event 5xx đã redaction.
+- `ERROR_MONITOR_TIMEOUT_MS=1500`.
+- `PRODUCTION_SECRETS_ROTATED_AT`: ISO timestamp của lần rotate Neon/JWT/Cron/R2/Resend gần nhất.
 
 Không đưa `DATABASE_URL_DIRECT`, `DATABASE_URL_TEST` hoặc secret vào frontend.
 
@@ -99,7 +102,7 @@ Tài liệu chính thức: [Resend với Express](https://resend.com/docs/send-w
 ### Frontend production
 
 - `VITE_API_BASE_URL=/api/v1`
-- `VITE_SHOW_DEMO_ACCOUNTS=true`
+- `VITE_SHOW_DEMO_ACCOUNTS=false`. Production bundle hard-disable demo picker và build sẽ fail nếu còn demo credential/identity trong JavaScript.
 
 Biến có tiền tố `VITE_` được đóng gói vào JavaScript và có thể được người dùng xem; chỉ đặt cấu hình công khai ở đây.
 
@@ -147,6 +150,16 @@ pnpm dlx vercel@58.7.1 git connect https://github.com/kgiahuy0412/uit-career-hub
    - Frontend project: `frontend`.
 
 Không đặt Root Directory trước khi chạy hai lệnh `git connect --cwd`, vì CLI sẽ ghép đường dẫn thành `backend/backend` hoặc `frontend/frontend`.
+
+## Gate trước release candidate
+
+Nạp environment production trên máy quản trị, trỏ `BACKUP_RESTORE_EVIDENCE_PATH` tới report Neon test drill gần nhất và chạy:
+
+```powershell
+pnpm security:production:check
+```
+
+Gate là read-only đối với production database. Chi tiết logging, restore drill, demo account và rotation tại [`../security/observability-and-recovery.md`](../security/observability-and-recovery.md).
 
 ## Kiểm tra sau deploy
 
