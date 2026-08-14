@@ -303,6 +303,8 @@ Demo reset thu hồi refresh token. Đăng xuất/xóa cookie rồi đăng nhậ
 
 - `UIT_Career_Hub_ERD_Database_Report.docx`: ERD, data dictionary và dữ liệu phục vụ báo cáo.
 - `UIT_Career_Hub_ERD.png`: ERD vật lý dạng hộp bảng, hiển thị PK/FK/UQ, kiểu dữ liệu và 44 quan hệ khóa ngoại.
+- `erd/01_erd_core_workflow.png`: sơ đồ gọn để dùng trong chương Thiết kế hệ thống của báo cáo.
+- `erd/02_erd_identity_access.png` đến `erd/06_erd_notifications_audit.png`: các ERD chi tiết theo module; nên đặt ở các tiểu mục tương ứng hoặc phụ lục.
 - `database/migrations/*.sql`: nguồn sự thật của schema.
 - `docs/domain/erd.md`: ERD mức domain.
 - `docs/domain/job-state-machine.md`: vòng đời tin tuyển dụng.
