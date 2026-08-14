@@ -1,6 +1,6 @@
 # UIT Career Hub - Hướng dẫn nhận bàn giao và chạy dự án
 
-Tài liệu này dành cho thành viên mới nhận repository để đọc mã nguồn, chạy hệ thống local, kiểm tra database và lấy thông tin viết báo cáo. Bản mô tả ERD/data dictionary đầy đủ nằm trong `UIT_Career_Hub_ERD_Database_Report.docx` cùng thư mục.
+Tài liệu này dành cho thành viên mới nhận repository để đọc mã nguồn, chạy hệ thống local, kiểm tra database và lấy thông tin viết báo cáo. Bản mô tả ERD/data dictionary đầy đủ nằm trong `UIT_Career_Hub_ERD_Database_Report.docx`; ảnh ERD dạng bảng và đường nối nằm trong `UIT_Career_Hub_ERD.png` cùng thư mục.
 
 ## 1. Tổng quan nhanh
 
@@ -302,6 +302,7 @@ Demo reset thu hồi refresh token. Đăng xuất/xóa cookie rồi đăng nhậ
 ## 13. Nguồn tài liệu cần đọc
 
 - `UIT_Career_Hub_ERD_Database_Report.docx`: ERD, data dictionary và dữ liệu phục vụ báo cáo.
+- `UIT_Career_Hub_ERD.png`: ERD vật lý dạng hộp bảng, hiển thị PK/FK/UQ, kiểu dữ liệu và 44 quan hệ khóa ngoại.
 - `database/migrations/*.sql`: nguồn sự thật của schema.
 - `docs/domain/erd.md`: ERD mức domain.
 - `docs/domain/job-state-machine.md`: vòng đời tin tuyển dụng.
