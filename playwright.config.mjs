@@ -44,7 +44,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "pnpm --dir backend dev",
+      command: "java -jar backend/target/career-hub-api-0.0.1-SNAPSHOT.jar",
       url: `${apiOrigin}/api/health`,
       reuseExistingServer: false,
       timeout: 120_000,

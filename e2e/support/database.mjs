@@ -3,30 +3,28 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const pnpmExecutable = process.platform === "win32" ? process.env.ComSpec : "pnpm";
+const backendRoot = resolve(repositoryRoot, "backend");
+const javaExecutable = "java";
 
-function runDatabaseScript(script) {
+function runDatabaseReset() {
   try {
-    const argumentsList = process.platform === "win32"
-      ? ["/d", "/s", "/c", `pnpm ${script}`]
-      : [script];
-    execFileSync(pnpmExecutable, argumentsList, {
-      cwd: repositoryRoot,
-      env: { ...process.env, NODE_ENV: "test" },
+    execFileSync(javaExecutable, ["-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-jar", "target/career-hub-api-0.0.1-SNAPSHOT.jar", "db:e2e:reset"], {
+      cwd: backendRoot,
+      env: { ...process.env, NODE_ENV: "test", DATABASE_URL: process.env.DATABASE_URL, DATABASE_URL_DIRECT: process.env.DATABASE_URL_DIRECT },
       encoding: "utf8",
       stdio: "pipe",
     });
   } catch (error) {
     const stdout = error?.stdout?.toString?.() ?? "";
     const stderr = error?.stderr?.toString?.() ?? "";
-    throw new Error(`Không thể chạy ${script}: ${error?.message ?? "lỗi không xác định"}.\n${stdout}\n${stderr}`.trim());
+    throw new Error(`Không thể reset database E2E bằng Java: ${error?.message ?? "lỗi không xác định"}.\n${stdout}\n${stderr}`.trim());
   }
 }
 
 export function provisionE2eDatabase() {
-  runDatabaseScript("db:e2e:provision");
+  runDatabaseReset();
 }
 
 export function resetE2eDatabase() {
-  runDatabaseScript("db:e2e:reset");
+  runDatabaseReset();
 }

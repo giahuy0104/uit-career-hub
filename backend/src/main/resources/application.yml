@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: uit-career-hub-api
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+  mvc:
+    problemdetails:
+      enabled: false
+
+server:
+  port: ${PORT:${BACKEND_PORT:3000}}
+  shutdown: graceful
+  error:
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  environment: ${NODE_ENV:development}
+  cors-origin: ${CORS_ORIGIN:http://localhost:5173}
+  public-url: ${PUBLIC_APP_URL:http://localhost:5173}
+  database:
+    url: ${DATABASE_URL:postgresql://uit_user:uit_local_password@localhost:5432/uit_career_hub}
+    direct-url: ${DATABASE_URL_DIRECT:}
+    pool-max: ${DATABASE_POOL_MAX:10}
+  security:
+    jwt-secret: ${JWT_ACCESS_SECRET:development-only-change-me-32-characters}
+    jwt-issuer: ${JWT_ISSUER:uit-career-hub-api}
+    jwt-audience: ${JWT_AUDIENCE:uit-career-hub-web}
+    access-token-ttl-seconds: ${ACCESS_TOKEN_TTL_SECONDS:900}
+    refresh-token-ttl-days: ${REFRESH_TOKEN_TTL_DAYS:7}
+    refresh-cookie-name: ${AUTH_COOKIE_NAME:uit_refresh_token}
+    refresh-cookie-secure: ${AUTH_COOKIE_SECURE:false}
+    refresh-cookie-same-site: ${AUTH_COOKIE_SAME_SITE:lax}
+    uit-email-domains: ${UIT_EMAIL_DOMAINS:student.uit.edu.vn,uit.edu.vn}
+  email:
+    enabled: ${EMAIL_ENABLED:false}
+    api-key: ${RESEND_API_KEY:}
+    from: ${EMAIL_FROM:}
+    batch-size: ${EMAIL_BATCH_SIZE:10}
+    max-attempts: ${EMAIL_MAX_ATTEMPTS:5}
+  storage:
+    enabled: ${OBJECT_STORAGE_ENABLED:false}
+    account-id: ${R2_ACCOUNT_ID:}
+    access-key-id: ${R2_ACCESS_KEY_ID:}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+    bucket: ${R2_BUCKET:uit-career-hub-documents}
+    upload-url-ttl-seconds: ${OBJECT_UPLOAD_URL_TTL_SECONDS:600}
+    download-url-ttl-seconds: ${OBJECT_DOWNLOAD_URL_TTL_SECONDS:300}
+  cron-secret: ${CRON_SECRET:}

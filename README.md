@@ -9,7 +9,8 @@ Tài liệu nghiệp vụ hiện tại: `docs/specification/UIT-Career-Hub-dac-t
 ```text
 uit-career-hub/
 ├── frontend/        React + Vite, kế thừa prototype đã duyệt
-├── backend/         Express + TypeScript
+├── backend/         Java 21 + Spring Boot 3.5 + Maven Wrapper
+├── backend-express-legacy/  Mã Express cũ, chỉ giữ để đối chiếu
 ├── database/        SQL migration và seed
 ├── docs/domain/     ERD và state machine
 ├── docs/api/        OpenAPI 3.1
@@ -24,10 +25,10 @@ uit-career-hub/
 
 ## Yêu cầu môi trường
 
-- Node.js 20 trở lên.
-- pnpm 10 trở lên.
+- JDK 21 (kiểm tra bằng `java -version`).
+- Node.js 20 trở lên và pnpm 11.16.0.
 - Git.
-- Một project Neon PostgreSQL. Docker Desktop không bắt buộc.
+- PostgreSQL 16: dùng Docker Desktop ở local hoặc một project Neon.
 
 ## Cấu hình Neon
 
@@ -48,21 +49,29 @@ Copy-Item frontend/.env.example frontend/.env.local
 
 Trong production, phải đặt `JWT_ACCESS_SECRET` bằng chuỗi ngẫu nhiên tối thiểu 32 ký tự. `UIT_EMAIL_DOMAINS` quy định miền email được chấp nhận cho tài khoản sinh viên. Local development dùng cookie `SameSite=Lax`; nếu frontend/backend production khác site, dùng HTTPS và cấu hình `AUTH_COOKIE_SECURE=true`, `AUTH_COOKIE_SAME_SITE=none`.
 
-## Cài đặt và dựng database
+## Chạy lần đầu sau khi clone (PostgreSQL local)
 
 ```powershell
+Copy-Item .env.example .env
+Copy-Item frontend/.env.example frontend/.env.local
 pnpm install
-pnpm db:migrate
-pnpm db:seed
+pnpm db:up
 ```
 
-Hoặc chạy migration và seed liên tiếp:
+Trong `.env`, đặt hai URL local sau (không dùng URL Neon mẫu):
+
+```env
+DATABASE_URL=postgresql://uit_user:uit_local_password@localhost:5432/uit_career_hub
+DATABASE_URL_DIRECT=postgresql://uit_user:uit_local_password@localhost:5432/uit_career_hub
+```
+
+Sau đó tạo schema và dữ liệu demo:
 
 ```powershell
 pnpm db:setup
 ```
 
-Migration dùng `DATABASE_URL_DIRECT`; backend runtime dùng pooled `DATABASE_URL`. Seed development bị chặn khi `NODE_ENV=production`.
+Maven không cần cài riêng vì project có `backend/mvnw.cmd`. Migration dùng `DATABASE_URL_DIRECT`; backend runtime dùng `DATABASE_URL`.
 
 ## Chạy ứng dụng
 
@@ -84,11 +93,20 @@ pnpm dev:frontend
 - Health check: http://localhost:3000/api/health
 - Database health: http://localhost:3000/api/health/database
 
-Production hiện tại:
+Lệnh backend sẽ build Spring Boot rồi chạy JAR. Muốn thao tác trực tiếp trong thư mục backend:
+
+```powershell
+cd backend
+.\mvnw.cmd -DskipTests package
+java -jar target\career-hub-api-0.0.1-SNAPSHOT.jar
+```
+
+Trạng thái triển khai công khai:
 
 - Frontend: https://uit-career-hub-web-041204.vercel.app
-- Backend: https://uit-career-hub-api-041204.vercel.app
-- Hướng dẫn triển khai: `docs/deployment/vercel-neon.md`
+- URL `https://uit-career-hub-api-041204.vercel.app` vẫn là bản Express cũ; không dùng URL này để xác nhận back-end Java.
+- Back-end Spring Boot đã được kiểm tra ở local/CI nhưng chưa được triển khai lại lên môi trường chạy JVM.
+- Tài liệu `docs/deployment/vercel-neon.md` mô tả kiến trúc triển khai cũ và cần được cập nhật trước lần phát hành Java đầu tiên.
 - Release MVP hiện tại: `docs/releases/v0.1.0.md`
 
 ## Kiểm tra
@@ -97,10 +115,9 @@ Production hiện tại:
 pnpm typecheck
 pnpm build
 pnpm test
-pnpm openapi:validate
 ```
 
-Nếu `DATABASE_URL_TEST` để trống, các integration test cần database sẽ được skip có chủ đích; unit test và health route test vẫn chạy.
+Chạy riêng backend: `pnpm test:backend` hoặc `backend\mvnw.cmd test`.
 
 Playwright dùng `DATABASE_URL_E2E` tách biệt và không fallback sang database runtime. Xem cấu hình an toàn cùng lệnh chạy smoke/full suite tại `docs/testing/playwright-e2e.md`.
 
@@ -110,7 +127,7 @@ Workflow `.github/workflows/ci.yml` tự chạy khi có push hoặc pull request
 
 1. Cài đúng pnpm 11.16.0 và Node.js 24 theo cấu hình của dự án.
 2. Khởi tạo PostgreSQL 16 tạm thời trên GitHub runner, không dùng thông tin kết nối Neon.
-3. Chạy typecheck, kiểm tra OpenAPI, toàn bộ unit/integration test và build frontend/backend.
+3. Chạy Maven test/package cho Spring Boot và test/build frontend.
 4. Cài Chromium rồi chạy smoke đăng nhập/dashboard cho cả ba portal bằng database E2E tạm thời riêng.
 
 Có thể chạy thủ công trong tab **Actions → CI → Run workflow**. Chỉ merge pull request khi job `Typecheck, test and build` đã thành công.
@@ -137,6 +154,8 @@ Các lệnh Docker còn lại:
 pnpm db:logs
 pnpm db:down
 ```
+
+Kết nối DBeaver vào database local bằng: host `localhost`, port `5432`, database `uit_career_hub`, username `uit_user`, password `uit_local_password`. Những giá trị này được khai báo trong `docker-compose.yml` và `.env`.
 
 ## Tài liệu kỹ thuật
 
