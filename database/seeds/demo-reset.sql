@@ -38,7 +38,8 @@ WHERE created_by_user_id IN (SELECT id FROM demo_user_ids)
        '00000000-0000-4000-8000-000000007002',
        '00000000-0000-4000-8000-000000007003',
        '00000000-0000-4000-8000-000000007004',
-       '00000000-0000-4000-8000-000000007005'
+       '00000000-0000-4000-8000-000000007005',
+       '00000000-0000-4000-8000-000000007006'
    );
 
 CREATE TEMP TABLE demo_application_ids (id uuid PRIMARY KEY) ON COMMIT DROP;
@@ -50,7 +51,8 @@ WHERE student_profile_id IN (SELECT id FROM demo_student_ids)
    OR id IN (
        '00000000-0000-4000-8000-000000008001',
        '00000000-0000-4000-8000-000000008002',
-       '00000000-0000-4000-8000-000000008003'
+       '00000000-0000-4000-8000-000000008003',
+       '00000000-0000-4000-8000-000000008006'
    );
 
 CREATE TEMP TABLE demo_placement_ids (id uuid PRIMARY KEY) ON COMMIT DROP;
@@ -73,6 +75,36 @@ WHERE actor_user_id IN (SELECT id FROM demo_user_ids)
    OR target_id IN (SELECT id FROM demo_student_ids)
    OR target_id IN (SELECT id FROM demo_user_ids)
    OR target_id IN (SELECT id FROM demo_placement_ids);
+
+DELETE FROM internship_weekly_log_history
+WHERE weekly_log_id IN (
+    SELECT id FROM internship_weekly_logs
+    WHERE placement_id IN (SELECT id FROM demo_placement_ids)
+);
+
+DELETE FROM internship_weekly_log_submissions
+WHERE weekly_log_id IN (
+    SELECT id FROM internship_weekly_logs
+    WHERE placement_id IN (SELECT id FROM demo_placement_ids)
+);
+
+DELETE FROM internship_weekly_logs
+WHERE placement_id IN (SELECT id FROM demo_placement_ids);
+
+DELETE FROM internship_plan_history
+WHERE plan_id IN (
+    SELECT id FROM internship_plans
+    WHERE placement_id IN (SELECT id FROM demo_placement_ids)
+);
+
+DELETE FROM internship_plan_submissions
+WHERE plan_id IN (
+    SELECT id FROM internship_plans
+    WHERE placement_id IN (SELECT id FROM demo_placement_ids)
+);
+
+DELETE FROM internship_plans
+WHERE placement_id IN (SELECT id FROM demo_placement_ids);
 
 DELETE FROM internship_evaluations
 WHERE placement_id IN (SELECT id FROM demo_placement_ids);

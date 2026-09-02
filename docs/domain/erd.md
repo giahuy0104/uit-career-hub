@@ -27,6 +27,16 @@ erDiagram
     APPLICATIONS ||--o| RECRUITMENT_RESULTS : concludes
     APPLICATIONS ||--o| INTERNSHIP_PLACEMENTS : creates
     INTERNSHIP_PLACEMENTS ||--o{ INTERNSHIP_PLACEMENT_HISTORY : records
+    INTERNSHIP_PLACEMENTS ||--o| INTERNSHIP_PLANS : has
+    INTERNSHIP_PLANS ||--o{ INTERNSHIP_PLAN_SUBMISSIONS : snapshots
+    INTERNSHIP_PLANS ||--o{ INTERNSHIP_PLAN_HISTORY : records
+    USERS ||--o{ INTERNSHIP_PLAN_SUBMISSIONS : submits
+    USERS o|--o{ INTERNSHIP_PLAN_HISTORY : acts
+    INTERNSHIP_PLACEMENTS ||--o{ INTERNSHIP_WEEKLY_LOGS : tracks
+    INTERNSHIP_WEEKLY_LOGS ||--o{ INTERNSHIP_WEEKLY_LOG_SUBMISSIONS : snapshots
+    INTERNSHIP_WEEKLY_LOGS ||--o{ INTERNSHIP_WEEKLY_LOG_HISTORY : records
+    USERS ||--o{ INTERNSHIP_WEEKLY_LOG_SUBMISSIONS : submits
+    USERS o|--o{ INTERNSHIP_WEEKLY_LOG_HISTORY : acts
     INTERNSHIP_PLACEMENTS ||--o{ INTERNSHIP_EVALUATIONS : receives
     USERS ||--o{ INTERNSHIP_EVALUATIONS : submits
     USERS ||--o{ NOTIFICATIONS : receives
@@ -193,6 +203,81 @@ erDiagram
       date effective_date
       text note
     }
+    INTERNSHIP_PLANS {
+      uuid id PK
+      uuid placement_id FK,UK
+      text status
+      integer version
+      text title
+      text department
+      text company_supervisor_name
+      text company_supervisor_email
+      text objectives
+      text expected_tasks
+      text expected_skills
+      date start_date
+      date end_date
+      integer current_submission_no
+    }
+    INTERNSHIP_PLAN_SUBMISSIONS {
+      uuid id PK
+      uuid plan_id FK
+      integer submission_no
+      uuid submitted_by_user_id FK
+      jsonb snapshot
+      timestamptz created_at
+    }
+    INTERNSHIP_PLAN_HISTORY {
+      uuid id PK
+      uuid plan_id FK
+      uuid command_id UK
+      text action
+      text from_status
+      text to_status
+      text actor_type
+      uuid actor_user_id FK
+      text reason_code
+      text note
+      timestamptz created_at
+    }
+    INTERNSHIP_WEEKLY_LOGS {
+      uuid id PK
+      uuid placement_id FK
+      integer week_number
+      date period_start
+      date period_end
+      date due_date
+      text status
+      integer version
+      integer current_submission_no
+      text work_summary
+      text outcomes
+      text difficulties
+      text next_plan
+      timestamptz submitted_at
+      timestamptz company_reviewed_at
+    }
+    INTERNSHIP_WEEKLY_LOG_SUBMISSIONS {
+      uuid id PK
+      uuid weekly_log_id FK
+      integer submission_no
+      uuid submitted_by_user_id FK
+      jsonb snapshot
+      timestamptz created_at
+    }
+    INTERNSHIP_WEEKLY_LOG_HISTORY {
+      uuid id PK
+      uuid weekly_log_id FK
+      uuid command_id
+      text action
+      text from_status
+      text to_status
+      text actor_type
+      uuid actor_user_id FK
+      text reason_code
+      text note
+      timestamptz created_at
+    }
     INTERNSHIP_EVALUATIONS {
       uuid id PK
       uuid placement_id FK
@@ -234,11 +319,18 @@ erDiagram
 - Company chỉ đọc/sửa `companies`, `job_posts` thuộc company và chỉ thấy application sau khi UIT chuyển đến.
 - UIT_ADMIN quản lý đối tác, duyệt job/application và xác nhận placement; không tự gán kết quả tuyển dụng khi chưa có căn cứ.
 - UIT_ADMIN theo dõi kỳ thực tập sau `HIRED`; mỗi transition có version, command id, actor history, audit và notification.
+- Student lập và nộp `internship_plans` của placement thuộc mình; Company chỉ duyệt placement thuộc company;
+  UIT_ADMIN là bên duy nhất phê duyệt cuối. Mỗi lần nộp tạo `internship_plan_submissions` bất biến.
+- Student chỉ tạo/sửa/nộp `internship_weekly_logs` theo tuần khi placement của mình ở `STARTED`; Company chỉ
+  xác nhận hoặc yêu cầu sửa nhật ký thuộc company; UIT_ADMIN đọc toàn trường và xem hàng đợi quá hạn. Mỗi lần
+  nộp tạo `internship_weekly_log_submissions` bất biến; cờ quá hạn được suy diễn từ trạng thái và `due_date`.
 - Student và Company chỉ gửi một `internship_evaluations` cho placement thuộc mình sau `COMPLETED`; UIT đọc đủ hai phía, còn Company không đọc nội dung phản hồi Student.
 - UIT_ADMIN là vai trò duy nhất được tạo, đổi tên, ngừng hoặc kích hoạt lại category/skill; khóa nghiệp vụ không đổi và bản ghi không bị xóa cứng.
 - UIT_ADMIN là vai trò duy nhất được tổng hợp và xuất báo cáo toàn trường; export chỉ đọc các quan hệ hiện có và ghi một `AUDIT_LOGS` với `target_type = REPORT`.
 - `application_documents` là snapshot độc lập; thay đổi tài liệu gốc không làm đổi hồ sơ đã gửi.
-- `application_status_history`, `job_post_status_history`, `internship_evaluations` và `audit_logs` không có API cập nhật/xóa.
+- `application_status_history`, `job_post_status_history`, `internship_plan_submissions`,
+  `internship_plan_history`, `internship_weekly_log_submissions`, `internship_weekly_log_history`,
+  `internship_evaluations` và `audit_logs` không có API cập nhật/xóa.
 - `notifications` chỉ chứa metadata/deep link, không chứa CV hay internal note.
 
 ## Quyết định schema

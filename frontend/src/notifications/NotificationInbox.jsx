@@ -41,7 +41,9 @@ function NoticeIcon({ type }) {
 export function notificationRoute(role, notification) {
   const link = notification.deepLink || "";
   const type = notification.type || "";
+  const internshipResource = ["INTERNSHIP_PLAN", "INTERNSHIP_WEEKLY_LOG"].includes(notification.resourceType);
   if (role === "admin") {
+    if (link.includes("/uit/internship-supervision") || internshipResource) return "admin-internships";
     if (link.includes("/uit/jobs") || notification.resourceType === "JOB_POST") return "admin-jobs";
     if (link.includes("/uit/student-documents") || notification.resourceType === "STUDENT_DOCUMENT") return "admin-documents";
     if (link.includes("/placements") || /PLACEMENT|HIRED/.test(type)) return "admin-placements";
@@ -49,11 +51,13 @@ export function notificationRoute(role, notification) {
     return "admin-dashboard";
   }
   if (role === "company") {
+    if (link.includes("/company/internships") || internshipResource) return "company-internships";
     if (link.includes("/company/jobs") || notification.resourceType === "JOB_POST") return "company-jobs";
     if (link.includes("/interview") || /INTERVIEW/.test(type)) return "company-interviews";
     if (link.includes("/company/candidates") || notification.resourceType === "APPLICATION") return "company-candidates";
     return "company-dashboard";
   }
+  if (link.includes("/student/internships") || internshipResource) return "internships";
   if (link.includes("/interview") || /INTERVIEW/.test(type)) return "interviews";
   if (link.includes("/profile") || notification.resourceType === "STUDENT_DOCUMENT") return "profile";
   if (link.includes("/applications") || notification.resourceType === "APPLICATION") return "applications";

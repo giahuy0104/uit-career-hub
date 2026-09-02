@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Bell,
   BookOpenText,
   Briefcase,
   Buildings,
@@ -17,14 +16,12 @@ import {
   FilePdf,
   FileText,
   FunnelSimple,
-  House,
   Info,
   ListChecks,
   MagnifyingGlass,
   MapPin,
   SealCheck,
   ShieldCheck,
-  SignOut,
   SlidersHorizontal,
   Trash,
   UploadSimple,
@@ -36,8 +33,8 @@ import {
 import { useAuth } from "./auth/AuthContext.jsx";
 import { CompanyActivationScreen } from "./auth/CompanyActivationScreen.jsx";
 import { LoginScreen, SessionLoadingScreen } from "./auth/LoginScreen.jsx";
-import { useNotifications } from "./notifications/NotificationContext.jsx";
 import { InternshipEvaluationPanel } from "./placements/InternshipEvaluationPanel.jsx";
+import { WorkspaceShell } from "./shared/WorkspaceShell.jsx";
 import {
   filterStudentApplications,
   filterStudentJobs,
@@ -47,56 +44,6 @@ import {
 const AdminPortal = lazy(() => import("./RolePortals.jsx").then((module) => ({ default: module.AdminPortal })));
 const CompanyPortal = lazy(() => import("./RolePortals.jsx").then((module) => ({ default: module.CompanyPortal })));
 const StudentExtraScreen = lazy(() => import("./RolePortals.jsx").then((module) => ({ default: module.StudentExtraScreen })));
-
-function AppLogo({ compact = false, onClick }) {
-  return (
-    <button className={`brand ${compact ? "brand-compact" : ""}`} onClick={onClick}>
-      <span className="brand-symbol"><SealCheck size={compact ? 26 : 34} weight="duotone" /></span>
-      <span><strong>UIT Career Hub</strong><small>Kết nối tri thức · Dẫn lối sự nghiệp</small></span>
-    </button>
-  );
-}
-
-function getInitials(name = "") {
-  return name.split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join("").toUpperCase() || "UIT";
-}
-
-function StudentIdentity({ inverse = false, user }) {
-  const name = user?.displayName || "Sinh viên UIT";
-  const meta = user?.organization ? `MSSV ${user.organization}` : user?.email;
-  return (
-    <button className={`student-identity ${inverse ? "inverse" : ""}`}>
-      <span className="avatar">{getInitials(name)}</span>
-      <span><strong>{name}</strong><small>{meta}</small></span>
-      <CaretDown size={16} />
-    </button>
-  );
-}
-
-function TopHeader({ route, navigate, user, onLogout }) {
-  const { unreadCount } = useNotifications();
-  return (
-    <header className="top-header">
-      <AppLogo onClick={() => navigate("dashboard")} />
-      <nav className="top-nav" aria-label="Điều hướng chính">
-        <button className={route === "dashboard" ? "active" : ""} onClick={() => navigate("dashboard")}><House size={19} />Tổng quan</button>
-        <button className={route === "jobs" ? "active" : ""} onClick={() => navigate("jobs")}><Briefcase size={19} />Việc làm</button>
-        <button className={route === "companies" ? "active" : ""} onClick={() => navigate("companies")}><Buildings size={19} />Doanh nghiệp</button>
-        <button className={route === "applications" ? "active" : ""} onClick={() => navigate("applications")}><FileText size={19} />Đơn ứng tuyển</button>
-        <button className={route === "notifications" ? "active" : ""} onClick={() => navigate("notifications")}><Bell size={19} />Thông báo{unreadCount > 0 && <span className="notification-dot">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>
-      </nav>
-      <div className="top-session"><StudentIdentity user={user} /><button className="top-signout" title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div>
-    </header>
-  );
-}
-
-function Sidebar({ navigate, user, onLogout }) {
-  const { unreadCount } = useNotifications();
-  const items = [
-    ["Tổng quan", House, "dashboard"], ["Việc làm", Briefcase, "jobs"], ["Đơn ứng tuyển", FileText, "applications"], ["Hồ sơ & CV", User, "profile"], ["Lịch phỏng vấn", CalendarBlank, "interviews"], ["Thông báo", Bell, "notifications"],
-  ];
-  return <aside className="sidebar"><AppLogo compact onClick={() => navigate("dashboard")} /><nav>{items.map(([label, Icon, destination]) => <button key={label} className={label === "Đơn ứng tuyển" ? "active" : ""} onClick={() => destination && navigate(destination)}><Icon size={21} />{label}{label === "Thông báo" && unreadCount > 0 && <span className="side-count">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>)}</nav><div className="sidebar-user"><StudentIdentity inverse user={user} /><button title="Đăng xuất" onClick={onLogout}><SignOut size={20} /></button></div></aside>;
-}
 
 const opportunityLabels = {
   INTERNSHIP: "Thực tập",
@@ -155,6 +102,7 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [reloadVersion, setReloadVersion] = useState(0);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -186,14 +134,18 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
   };
 
   return (
-    <div className="screen jobs-screen">
-      <TopHeader route="jobs" navigate={navigate} user={user} onLogout={onLogout} />
-      <div className="jobs-layout">
-        <main className="jobs-list-pane">
-          <div className="page-heading-row">
-            <div><p className="eyebrow">TIN ĐÃ ĐƯỢC UIT DUYỆT</p><h1>Cơ hội dành cho bạn</h1><p>Chỉ hiển thị tin còn hạn từ doanh nghiệp đối tác đang hoạt động.</p></div>
-            <button className="saved-link" onClick={() => navigate("applications")}><FileText size={19} />Đơn đã nộp <span>{applications.length}</span></button>
-          </div>
+    <WorkspaceShell
+      role="student"
+      route="jobs"
+      navigate={navigate}
+      title="Việc làm"
+      description="Khám phá cơ hội đã được UIT kiểm duyệt từ các doanh nghiệp đối tác."
+      user={user}
+      onLogout={onLogout}
+      actions={<button className="secondary-button jobs-application-link" onClick={() => navigate("applications")}><FileText size={18} />Đơn đã nộp <span>{applications.length}</span></button>}
+    >
+      <div className="jobs-layout workspace-jobs-layout">
+        <section className="jobs-list-pane">
           <div className="search-row">
             <label className="search-field"><MagnifyingGlass size={22} /><input aria-label="Tìm việc làm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty hoặc kỹ năng" /></label>
             <button className={`secondary-button ${filtersOpen ? "selected" : ""}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}><FunnelSimple size={20} />Bộ lọc</button>
@@ -203,7 +155,7 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
           <section className="job-group" aria-label="Danh sách việc làm">
             <div className="job-table-header"><span>Cơ hội</span><span>Loại hình</span><span>Địa điểm</span><span>Hạn nộp</span><span>Xác thực</span></div>
             {loadingJobs ? <div className="portal-loading" role="status"><CircleNotch className="spin" size={22} />Đang tải tin tuyển dụng...</div> : loadError ? <div className="portal-error" role="alert"><Warning size={21} /><span>{loadError}</span><button className="secondary-button small" onClick={() => setReloadVersion((value) => value + 1)}>Thử lại</button></div> : filtered.length ? filtered.map((job) => (
-              <button key={job.id} className={`job-row ${selected?.id === job.id ? "selected" : ""}`} aria-pressed={selected?.id === job.id} onClick={() => setSelectedId(job.id)}>
+              <button key={job.id} className={`job-row ${selected?.id === job.id ? "selected" : ""}`} aria-pressed={selected?.id === job.id} onClick={() => { setSelectedId(job.id); setMobileDetailOpen(true); }}>
                 <span className="job-title-cell"><LiveCompanyMark company={job.company} /><span><strong>{job.title}</strong><small>{job.company.name}</small></span></span>
                 <span><span className={`type-pill ${job.opportunityType === "INTERNSHIP" ? "intern" : "fulltime"}`}>{opportunityLabels[job.opportunityType]}</span></span>
                 <span className="muted-cell"><MapPin size={17} /><span>{job.location}<small>{workModeLabels[job.workMode]}</small></span></span>
@@ -212,8 +164,9 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
               </button>
             )) : <div className="empty-state"><MagnifyingGlass size={32} /><strong>{items.length ? "Không tìm thấy cơ hội phù hợp" : "Chưa có cơ hội đang tuyển"}</strong><span>{items.length ? "Hãy thử từ khóa hoặc bộ lọc khác." : "Tin đã được UIT duyệt và còn hạn sẽ xuất hiện tại đây."}</span>{filtersActive && <button className="secondary-button small" onClick={clearFilters}>Xóa bộ lọc</button>}</div>}
           </section>
-        </main>
-        <aside className="job-detail-pane">
+        </section>
+        <aside className={`job-detail-pane ${mobileDetailOpen ? "mobile-open" : ""}`} aria-label="Chi tiết việc làm">
+          <button className="job-detail-mobile-close" aria-label="Đóng chi tiết việc làm" onClick={() => setMobileDetailOpen(false)}><ArrowLeft size={18} />Danh sách việc làm</button>
           {loadingJobs ? <div className="portal-loading" role="status"><CircleNotch className="spin" size={22} />Đang tải chi tiết tin...</div> : loadError ? <div className="empty-state job-detail-empty"><Warning size={30} /><strong>Chưa tải được chi tiết</strong><span>Thử lại ở danh sách việc làm để đồng bộ dữ liệu mới nhất.</span></div> : selected ? <>
             <div className="detail-company"><LiveCompanyMark company={selected.company} size="lg" /><span className="verified-tag"><SealCheck size={15} weight="fill" />Đối tác UIT</span></div>
             <h2>{selected.title}</h2><p className="company-name">{selected.company.name}</p>
@@ -228,7 +181,7 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
           </> : <div className="empty-state job-detail-empty"><MagnifyingGlass size={30} /><strong>Không có tin trong kết quả hiện tại</strong><span>Xóa bộ lọc hoặc chọn từ khóa khác để xem chi tiết.</span>{filtersActive && <button className="secondary-button small" onClick={clearFilters}>Xóa bộ lọc</button>}</div>}
         </aside>
       </div>
-    </div>
+    </WorkspaceShell>
   );
 }
 
@@ -415,11 +368,18 @@ function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId 
   };
 
   return (
-    <div className="screen applications-screen">
-      <Sidebar navigate={navigate} user={user} onLogout={onLogout} />
-      <main className="applications-content">
+    <WorkspaceShell
+      role="student"
+      route="applications"
+      navigate={navigate}
+      title="Đơn ứng tuyển"
+      description="Theo dõi người đang xử lý, trạng thái hồ sơ và lịch sử của từng đơn."
+      actions={<div className="applications-tools"><label className="search-field compact"><MagnifyingGlass size={20} /><input aria-label="Tìm đơn ứng tuyển" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty..." /></label><label className="select-control"><select aria-label="Lọc theo trạng thái" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(applicationStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><CaretDown size={15} /></label></div>}
+      user={user}
+      onLogout={onLogout}
+    >
+      <div className="applications-content workspace-applications-content">
         {message && <div className="toast" role="status"><CheckCircle weight="fill" />{message}</div>}
-        <header className="applications-header"><div><h1>Đơn ứng tuyển của tôi</h1><p>Theo dõi người đang xử lý và lịch sử của từng đơn.</p></div><div className="applications-tools"><label className="search-field compact"><MagnifyingGlass size={20} /><input aria-label="Tìm đơn ứng tuyển" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty..." /></label><label className="select-control"><select aria-label="Lọc theo trạng thái" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Tất cả trạng thái</option>{Object.entries(applicationStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><CaretDown size={15} /></label></div></header>
         {loadingApplications ? <div className="portal-loading" role="status"><CircleNotch className="spin" size={22} />Đang tải đơn ứng tuyển...</div> : loadError ? <div className="portal-error" role="alert"><Warning size={21} /><span>{loadError}</span><button className="secondary-button small" onClick={() => setReloadVersion((value) => value + 1)}>Thử lại</button></div> : !items.length ? <div className="active-application empty-state"><FileText size={36} /><strong>Bạn chưa có đơn ứng tuyển</strong><span>Hãy chọn một cơ hội phù hợp để bắt đầu.</span><button className="primary-button" onClick={() => navigate("jobs")}>Xem việc làm</button></div> : !filtered.length ? <div className="active-application empty-state"><MagnifyingGlass size={36} /><strong>Không có đơn khớp bộ lọc</strong><span>Hãy đổi từ khóa hoặc trạng thái để xem các đơn khác.</span><button className="secondary-button" onClick={clearFilters}>Xóa bộ lọc</button></div> : selected && <>
           <section className="active-application">
             <div className="application-title"><LiveCompanyMark company={selected.job.company} size="lg" /><span><h2>{selected.job.title}</h2><p>{selected.job.company.name}</p><small><CalendarBlank size={15} />Đã nộp: {formatDate(selected.submittedAt)}</small></span><span className={`status-pill ${terminal ? "neutral" : "pending"}`}>{applicationStatusLabels[selected.status]}</span></div>
@@ -445,12 +405,12 @@ function LiveApplicationsScreen({ navigate, user, onLogout, targetApplicationId 
           </section>
           <section className="application-table-section live-applications-table"><h3>Tất cả đơn ứng tuyển ({filtered.length})</h3><div className="application-table"><div className="application-table-head"><span>Vị trí ứng tuyển</span><span>Công ty</span><span>Ngày nộp</span><span>Trạng thái hiện tại</span><span>Bước tiếp theo</span></div>{filtered.map((application) => <button className={`application-row ${application.id === selected.id ? "selected" : ""}`} key={application.id} onClick={() => setSelectedId(application.id)}><strong>{application.job.title}</strong><span>{application.job.company.name}</span><span>{formatDate(application.submittedAt)}</span><span><i className="status-tag pending">{applicationStatusLabels[application.status]}</i></span><span>Xem chi tiết <CaretRight size={15} /></span></button>)}</div></section>
         </>}
-      </main>
+      </div>
       {documentsOpen && selected && <div className="modal-backdrop" onMouseDown={() => setDocumentsOpen(false)}><div className="modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" onClick={() => setDocumentsOpen(false)}><X size={20} /></button><span className="modal-icon"><FileText size={26} /></span><h2>Hồ sơ đã nộp</h2><p>Đây là bản chụp tài liệu tại thời điểm gửi đơn.</p><div className="modal-list">{selected.documents.map((document) => <span key={document.id}><CheckCircle size={18} />{document.fileName} · {formatBytes(document.fileSizeBytes)}</span>)}</div><button className="primary-button full" onClick={() => setDocumentsOpen(false)}>Đóng</button></div></div>}
       {supplementOpen && selected && <div className="modal-backdrop" onMouseDown={() => !supplementBusy && setSupplementOpen(false)}><div className="modal supplement-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" disabled={supplementBusy} onClick={() => setSupplementOpen(false)}><X size={20} /></button><span className="modal-icon"><UploadSimple size={26} /></span><h2>Bổ sung hồ sơ</h2><p>Chọn phiên bản tài liệu mới đã được xác minh. Tài liệu cũ vẫn được giữ lại trong snapshot để UIT đối chiếu.</p><div className="supplement-requirements"><strong>UIT yêu cầu</strong><span>{requiredSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")}</span><small>Hạn nộp: {formatDate(supplementRequest?.metadata?.dueAt)}</small></div>{supplementLoading ? <div className="portal-loading" role="status"><CircleNotch className="spin" />Đang tải tài liệu...</div> : <div className="supplement-document-list">{supplementDocuments.length ? supplementDocuments.map((document) => { const checked = selectedSupplementIds.includes(document.id); const requested = requiredSupplementTypes.includes(document.documentType); return <label className={`supplement-document ${checked ? "selected" : ""}`} key={document.id}><input type="checkbox" checked={checked} onChange={() => setSelectedSupplementIds((current) => checked ? current.filter((id) => id !== document.id) : [...current, document.id])} /><FileText size={21} /><span><strong>{document.fileName}</strong><small>{applicationDocumentTypeLabels[document.documentType] || document.documentType} · Phiên bản {document.version} · {formatBytes(document.fileSizeBytes)}</small></span>{requested && <i>Bắt buộc</i>}</label>; }) : <div className="supplement-empty"><Warning size={24} /><strong>Chưa có tài liệu mới phù hợp</strong><span>Hãy cập nhật và xác minh tài liệu trong hồ sơ sinh viên trước khi nộp lại.</span></div>}</div>}{missingSupplementTypes.length > 0 && !supplementLoading && <p className="form-error" role="alert"><Warning size={18} />Còn thiếu: {missingSupplementTypes.map((type) => applicationDocumentTypeLabels[type] || type).join(", ")}.</p>}{supplementError && <p className="form-error" role="alert"><Warning size={18} />{supplementError}</p>}<p className="supplement-consent"><ShieldCheck size={18} />Khi nộp lại, bạn đồng ý chia sẻ các tài liệu đã chọn với UIT và doanh nghiệp sau khi hồ sơ được duyệt.</p><div className="modal-actions"><button className="secondary-button" disabled={supplementBusy} onClick={() => setSupplementOpen(false)}>Để sau</button><button className="primary-button" disabled={supplementLoading || supplementBusy || !selectedSupplementIds.length || missingSupplementTypes.length > 0} onClick={() => void submitSupplement()}>{supplementBusy ? <CircleNotch className="spin" size={18} /> : <UploadSimple size={18} />}Nộp hồ sơ bổ sung</button></div></div></div>}
       {withdrawalAction && selected && <div className="modal-backdrop" onMouseDown={() => !withdrawalBusy && setWithdrawalAction("")}><div className="modal withdrawal-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" disabled={withdrawalBusy} onClick={() => setWithdrawalAction("")}><X size={20} /></button><span className="modal-icon danger"><Warning size={26} /></span><h2>{withdrawalAction === "CANCEL_INTERVIEW" ? "Hủy tham gia phỏng vấn?" : "Rút đơn ứng tuyển?"}</h2><p>{withdrawalAction === "CANCEL_INTERVIEW" ? <>Lịch phỏng vấn với <strong>{selected.job.company.name}</strong> sẽ được hủy và đơn chuyển sang Đã rút.</> : <>UIT và doanh nghiệp sẽ dừng xử lý đơn vị trí <strong>{selected.job.title}</strong>.</>} Lý do và thao tác được lưu trong lịch sử.</p><div className="withdrawal-form"><label><span>Nhóm lý do *</span><select value={withdrawalReasonCode} onChange={(event) => setWithdrawalReasonCode(event.target.value)}>{withdrawalAction === "CANCEL_INTERVIEW" && <option value="STUDENT_SCHEDULE_CONFLICT">Trùng lịch học hoặc lịch cá nhân</option>}<option value="STUDENT_CHANGED_PLAN">Thay đổi kế hoạch cá nhân</option><option value="STUDENT_ACCEPTED_OTHER_OPPORTUNITY">Đã chọn cơ hội khác</option><option value="STUDENT_OTHER_REASON">Lý do khác</option></select></label><label><span>Lý do chi tiết *</span><textarea value={withdrawalNote} onChange={(event) => setWithdrawalNote(event.target.value)} placeholder="Mô tả ngắn gọn để UIT và doanh nghiệp nắm được lý do..." maxLength={2000} /></label></div>{withdrawalError && <p className="form-error" role="alert"><Warning size={18} />{withdrawalError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={withdrawalBusy} onClick={() => setWithdrawalAction("")}>Giữ lại đơn</button><button className="primary-button danger-fill" disabled={withdrawalBusy || withdrawalNote.trim().length < 5} onClick={() => void submitWithdrawal()}>{withdrawalBusy ? <CircleNotch className="spin" size={18} /> : <Trash size={18} />}{withdrawalAction === "CANCEL_INTERVIEW" ? "Xác nhận hủy tham gia" : "Xác nhận rút đơn"}</button></div></div></div>}
       {offerDecision && selected && <div className="modal-backdrop" onMouseDown={() => !offerBusy && setOfferDecision("")}><div className="modal offer-decision-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Đóng" disabled={offerBusy} onClick={() => setOfferDecision("")}><X size={20} /></button><span className={`modal-icon ${offerDecision === "decline" ? "danger" : ""}`}>{offerDecision === "accept" ? <CheckCircle size={26} /> : <Warning size={26} />}</span><h2>{offerDecision === "accept" ? "Xác nhận nhận offer" : "Từ chối offer"}</h2><p>{offerDecision === "accept" ? <>Bạn chọn <strong>{selected.job.company.name}</strong> cho vị trí <strong>{selected.job.title}</strong>. UIT sẽ xác nhận trước khi đóng các đơn còn lại.</> : <>Lý do từ chối sẽ được lưu trong lịch sử và gửi đến doanh nghiệp.</>}</p>{offerDecision === "decline" && <label className="offer-decline-note"><span>Lý do *</span><textarea value={offerNote} onChange={(event) => setOfferNote(event.target.value)} placeholder="Ví dụ: Tôi đã chọn một cơ hội phù hợp hơn..." maxLength={2000} /></label>}{offerError && <p className="form-error" role="alert"><Warning size={18} />{offerError}</p>}<div className="modal-actions"><button className="secondary-button" disabled={offerBusy} onClick={() => setOfferDecision("")}>Hủy</button><button className={offerDecision === "accept" ? "primary-button" : "secondary-button danger"} disabled={offerBusy || (offerDecision === "decline" && offerNote.trim().length < 5)} onClick={() => void respondToOffer()}>{offerBusy ? <CircleNotch className="spin" size={18} /> : offerDecision === "accept" ? <CheckCircle size={18} /> : <X size={18} />}{offerDecision === "accept" ? "Xác nhận nhận offer" : "Xác nhận từ chối"}</button></div></div></div>}
-    </div>
+    </WorkspaceShell>
   );
 }
 
@@ -483,7 +443,7 @@ function LiveApplyScreen({ job, navigate, user, onLogout }) {
     return () => { active = false; };
   }, [authorizedRequest, job]);
 
-  if (!job) return <div className="screen apply-screen"><TopHeader route="jobs" navigate={navigate} user={user} onLogout={onLogout} /><div className="empty-state apply-empty"><Briefcase size={38} /><strong>Chưa chọn tin tuyển dụng</strong><span>Quay lại danh sách và chọn “Ứng tuyển” tại một tin còn hạn.</span><button className="primary-button" onClick={() => navigate("jobs")}>Quay lại việc làm</button></div></div>;
+  if (!job) return <WorkspaceShell role="student" route="jobs" navigate={navigate} title="Ứng tuyển" description="Chuẩn bị hồ sơ và tài liệu cho cơ hội bạn đã chọn." user={user} onLogout={onLogout}><div className="empty-state apply-empty"><Briefcase size={38} /><strong>Chưa chọn tin tuyển dụng</strong><span>Quay lại danh sách và chọn “Ứng tuyển” tại một tin còn hạn.</span><button className="primary-button" onClick={() => navigate("jobs")}>Quay lại việc làm</button></div></WorkspaceShell>;
 
   const verifiedCvs = documents.filter((document) => document.documentType === "CV" && document.verificationStatus === "VERIFIED");
   const supportDocuments = documents.filter((document) => document.documentType !== "CV");
@@ -506,12 +466,18 @@ function LiveApplyScreen({ job, navigate, user, onLogout }) {
   };
 
   return (
-    <div className="screen apply-screen">
-      <TopHeader route="jobs" navigate={navigate} user={user} onLogout={onLogout} />
-      <div className="apply-breadcrumb"><button onClick={() => navigate("jobs")}><ArrowLeft size={17} />Việc làm</button><CaretRight size={14} /><span>{job.company.code}</span><CaretRight size={14} /><span>Ứng tuyển</span></div>
-      <div className="apply-layout">
-        <main className="apply-main">
-          <h1>Ứng tuyển {job.title}</h1>
+    <WorkspaceShell
+      role="student"
+      route="jobs"
+      navigate={navigate}
+      title={`Ứng tuyển ${job.title}`}
+      description={`${job.company.name} · Hoàn thiện hai bước trước khi gửi hồ sơ cho UIT kiểm duyệt.`}
+      user={user}
+      onLogout={onLogout}
+    >
+      <div className="apply-breadcrumb workspace-apply-breadcrumb"><button onClick={() => navigate("jobs")}><ArrowLeft size={17} />Việc làm</button><CaretRight size={14} /><span>{job.company.code}</span><CaretRight size={14} /><span>Ứng tuyển</span></div>
+      <div className="apply-layout workspace-apply-layout">
+        <section className="apply-main">
           <div className="apply-steps">{["Hồ sơ & tài liệu", "Kiểm tra & xác nhận"].map((label, index) => <button key={label} className={`${step === index + 1 ? "current" : ""} ${step > index + 1 ? "done" : ""}`} onClick={() => index + 1 < step && setStep(index + 1)}><span>{step > index + 1 ? <Check size={17} /> : index + 1}</span>{label}</button>)}</div>
           {loadingForm ? <div className="portal-loading" role="status"><CircleNotch className="spin" size={22} />Đang tải hồ sơ...</div> : step === 1 ? <div className="form-content">
             <p className="info-banner slim"><Info size={20} />Thông tin bên dưới được lấy từ hồ sơ UIT. Chỉ tài liệu đã xác minh mới có thể gửi.</p>
@@ -522,10 +488,10 @@ function LiveApplyScreen({ job, navigate, user, onLogout }) {
           </div> : <div className="form-content confirmation-step"><button className="back-link" onClick={() => setStep(1)}><ArrowLeft size={16} />Quay lại hồ sơ</button><span className="confirmation-icon"><ListChecks size={36} /></span><h2>Kiểm tra trước khi gửi</h2><p>Đơn sẽ chuyển sang trạng thái “UIT đang kiểm duyệt”. Doanh nghiệp chưa nhận CV ở bước này.</p><div className="confirm-list"><span><CheckCircle size={20} />Tài khoản {profile?.studentCode} đang hoạt động</span><span><CheckCircle size={20} />Đã chọn {documents.find((document) => document.id === selectedCv)?.fileName}</span><span><CheckCircle size={20} />Có {selectedSupport.length} tài liệu hỗ trợ</span><span><CheckCircle size={20} />Đã đồng ý phạm vi chia sẻ dữ liệu</span></div></div>}
           {formError && <p className="form-error" role="alert"><Warning size={18} />{formError}</p>}
           <footer className="apply-footer"><button className="secondary-button" onClick={() => navigate("jobs")}><ArrowLeft size={18} />Hủy</button><button className="primary-button" disabled={submitting || (step === 1 && !ready)} onClick={() => step === 1 ? setStep(2) : void submitApplication()}>{submitting ? <><CircleNotch className="spin" size={18} />Đang gửi...</> : <>{step === 2 ? "Gửi đơn ứng tuyển" : "Tiếp tục"}<ArrowRight size={18} /></>}</button></footer>
-        </main>
+        </section>
         <aside className="apply-summary"><div className="summary-company"><LiveCompanyMark company={job.company} size="lg" /><span><strong>{job.company.name}</strong><small><SealCheck size={15} weight="fill" />Đối tác đã xác thực</small></span></div><h2>{job.title}</h2><div className="summary-meta"><span><MapPin size={18} />{workModeLabels[job.workMode]} · {job.location}</span><span><CalendarBlank size={18} />Hạn ứng tuyển: {formatDate(job.deadline)}</span><span><User size={18} />Số lượng tuyển: {job.positions}</span></div><section><h3>Yêu cầu kỹ năng</h3><div className="skill-list">{job.skills.map((skill) => <span key={skill.id}>{skill.name}</span>)}</div></section><p className="privacy-note boxed"><Info size={20} />UIT kiểm tra hồ sơ trước; chỉ hồ sơ đạt mới được chuyển cho doanh nghiệp.</p></aside>
       </div>
-    </div>
+    </WorkspaceShell>
   );
 }
 
@@ -553,7 +519,7 @@ export function App() {
   else if (role === "company") content = <CompanyPortal route={route} navigate={navigate} navigationPayload={navigationPayload} user={user} onLogout={logout} />;
   else if (route === "applications") content = <LiveApplicationsScreen navigate={navigate} targetApplicationId={navigationPayload?.notification?.resourceId} user={user} onLogout={logout} />;
   else if (route === "apply") content = <LiveApplyScreen job={selectedJob} navigate={navigate} user={user} onLogout={logout} />;
-  else if (["dashboard", "companies", "profile", "interviews", "notifications"].includes(route)) content = <StudentExtraScreen route={route} navigate={navigate} user={user} onLogout={logout} />;
+  else if (["dashboard", "companies", "profile", "interviews", "internships", "notifications"].includes(route)) content = <StudentExtraScreen route={route} navigate={navigate} navigationPayload={navigationPayload} user={user} onLogout={logout} />;
   else content = <LiveJobsScreen navigate={navigate} user={user} onLogout={logout} initialCompanyId={navigationPayload?.companyId} initialCompanyName={navigationPayload?.companyName} />;
   return (
     <Suspense fallback={<div className="portal-route-loading" role="status"><CircleNotch className="spin" size={24} />Đang tải không gian làm việc...</div>}>

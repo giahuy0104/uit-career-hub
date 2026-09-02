@@ -42,6 +42,7 @@ import {
   CompanyProfileManagement,
 } from "./companies/CompanyManagement.jsx";
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
+import { InternshipPlanWorkspace } from "./internships/InternshipPlanWorkspace.jsx";
 import { AdminReports } from "./reports/AdminReports.jsx";
 import { AdminPlacementLifecycle } from "./placements/AdminPlacementLifecycle.jsx";
 import { InternshipEvaluationPanel } from "./placements/InternshipEvaluationPanel.jsx";
@@ -129,12 +130,13 @@ function OfferDocumentCard({ document, startDate, busy, error, onOpen, compact =
   );
 }
 
-export function StudentExtraScreen({ route, navigate, user, onLogout }) {
+export function StudentExtraScreen({ route, navigate, navigationPayload, user, onLogout }) {
   const titles = {
     dashboard: ["Tổng quan", "Thông tin quan trọng và bước tiếp theo trong hành trình nghề nghiệp của bạn."],
     companies: ["Doanh nghiệp đối tác", "Khám phá các doanh nghiệp đã được UIT xác thực và đang hợp tác tuyển dụng."],
     profile: ["Hồ sơ & CV", "Quản lý hồ sơ dùng cho quy trình UIT kiểm duyệt và chuyển đến doanh nghiệp."],
     interviews: ["Lịch phỏng vấn", "Theo dõi lịch hẹn, hình thức và kết quả phỏng vấn của bạn."],
+    internships: ["Quá trình thực tập", "Lập kế hoạch, báo cáo tiến độ hằng tuần và theo dõi phản hồi từ doanh nghiệp, UIT."],
     notifications: ["Thông báo", "Các cập nhật từ UIT, doanh nghiệp và hệ thống."],
   };
   const [title, description] = titles[route] || titles.dashboard;
@@ -144,6 +146,7 @@ export function StudentExtraScreen({ route, navigate, user, onLogout }) {
       {route === "companies" && <CompaniesScreen navigate={navigate} />}
       {route === "profile" && <ProfileScreen />}
       {route === "interviews" && <LiveInterviewsScreen />}
+      {route === "internships" && <InternshipPlanWorkspace role="student" targetPlacementId={navigationPayload?.notification?.payload?.placementId} />}
       {route === "notifications" && <StudentNotifications navigate={navigate} />}
     </WorkspaceShell>
   );
@@ -534,6 +537,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     "admin-documents": ["Xác minh tài liệu sinh viên", "Kiểm tra tài liệu PDF mới tải lên trước khi sinh viên dùng trong hồ sơ ứng tuyển."],
     "admin-applications": ["Duyệt hồ sơ sinh viên", "Xác minh điều kiện và tài liệu trước khi chuyển hồ sơ đến doanh nghiệp."],
     "admin-placements": ["Theo dõi kết quả tuyển dụng", "Theo dõi từ phỏng vấn đến nhận việc, thực tập và hoàn thành."],
+    "admin-internships": ["Quản lý thực tập", "Phê duyệt kế hoạch, theo dõi nhật ký hằng tuần và phát hiện trường hợp quá hạn."],
     "admin-notifications": ["Thông báo", "Các yêu cầu mới và thay đổi trạng thái cần bộ phận UIT theo dõi."],
   };
   const activeRoute = titles[route] ? route : "admin-dashboard";
@@ -548,6 +552,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     {activeRoute === "admin-documents" && <AdminStudentDocumentReview targetDocumentId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-placements" && <><AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} /><AdminPlacementLifecycle /></>}
+    {activeRoute === "admin-internships" && <InternshipPlanWorkspace role="admin" targetPlacementId={navigationPayload?.notification?.payload?.placementId} />}
     {activeRoute === "admin-notifications" && <NotificationInbox role="admin" onOpen={(notification, destination) => navigate(destination, { notification })} />}
     {modal === "company" && <CompanyCreatePartnerModal close={() => setModal(null)} onComplete={() => setCompaniesVersion(value => value + 1)} />}
   </WorkspaceShell>;
@@ -1178,6 +1183,7 @@ export function CompanyPortal({ route, navigate, navigationPayload, user, onLogo
     "company-jobs": ["Tin tuyển dụng", "Soạn, gửi UIT phê duyệt và theo dõi hiệu quả từng tin."],
     "company-candidates": ["Ứng viên", "Xử lý các hồ sơ đã được UIT kiểm duyệt và chuyển đến doanh nghiệp."],
     "company-interviews": ["Lịch phỏng vấn", "Tạo lịch, gửi lời mời và cập nhật kết quả phỏng vấn."],
+    "company-internships": ["Sinh viên thực tập", "Xác nhận kế hoạch và nhật ký hằng tuần hoặc gửi góp ý để sinh viên điều chỉnh."],
     "company-notifications": ["Thông báo", "Các cập nhật từ UIT, ứng viên và hệ thống."],
   };
   const activeRoute = titles[route] ? route : 'company-dashboard';
@@ -1187,7 +1193,7 @@ export function CompanyPortal({ route, navigate, navigationPayload, user, onLogo
     : undefined;
   const action = activeRoute === 'company-jobs' ? <button className="primary-button" onClick={() => setModal('job')}><Plus />Tạo tin tuyển dụng</button> : null;
   return <WorkspaceShell role="company" route={activeRoute} navigate={navigate} title={title} description={description} actions={pageAction || action} user={user} onLogout={onLogout}>
-    {activeRoute==='company-dashboard'&&<LiveCompanyDashboard navigate={navigate}/>} {activeRoute==='company-profile'&&<CompanyProfileManagement/>} {activeRoute==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {activeRoute==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {activeRoute==='company-interviews'&&<LiveCompanyInterviews navigate={navigate}/>} {activeRoute==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
+    {activeRoute==='company-dashboard'&&<LiveCompanyDashboard navigate={navigate}/>} {activeRoute==='company-profile'&&<CompanyProfileManagement/>} {activeRoute==='company-jobs'&&<LiveCompanyJobs refreshKey={jobsVersion} onCreate={()=>setModal({ type: 'job', job: null })} onEdit={job=>setModal({ type: 'job', job })}/>} {activeRoute==='company-candidates'&&<CompanyCandidates targetApplicationId={navigationPayload?.notification?.resourceId}/>} {activeRoute==='company-interviews'&&<LiveCompanyInterviews navigate={navigate}/>} {activeRoute==='company-internships'&&<InternshipPlanWorkspace role="company" targetPlacementId={navigationPayload?.notification?.payload?.placementId}/>} {activeRoute==='company-notifications'&&<CompanyNotifications navigate={navigate}/>}
     {modal?.type === 'job' && <JobPostModal job={modal.job} close={() => setModal(null)} onComplete={() => { setJobsVersion(value => value + 1); setModal(null); }} />}
     {modal === 'job' && <JobPostModal close={() => setModal(null)} onComplete={() => { setJobsVersion(value => value + 1); setModal(null); }} />}
   </WorkspaceShell>;

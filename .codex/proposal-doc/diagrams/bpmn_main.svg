@@ -1,0 +1,69 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1320" viewBox="0 0 2400 1320">
+<defs>
+  <marker id="arrow" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto"><path d="M0,0 L12,4 L0,8 Z" fill="#222"/></marker>
+  <style>
+    .title{font:700 34px Arial;fill:#111}.lane{fill:#fafafa;stroke:#333;stroke-width:2}.lane2{fill:#f1f1f1;stroke:#333;stroke-width:2}
+    .laneLabel{font:700 24px Arial;fill:#111}.task{fill:#fff;stroke:#222;stroke-width:2.5;rx:16}.gateway{fill:#fff;stroke:#222;stroke-width:2.5}
+    .taskText{font:600 19px Arial;line-height:1.25;color:#111;text-align:center}.small{font:16px Arial;color:#222;text-align:center}
+    .flow{fill:none;stroke:#222;stroke-width:3;marker-end:url(#arrow)}.dash{stroke-dasharray:10 7}.label{font:16px Arial;fill:#111}
+    .event{fill:#fff;stroke:#222;stroke-width:4}.end{fill:#fff;stroke:#222;stroke-width:8}
+  </style>
+</defs>
+<rect width="2400" height="1320" fill="white"/>
+<text x="1200" y="52" text-anchor="middle" class="title">BPMN - LUỒNG TUYỂN DỤNG VÀ XÁC NHẬN THỰC TẬP</text>
+
+<rect class="lane" x="50" y="80" width="2300" height="285"/><rect class="lane2" x="50" y="365" width="2300" height="285"/>
+<rect class="lane" x="50" y="650" width="2300" height="285"/><rect class="lane2" x="50" y="935" width="2300" height="285"/>
+<line x1="235" y1="80" x2="235" y2="1220" stroke="#333" stroke-width="2"/>
+<text transform="translate(120 235) rotate(-90)" text-anchor="middle" class="laneLabel">DOANH NGHIỆP</text>
+<text transform="translate(120 520) rotate(-90)" text-anchor="middle" class="laneLabel">UIT</text>
+<text transform="translate(120 805) rotate(-90)" text-anchor="middle" class="laneLabel">SINH VIÊN</text>
+<text transform="translate(120 1090) rotate(-90)" text-anchor="middle" class="laneLabel">HỆ THỐNG</text>
+
+<circle class="event" cx="285" cy="220" r="25"/>
+<rect class="task" x="350" y="155" width="235" height="130"/>
+<foreignObject x="365" y="175" width="205" height="90"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Tạo và gửi tin tuyển dụng</div></foreignObject>
+<path class="flow" d="M310 220 H350"/>
+
+<rect class="task" x="650" y="440" width="235" height="130"/>
+<foreignObject x="665" y="458" width="205" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Kiểm duyệt tin và doanh nghiệp</div></foreignObject>
+<path class="flow" d="M585 220 H615 V505 H650"/>
+
+<rect class="task" x="950" y="725" width="235" height="130"/>
+<foreignObject x="965" y="743" width="205" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Tìm việc, chọn CV và gửi đơn</div></foreignObject>
+<path class="flow" d="M885 505 H920 V790 H950"/>
+
+<rect class="task" x="1250" y="440" width="235" height="130"/>
+<foreignObject x="1265" y="458" width="205" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Kiểm tra hồ sơ và tài liệu</div></foreignObject>
+<path class="flow" d="M1185 790 H1215 V505 H1250"/>
+
+<polygon class="gateway" points="1545,505 1605,445 1665,505 1605,565"/>
+<foreignObject x="1555" y="475" width="100" height="65"><div xmlns="http://www.w3.org/1999/xhtml" class="small">Hồ sơ<br/>đạt?</div></foreignObject>
+<path class="flow" d="M1485 505 H1545"/>
+
+<rect class="task" x="1505" y="725" width="200" height="130"/>
+<foreignObject x="1520" y="743" width="170" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Bổ sung tài liệu theo yêu cầu</div></foreignObject>
+<path class="flow dash" d="M1605 565 V725"/><text x="1620" y="650" class="label">Chưa đạt</text>
+<path class="flow dash" d="M1505 790 H1215 V570"/>
+
+<rect class="task" x="1735" y="155" width="235" height="130"/>
+<foreignObject x="1750" y="171" width="205" height="105"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Sàng lọc, phỏng vấn và gửi offer</div></foreignObject>
+<path class="flow" d="M1665 505 H1700 V220 H1735"/><text x="1680" y="485" class="label">Đạt</text>
+
+<rect class="task" x="1770" y="725" width="200" height="130"/>
+<foreignObject x="1785" y="744" width="170" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Xem PDF offer và phản hồi</div></foreignObject>
+<path class="flow" d="M1850 285 V725"/>
+
+<rect class="task" x="2040" y="440" width="220" height="130"/>
+<foreignObject x="2055" y="458" width="190" height="100"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Xác nhận nơi thực tập</div></foreignObject>
+<path class="flow" d="M1970 790 H2005 V505 H2040"/>
+
+<rect class="task" x="2010" y="1005" width="250" height="140"/>
+<foreignObject x="2025" y="1024" width="220" height="110"><div xmlns="http://www.w3.org/1999/xhtml" class="taskText">Chốt HIRED, đóng đơn khác, tạo placement và thông báo</div></foreignObject>
+<path class="flow" d="M2150 570 V1005"/>
+<circle class="end" cx="2300" cy="1075" r="27"/>
+<path class="flow" d="M2260 1075 H2273"/>
+
+<text x="300" y="1275" class="label">Mọi quyết định quan trọng ghi state history, audit log, idempotency key và notification trong cùng luồng nghiệp vụ.</text>
+</svg>

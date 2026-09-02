@@ -159,6 +159,15 @@ INSERT INTO job_posts (
         'Nắm vững lập trình hướng đối tượng và Git.',
         'Đào tạo fresher.', 8, current_date + 60,
         'PENDING_UIT_REVIEW', now() - interval '1 day', NULL
+    ),
+    (
+        '00000000-0000-4000-8000-000000007006', '00000000-0000-4000-8000-000000001001',
+        '00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000001',
+        'Thực tập sinh Platform Engineering', 'INTERNSHIP', 'HYBRID', 'Quận 7, TP. Hồ Chí Minh',
+        'Tham gia phát triển API nội bộ, tự động hóa quy trình triển khai và theo dõi hệ thống.',
+        'Có nền tảng Java, cơ sở dữ liệu và mong muốn phát triển kỹ năng vận hành sản phẩm.',
+        'Mentor kỹ thuật, phụ cấp và hỗ trợ báo cáo thực tập.', 2, current_date + 30,
+        'CLOSED', now() - interval '45 days', now() - interval '44 days'
     )
 ON CONFLICT DO NOTHING;
 
@@ -167,7 +176,8 @@ INSERT INTO job_post_categories (job_post_id, category_id) VALUES
     ('00000000-0000-4000-8000-000000007002', '00000000-0000-4000-8000-000000006002'),
     ('00000000-0000-4000-8000-000000007003', '00000000-0000-4000-8000-000000006003'),
     ('00000000-0000-4000-8000-000000007005', '00000000-0000-4000-8000-000000006001'),
-    ('00000000-0000-4000-8000-000000007004', '00000000-0000-4000-8000-000000006001')
+    ('00000000-0000-4000-8000-000000007004', '00000000-0000-4000-8000-000000006001'),
+    ('00000000-0000-4000-8000-000000007006', '00000000-0000-4000-8000-000000006001')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO job_post_skills (job_post_id, skill_id, is_required) VALUES
@@ -176,7 +186,9 @@ INSERT INTO job_post_skills (job_post_id, skill_id, is_required) VALUES
     ('00000000-0000-4000-8000-000000007002', '00000000-0000-4000-8000-000000006105', true),
     ('00000000-0000-4000-8000-000000007002', '00000000-0000-4000-8000-000000006103', true),
     ('00000000-0000-4000-8000-000000007003', '00000000-0000-4000-8000-000000006104', true),
-    ('00000000-0000-4000-8000-000000007005', '00000000-0000-4000-8000-000000006101', false)
+    ('00000000-0000-4000-8000-000000007005', '00000000-0000-4000-8000-000000006101', false),
+    ('00000000-0000-4000-8000-000000007006', '00000000-0000-4000-8000-000000006101', true),
+    ('00000000-0000-4000-8000-000000007006', '00000000-0000-4000-8000-000000006103', true)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO job_post_status_history (
@@ -189,7 +201,11 @@ INSERT INTO job_post_status_history (
     ('10000000-0000-4000-8000-000000007007', '00000000-0000-4000-8000-000000007005', '11000000-0000-4000-8000-000000007007', 'DRAFT', 'PENDING_UIT_REVIEW', 'COMPANY', '00000000-0000-4000-8000-000000000103', NULL, NULL, now() - interval '4 days'),
     ('10000000-0000-4000-8000-000000007008', '00000000-0000-4000-8000-000000007005', '11000000-0000-4000-8000-000000007008', 'PENDING_UIT_REVIEW', 'RECRUITING', 'UIT_ADMIN', '00000000-0000-4000-8000-000000000001', NULL, NULL, now() - interval '3 days'),
     ('10000000-0000-4000-8000-000000007004', '00000000-0000-4000-8000-000000007004', '11000000-0000-4000-8000-000000007004', NULL, 'DRAFT', 'COMPANY', '00000000-0000-4000-8000-000000000103', NULL, 'Khởi tạo dữ liệu demo', now() - interval '2 days'),
-    ('10000000-0000-4000-8000-000000007005', '00000000-0000-4000-8000-000000007004', '11000000-0000-4000-8000-000000007005', 'DRAFT', 'PENDING_UIT_REVIEW', 'COMPANY', '00000000-0000-4000-8000-000000000103', NULL, NULL, now() - interval '1 day')
+    ('10000000-0000-4000-8000-000000007005', '00000000-0000-4000-8000-000000007004', '11000000-0000-4000-8000-000000007005', 'DRAFT', 'PENDING_UIT_REVIEW', 'COMPANY', '00000000-0000-4000-8000-000000000103', NULL, NULL, now() - interval '1 day'),
+    ('10000000-0000-4000-8000-000000007009', '00000000-0000-4000-8000-000000007006', '11000000-0000-4000-8000-000000007009', NULL, 'DRAFT', 'COMPANY', '00000000-0000-4000-8000-000000000101', NULL, 'Khởi tạo dữ liệu demo', now() - interval '46 days'),
+    ('10000000-0000-4000-8000-000000007010', '00000000-0000-4000-8000-000000007006', '11000000-0000-4000-8000-000000007010', 'DRAFT', 'PENDING_UIT_REVIEW', 'COMPANY', '00000000-0000-4000-8000-000000000101', NULL, NULL, now() - interval '45 days'),
+    ('10000000-0000-4000-8000-000000007011', '00000000-0000-4000-8000-000000007006', '11000000-0000-4000-8000-000000007011', 'PENDING_UIT_REVIEW', 'RECRUITING', 'UIT_ADMIN', '00000000-0000-4000-8000-000000000001', NULL, NULL, now() - interval '44 days'),
+    ('10000000-0000-4000-8000-000000007012', '00000000-0000-4000-8000-000000007006', '11000000-0000-4000-8000-000000007012', 'RECRUITING', 'CLOSED', 'COMPANY', '00000000-0000-4000-8000-000000000101', 'POSITIONS_FILLED', 'Đã tuyển đủ sinh viên', now() - interval '15 days')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO applications (
@@ -219,8 +235,18 @@ INSERT INTO applications (
         '00000000-0000-4000-8000-000000008005', '00000000-0000-4000-8000-000000002002',
         '00000000-0000-4000-8000-000000007002', 'COMPANY_REVIEWING',
         now() - interval '4 days', now() - interval '4 days', now() - interval '1 day'
+    ),
+    (
+        '00000000-0000-4000-8000-000000008006', '00000000-0000-4000-8000-000000002001',
+        '00000000-0000-4000-8000-000000007006', 'HIRED',
+        now() - interval '40 days', now() - interval '40 days', now() - interval '24 days'
     )
 ON CONFLICT DO NOTHING;
+
+UPDATE applications
+SET accepted_at = now() - interval '27 days',
+    placement_confirmed_at = now() - interval '24 days'
+WHERE id = '00000000-0000-4000-8000-000000008006';
 
 INSERT INTO application_documents (
     id, application_id, source_document_id, document_type, file_name, mime_type,
@@ -230,7 +256,8 @@ INSERT INTO application_documents (
     ('00000000-0000-4000-8000-000000009002', '00000000-0000-4000-8000-000000008002', '00000000-0000-4000-8000-000000005001', 'CV', 'CV_Backend_NguyenMinhKhoa_2026.pdf', 'application/pdf', 421888, 'demo/snapshots/application-8002/cv-v1.pdf', 'demo-checksum-cv-20521067-v1', 1),
     ('00000000-0000-4000-8000-000000009003', '00000000-0000-4000-8000-000000008003', '00000000-0000-4000-8000-000000005001', 'CV', 'CV_Backend_NguyenMinhKhoa_2026.pdf', 'application/pdf', 421888, 'demo/snapshots/application-8003/cv-v1.pdf', 'demo-checksum-cv-20521067-v1', 1),
     ('00000000-0000-4000-8000-000000009004', '00000000-0000-4000-8000-000000008004', '00000000-0000-4000-8000-000000005003', 'CV', 'CV_Data_PhamGiaHuy_2026.pdf', 'application/pdf', 398144, 'demo/snapshots/application-8004/cv-v1.pdf', 'demo-checksum-cv-21520881-v1', 1),
-    ('00000000-0000-4000-8000-000000009005', '00000000-0000-4000-8000-000000008005', '00000000-0000-4000-8000-000000005003', 'CV', 'CV_Data_PhamGiaHuy_2026.pdf', 'application/pdf', 398144, 'demo/snapshots/application-8005/cv-v1.pdf', 'demo-checksum-cv-21520881-v1', 1)
+    ('00000000-0000-4000-8000-000000009005', '00000000-0000-4000-8000-000000008005', '00000000-0000-4000-8000-000000005003', 'CV', 'CV_Data_PhamGiaHuy_2026.pdf', 'application/pdf', 398144, 'demo/snapshots/application-8005/cv-v1.pdf', 'demo-checksum-cv-21520881-v1', 1),
+    ('00000000-0000-4000-8000-000000009006', '00000000-0000-4000-8000-000000008006', '00000000-0000-4000-8000-000000005001', 'CV', 'CV_Backend_NguyenMinhKhoa_2026.pdf', 'application/pdf', 421888, 'demo/snapshots/application-8006/cv-v1.pdf', 'demo-checksum-cv-20521067-v1', 1)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO application_status_history (
@@ -252,7 +279,8 @@ INSERT INTO application_status_history (
     ('20000000-0000-4000-8000-000000008013', '00000000-0000-4000-8000-000000008004', '21000000-0000-4000-8000-000000008013', 'COMPANY_REVIEWING', 'INTERVIEW_INVITED', 'COMPANY', '00000000-0000-4000-8000-000000000101', NULL, NULL, now() - interval '2 hours'),
     ('20000000-0000-4000-8000-000000008014', '00000000-0000-4000-8000-000000008005', '21000000-0000-4000-8000-000000008014', NULL, 'UIT_REVIEWING', 'STUDENT', '00000000-0000-4000-8000-000000000012', NULL, NULL, now() - interval '4 days'),
     ('20000000-0000-4000-8000-000000008015', '00000000-0000-4000-8000-000000008005', '21000000-0000-4000-8000-000000008015', 'UIT_REVIEWING', 'FORWARDED_TO_COMPANY', 'UIT_ADMIN', '00000000-0000-4000-8000-000000000001', NULL, NULL, now() - interval '3 days'),
-    ('20000000-0000-4000-8000-000000008016', '00000000-0000-4000-8000-000000008005', '21000000-0000-4000-8000-000000008016', 'FORWARDED_TO_COMPANY', 'COMPANY_REVIEWING', 'COMPANY', '00000000-0000-4000-8000-000000000103', NULL, NULL, now() - interval '1 day')
+    ('20000000-0000-4000-8000-000000008016', '00000000-0000-4000-8000-000000008005', '21000000-0000-4000-8000-000000008016', 'FORWARDED_TO_COMPANY', 'COMPANY_REVIEWING', 'COMPANY', '00000000-0000-4000-8000-000000000103', NULL, NULL, now() - interval '1 day'),
+    ('20000000-0000-4000-8000-000000008017', '00000000-0000-4000-8000-000000008006', '21000000-0000-4000-8000-000000008017', NULL, 'HIRED', 'UIT_ADMIN', '00000000-0000-4000-8000-000000000001', NULL, 'Dữ liệu demo cho quy trình kế hoạch và nhật ký thực tập', now() - interval '24 days')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO interviews (
@@ -281,6 +309,109 @@ INSERT INTO recruitment_results (
         '00000000-0000-4000-8000-000000000101', 'PASS', now() - interval '2 hours',
         current_date + 30, 'Dữ liệu demo nội bộ; không hiển thị cho sinh viên.'
     )
+ON CONFLICT DO NOTHING;
+
+INSERT INTO recruitment_results (
+    id, application_id, decided_by_user_id, outcome, student_decision, offered_at, responded_at, start_date, internal_note
+) VALUES (
+    '00000000-0000-4000-8000-000000011006', '00000000-0000-4000-8000-000000008006',
+    '00000000-0000-4000-8000-000000000101', 'PASS', 'ACCEPTED', now() - interval '30 days',
+    now() - interval '27 days', current_date - 21, 'Placement demo cho quy trình học thuật.'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO internship_placements (
+    id, application_id, status, version, expected_start_date, actual_start_date,
+    hired_at, started_at, created_at, updated_at
+) VALUES (
+    '00000000-0000-4000-8000-000000013001', '00000000-0000-4000-8000-000000008006',
+    'STARTED', 2, current_date - 21, current_date - 21,
+    now() - interval '24 days', now() - interval '21 days', now() - interval '24 days', now() - interval '21 days'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO internship_placement_history (
+    id, placement_id, command_id, from_status, to_status, actor_type, actor_user_id,
+    effective_date, note, metadata, created_at
+) VALUES
+(
+    '00000000-0000-4000-8000-000000014001', '00000000-0000-4000-8000-000000013001',
+    '00000000-0000-4000-8000-000000014101', NULL, 'HIRED', 'UIT_ADMIN',
+    '00000000-0000-4000-8000-000000000001', current_date - 21,
+    'Khởi tạo placement demo cho quy trình học thuật',
+    jsonb_build_object('applicationId', '00000000-0000-4000-8000-000000008006', 'source', 'DEVELOPMENT_SEED'),
+    now() - interval '24 days'
+),
+(
+    '00000000-0000-4000-8000-000000014002', '00000000-0000-4000-8000-000000013001',
+    '00000000-0000-4000-8000-000000014102', 'HIRED', 'STARTED', 'UIT_ADMIN',
+    '00000000-0000-4000-8000-000000000001', current_date - 21,
+    'Sinh viên đã bắt đầu thực tập tại doanh nghiệp',
+    jsonb_build_object('applicationId', '00000000-0000-4000-8000-000000008006', 'source', 'DEVELOPMENT_SEED'),
+    now() - interval '21 days'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO internship_weekly_logs (
+    id, placement_id, week_number, period_start, period_end, due_date, status, version,
+    current_submission_no, work_summary, outcomes, difficulties, next_plan,
+    submitted_at, company_reviewed_at, created_at, updated_at
+) VALUES
+(
+    '00000000-0000-4000-8000-000000015001', '00000000-0000-4000-8000-000000013001',
+    1, current_date - 21, current_date - 15, current_date - 13, 'COMPANY_CONFIRMED', 3, 1,
+    'Làm quen quy trình phát triển, thiết lập môi trường và hoàn thành API kiểm tra sức khỏe dịch vụ.',
+    'Chạy được dự án tại máy cá nhân, hiểu cấu trúc module và quy trình review mã nguồn.',
+    'Tài liệu môi trường cũ còn thiếu một số biến cấu hình.',
+    'Hoàn thiện API quản lý cấu hình và bổ sung kiểm thử đơn vị.',
+    now() - interval '14 days', now() - interval '13 days', now() - interval '21 days', now() - interval '13 days'
+),
+(
+    '00000000-0000-4000-8000-000000015002', '00000000-0000-4000-8000-000000013001',
+    2, current_date - 14, current_date - 8, current_date - 6, 'DRAFT', 1, 0,
+    'Phát triển API quản lý cấu hình và xử lý phản hồi từ lần review đầu tiên.',
+    'Hoàn thành các endpoint chính và bổ sung kiểm tra dữ liệu đầu vào.',
+    'Chưa hoàn tất một số trường hợp kiểm thử tích hợp.',
+    'Hoàn thiện kiểm thử tích hợp và chuẩn bị bản demo sprint.',
+    NULL, NULL, now() - interval '14 days', now() - interval '8 days'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO internship_weekly_log_submissions (
+    id, weekly_log_id, submission_no, submitted_by_user_id, snapshot, created_at
+) VALUES (
+    '00000000-0000-4000-8000-000000016001', '00000000-0000-4000-8000-000000015001', 1,
+    '00000000-0000-4000-8000-000000000011',
+    jsonb_build_object(
+        'weekNumber', 1, 'periodStart', (current_date - 21)::text, 'periodEnd', (current_date - 15)::text,
+        'dueDate', (current_date - 13)::text,
+        'workSummary', 'Làm quen quy trình phát triển, thiết lập môi trường và hoàn thành API kiểm tra sức khỏe dịch vụ.',
+        'outcomes', 'Chạy được dự án tại máy cá nhân, hiểu cấu trúc module và quy trình review mã nguồn.',
+        'difficulties', 'Tài liệu môi trường cũ còn thiếu một số biến cấu hình.',
+        'nextPlan', 'Hoàn thiện API quản lý cấu hình và bổ sung kiểm thử đơn vị.'
+    ),
+    now() - interval '14 days'
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO internship_weekly_log_history (
+    id, weekly_log_id, command_id, action, from_status, to_status, actor_type,
+    actor_user_id, reason_code, note, metadata, created_at
+) VALUES
+(
+    '00000000-0000-4000-8000-000000017001', '00000000-0000-4000-8000-000000015001',
+    '00000000-0000-4000-8000-000000017101', 'SUBMIT', 'DRAFT', 'SUBMITTED', 'STUDENT',
+    '00000000-0000-4000-8000-000000000011', NULL, 'Sinh viên nộp nhật ký tuần 1.',
+    jsonb_build_object('placementId', '00000000-0000-4000-8000-000000013001', 'weekNumber', 1, 'submissionNo', 1),
+    now() - interval '14 days'
+),
+(
+    '00000000-0000-4000-8000-000000017002', '00000000-0000-4000-8000-000000015001',
+    '00000000-0000-4000-8000-000000017102', 'COMPANY_CONFIRM', 'SUBMITTED', 'COMPANY_CONFIRMED', 'COMPANY',
+    '00000000-0000-4000-8000-000000000101', 'ACCEPTED', 'Nội dung rõ ràng, đúng tiến độ tuần đầu.',
+    jsonb_build_object('placementId', '00000000-0000-4000-8000-000000013001', 'weekNumber', 1, 'submissionNo', 1),
+    now() - interval '13 days'
+)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO notifications (

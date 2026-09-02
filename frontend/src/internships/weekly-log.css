@@ -1,0 +1,190 @@
+.weekly-log-panel { margin-top: 20px; }
+.weekly-log-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.weekly-log-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 58px; padding: 10px 13px; border: 1px solid var(--border-color, #dce3ec); border-radius: 10px; background: #f8fafc; }
+.weekly-log-summary span { color: #64748b; font-size: 12px; font-weight: 600; }
+.weekly-log-summary strong { color: #172033; font-size: 21px; }
+.weekly-log-summary .needs-attention { border-color: #fed7aa; background: #fff7ed; }
+.weekly-log-summary .needs-attention strong { color: #c2410c; }
+.weekly-global-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; }
+.weekly-global-summary div { display: grid; gap: 2px; }
+.weekly-global-summary small { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.weekly-global-summary strong { color: #172033; font-size: 13px; }
+.weekly-global-summary > span { display: inline-flex; align-items: center; gap: 6px; color: #9a3412; font-size: 12px; font-weight: 700; }
+.weekly-global-summary svg { font-size: 17px; }
+.weekly-log-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
+.weekly-log-toolbar p { flex: 1; margin: 0; color: #64748b; font-size: 13px; line-height: 1.5; }
+.weekly-log-toolbar button { white-space: nowrap; }
+.weekly-log-workspace { display: grid; grid-template-columns: minmax(210px, .62fr) minmax(0, 1.45fr); gap: 16px; align-items: start; }
+.weekly-log-list { display: grid; gap: 7px; max-height: 560px; overflow-y: auto; }
+.weekly-log-list button { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 9px; width: 100%; padding: 10px; border: 1px solid var(--border-color, #dce3ec); border-radius: 10px; background: #fff; color: #172033; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.weekly-log-list button:hover { border-color: #94a3b8; background: #f8fafc; }
+.weekly-log-list button.selected { border-color: #64748b; background: #f8fafc; box-shadow: inset 3px 0 #334155; }
+.weekly-log-list .week-number { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #e2e8f0; color: #334155; font-size: 12px; font-weight: 800; }
+.weekly-log-list button > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
+.weekly-log-list strong { font-size: 13px; }
+.weekly-log-list small { overflow: hidden; color: #64748b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.weekly-log-list .status-pill { grid-column: 2; justify-self: start; }
+.weekly-log-detail { min-width: 0; padding: 16px; border: 1px solid var(--border-color, #dce3ec); border-radius: 12px; background: #fff; }
+.weekly-log-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 13px; border-bottom: 1px solid #e2e8f0; }
+.weekly-log-detail h3 { margin: 5px 0 0; color: #172033; font-size: 17px; }
+.weekly-eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.weekly-eyebrow svg { font-size: 16px; }
+.weekly-log-state { display: grid; justify-items: end; gap: 5px; }
+.weekly-log-state small { color: #64748b; font-size: 10px; white-space: nowrap; }
+.weekly-revision-note { display: flex; gap: 10px; margin-top: 13px; padding: 11px 12px; border: 1px solid #fed7aa; border-radius: 9px; background: #fff7ed; color: #9a3412; }
+.weekly-revision-note > svg { flex: 0 0 auto; margin-top: 1px; font-size: 19px; }
+.weekly-revision-note strong { font-size: 12px; }
+.weekly-revision-note p { margin: 3px 0 0; color: #7c2d12; font-size: 12px; line-height: 1.55; }
+.weekly-log-form, .weekly-log-readonly { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 15px; }
+.weekly-log-form label { display: grid; gap: 6px; }
+.weekly-log-form label > span, .weekly-log-readonly small { color: #475569; font-size: 11px; font-weight: 700; }
+.weekly-log-form textarea { width: 100%; min-height: 112px; resize: vertical; padding: 10px 11px; border: 1px solid #cbd5e1; border-radius: 9px; outline: 0; background: #fff; color: #172033; font: inherit; font-size: 12px; line-height: 1.55; }
+.weekly-log-form textarea:focus { border-color: #64748b; box-shadow: 0 0 0 3px rgba(100, 116, 139, .12); }
+.weekly-log-readonly > div { min-width: 0; padding: 11px 12px; border-radius: 9px; background: #f8fafc; }
+.weekly-log-readonly p { margin: 5px 0 0; color: #334155; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+.weekly-log-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.weekly-log-history-section { margin-top: 17px; padding-top: 15px; border-top: 1px solid #e2e8f0; }
+.weekly-log-history-section h4 { margin: 0 0 11px; color: #334155; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.weekly-log-history { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.weekly-log-history li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; }
+.weekly-log-history li > span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #ecfdf5; color: #047857; }
+.weekly-log-history li > span svg { font-size: 14px; }
+.weekly-log-history li > div { display: grid; gap: 2px; }
+.weekly-log-history strong { color: #334155; font-size: 12px; }
+.weekly-log-history small { color: #64748b; font-size: 10px; }
+.weekly-log-history blockquote { margin: 5px 0 0; padding: 7px 9px; border-left: 2px solid #cbd5e1; background: #f8fafc; color: #475569; font-size: 11px; line-height: 1.5; }
+.weekly-log-error { margin-bottom: 12px; }
+.weekly-log-modal { max-width: 500px; }
+
+@media (max-width: 1120px) {
+  .weekly-log-workspace { grid-template-columns: 1fr; }
+  .weekly-log-list { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
+}
+
+@media (max-width: 760px) {
+  .weekly-log-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .weekly-global-summary, .weekly-log-toolbar, .weekly-log-detail > header { align-items: stretch; flex-direction: column; }
+  .weekly-log-toolbar { display: grid; }
+  .weekly-log-toolbar p { margin-bottom: 4px; }
+  .weekly-log-list, .weekly-log-form, .weekly-log-readonly { grid-template-columns: 1fr; }
+  .weekly-log-state { justify-items: start; }
+  .weekly-log-actions { flex-direction: column; }
+}
+
+/* Student journey canvas — selected graduation-thesis direction */
+.student-weekly-panel { min-width:0; margin-top:-12px; background:#fff; }
+.student-journey-ribbon { position:relative; z-index:4; min-height:168px; display:grid; grid-template-columns:minmax(340px,.58fr) minmax(0,1.42fr); color:#fff; filter:drop-shadow(0 12px 18px rgba(5,45,121,.18)); }
+.student-journey-phases { position:relative; min-width:0; margin:0; padding:38px 56px 28px 34px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; background:#0a3d9b; border-radius:0 0 28px 0; overflow:hidden; }
+.student-journey-phases::before { content:""; position:absolute; top:58px; left:68px; right:84px; height:1px; background:rgba(255,255,255,.42); }
+.student-journey-phases button { position:relative; z-index:1; min-width:0; padding:0 4px; display:grid; justify-items:center; gap:10px; border:0; color:rgba(255,255,255,.52); background:transparent; font:inherit; cursor:pointer; }
+.student-journey-phases button:disabled { cursor:not-allowed; }
+.student-journey-phases button > span { width:34px; height:34px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.34); border-radius:50%; background:#0a3d9b; font-size:11px; font-weight:800; }
+.student-journey-phases button > small { font-size:10px; font-weight:650; line-height:1.5; text-align:center; }
+.student-journey-phases button.done,.student-journey-phases button.active { color:#fff; }
+.student-journey-phases button.done > span { border-color:rgba(255,255,255,.62); }
+.student-journey-phases button.active > span { color:#0b55d6; border:4px solid rgba(255,255,255,.42); background:#fff; box-shadow:0 0 0 4px rgba(255,255,255,.12); }
+.student-journey-main { position:relative; min-width:0; margin-left:-36px; padding:30px 34px 26px 94px; display:grid; grid-template-columns:minmax(0,1fr) 170px; grid-template-rows:auto auto; align-content:center; gap:20px 28px; background:linear-gradient(118deg,#0d4bc7 0%,#0344b8 58%,#063b9b 100%); border-radius:74px 0 38px 4px; box-shadow:inset 0 1px 0 rgba(255,255,255,.12); }
+.student-journey-main::after { content:""; position:absolute; right:0; bottom:0; width:38%; height:1px; background:rgba(255,255,255,.16); }
+.student-journey-fold { position:absolute; z-index:-1; left:-8px; bottom:-17px; width:115px; height:42px; border-radius:0 0 52px 12px; background:#073486; transform:rotate(6deg); box-shadow:0 8px 15px rgba(4,35,94,.25); }
+.student-week-identity { min-width:0; display:flex; align-items:center; gap:22px; }
+.student-week-identity > strong { flex:0 0 auto; color:#fff; font-size:43px; line-height:1; letter-spacing:-.06em; }
+.student-week-identity > strong small { margin-left:5px; font-size:18px; letter-spacing:-.02em; }
+.student-week-identity > div { min-width:0; display:flex; align-items:baseline; gap:8px; }
+.student-week-identity span { color:#fff; font-size:12px; font-weight:800; white-space:nowrap; }
+.student-week-identity b { overflow:hidden; color:rgba(255,255,255,.9); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.student-week-deadline { min-width:0; display:flex; align-items:flex-start; gap:9px; color:#fff; }
+.student-week-deadline > span,.student-week-deadline strong,.student-week-deadline small { display:block; }
+.student-week-deadline > span { font-size:10px; }
+.student-week-deadline strong { margin-top:5px; color:#ff6e72; font-size:14px; }
+.student-week-deadline small { margin-top:5px; color:rgba(255,255,255,.78); font-size:9px; }
+.student-week-track.weekly-log-list { position:relative; grid-column:1 / -1; width:min(100%,620px); max-height:none; padding:0; display:grid; grid-template-columns:repeat(12,minmax(18px,1fr)); gap:0; overflow:visible; }
+.student-week-track.weekly-log-list::before { content:""; position:absolute; top:50%; right:8px; left:8px; height:2px; background:rgba(255,255,255,.5); transform:translateY(-50%); }
+.student-week-track.weekly-log-list button { position:relative; z-index:1; width:auto; min-width:0; min-height:20px; padding:0; display:grid; grid-template-columns:1fr; place-items:center; border:0; border-radius:0; background:transparent; box-shadow:none; color:rgba(255,255,255,.5); cursor:pointer; }
+.student-week-track.weekly-log-list button:hover,.student-week-track.weekly-log-list button.selected { border:0; background:transparent; box-shadow:none; }
+.student-week-track.weekly-log-list button:disabled { cursor:default; }
+.student-week-track.weekly-log-list button > span:first-child { width:19px; height:19px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.38); border-radius:50%; background:#0a42a9; font-size:8px; font-weight:800; }
+.student-week-track.weekly-log-list button.completed > span:first-child { color:#0b55d6; border-color:#fff; background:#fff; }
+.student-week-track.weekly-log-list button.current > span:first-child { width:23px; height:23px; color:#0b55d6; border:4px solid rgba(255,255,255,.36); background:#fff; box-shadow:0 0 0 2px #fff; }
+.student-journal-toolbar { min-height:44px; margin:8px 32px 0; display:flex; align-items:center; justify-content:flex-end; gap:20px; }
+.student-journal-toolbar > div:first-child { display:none; }
+.student-journal-toolbar > div:first-child span,.student-journal-toolbar > div:first-child strong { display:block; }
+.student-journal-toolbar > div:first-child span { margin-bottom:4px; color:#0a63e8; font-size:9px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
+.student-journal-toolbar > div:first-child strong { color:#12233f; font-size:16px; }
+.student-journal-toolbar-actions { display:flex; align-items:center; gap:8px; }
+.student-refresh-button { width:36px; height:36px; display:grid; place-items:center; border:1px solid #d5dfeb; border-radius:8px; color:#526782; background:#fff; }
+.student-refresh-button:hover { color:#0968e8; border-color:#9ec4f4; background:#f4f9ff; }
+.student-weekly-empty { margin:20px 32px; padding:24px; display:grid; justify-items:center; gap:12px; border:1px dashed #b9cce5; border-radius:14px; background:#f8fbff; }
+.student-weekly-empty .empty-hint { padding:20px; }
+.weekly-log-detail.student-weekly-detail { margin:0 32px; padding:0; border:0; border-radius:0; background:#fff; }
+.student-weekly-detail > .student-weekly-detail-header { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); border:0; white-space:nowrap; }
+.student-week-nav-buttons { display:flex; gap:6px; }
+.student-week-nav-buttons button { width:31px; height:31px; display:grid; place-items:center; border:1px solid #d8e1ec; border-radius:7px; color:#426080; background:#fff; }
+.student-week-nav-buttons button:hover:not(:disabled) { color:#0968e8; border-color:#9dc2ef; background:#f4f9ff; }
+.student-week-nav-buttons button:disabled { opacity:.35; cursor:not-allowed; }
+.student-weekly-state { display:flex; align-items:center; gap:10px; }
+.student-weekly-state > small { color:#74839a; font-size:9px; }
+.journey-log-fields.weekly-log-form { margin:0; display:grid; grid-template-columns:1fr; gap:0; }
+.journey-log-field { min-width:0; min-height:114px; padding:16px 0; display:grid; grid-template-columns:45px 52px minmax(190px,230px) minmax(0,1fr); align-items:start; gap:12px; border-bottom:1px solid #dce5ef; }
+.journey-log-field:last-child { border-bottom:0; }
+.journey-field-number { padding-top:7px; color:#0968e8; font-size:27px; font-weight:850; letter-spacing:-.055em; }
+.journey-field-icon { width:45px; height:45px; display:grid; place-items:center; border-radius:50%; color:#0968e8; background:#edf5ff; }
+.journey-field-copy { min-width:0; padding-top:4px; }
+.journey-field-copy strong,.journey-field-copy small { display:block; }
+.journey-field-copy strong { color:#14233e; font-size:12px; line-height:1.4; }
+.journey-field-copy small { margin-top:6px; color:#60738d; font-size:9px; line-height:1.55; }
+.journey-field-control { position:relative; min-width:0; display:block; }
+.journey-field-control textarea { width:100%; min-height:82px; padding:13px 14px 25px; resize:vertical; border:1px solid #ccd8e7; border-radius:9px; outline:0; color:#17263e; background:#fff; font:inherit; font-size:11px; line-height:1.55; transition:border-color .15s ease,box-shadow .15s ease,background .15s ease; }
+.journey-field-control textarea:hover { border-color:#aac0dc; }
+.journey-field-control textarea:focus { border-color:#0968e8; background:#fbfdff; box-shadow:0 0 0 4px rgba(9,104,232,.1); }
+.journey-field-control > small { position:absolute; right:11px; bottom:9px; color:#71819a; font-size:8px; }
+.journey-field-control.readonly { min-height:82px; padding:13px 14px; border-radius:9px; color:#35465e; background:#f6f9fd; font-size:10px; line-height:1.55; white-space:pre-wrap; }
+.student-journal-footer { min-height:90px; padding:18px 0 0; display:grid; grid-template-columns:220px minmax(260px,1fr) auto; align-items:stretch; gap:14px; border-top:1px solid #dce5ef; }
+.student-journal-help,.student-journal-tip { min-width:0; min-height:70px; padding:12px 14px; display:flex; align-items:flex-start; gap:10px; border:1px solid #d7e2ef; border-radius:10px; color:#0968e8; background:#fff; }
+.student-journal-tip { background:#f4f8ff; }
+.student-journal-help > svg,.student-journal-tip > svg { flex:0 0 auto; }
+.student-journal-help strong,.student-journal-help small,.student-journal-tip strong,.student-journal-tip small { display:block; }
+.student-journal-help strong,.student-journal-tip strong { font-size:10px; }
+.student-journal-help small,.student-journal-tip small { margin-top:5px; color:#657790; font-size:8px; line-height:1.45; }
+.student-weekly-actions.weekly-log-actions { margin:0; align-self:stretch; display:flex; align-items:center; gap:9px; }
+.student-weekly-actions .secondary-button,.student-weekly-actions .primary-button { min-height:52px; padding-inline:20px; white-space:nowrap; }
+.student-log-history { margin:20px 0 0; border:1px solid #dce5ef; border-radius:10px; background:#fff; }
+.student-log-history summary { min-height:46px; padding:0 14px; display:flex; align-items:center; gap:8px; color:#334a68; font-size:10px; font-weight:750; cursor:pointer; list-style:none; }
+.student-log-history summary::-webkit-details-marker { display:none; }
+.student-log-history summary span { margin-left:auto; color:#718198; font-size:9px; font-weight:600; }
+.student-log-history > div { padding:14px; border-top:1px solid #dce5ef; }
+
+@media (max-width: 1100px) {
+  .student-journey-ribbon { grid-template-columns:minmax(300px,.52fr) minmax(0,1.48fr); }
+  .student-journey-phases { padding-inline:24px 48px; }
+  .student-journey-main { padding-left:78px; }
+  .student-week-identity { gap:14px; }
+  .student-week-identity > div { display:grid; gap:3px; }
+  .journey-log-field { grid-template-columns:40px 48px minmax(170px,200px) minmax(0,1fr); gap:10px; }
+  .student-journal-footer { grid-template-columns:1fr 1fr; }
+  .student-weekly-actions { grid-column:1 / -1; justify-content:flex-end; }
+}
+
+@media (max-width: 900px) {
+  .student-weekly-panel { margin-top:8px; }
+  .student-journey-ribbon { margin-inline:14px; grid-template-columns:1fr; filter:drop-shadow(0 9px 15px rgba(5,45,121,.16)); }
+  .student-journey-phases { min-height:112px; padding:20px 28px; border-radius:24px 24px 0 0; }
+  .student-journey-phases::before { top:40px; }
+  .student-journey-main { min-height:148px; margin-left:0; padding:24px; border-radius:0 0 24px 24px; }
+  .student-journey-fold { display:none; }
+  .student-journal-toolbar,.weekly-log-detail.student-weekly-detail { margin-inline:14px; }
+}
+
+@media (max-width: 700px) {
+  .student-journey-main { grid-template-columns:1fr auto; gap:15px; }
+  .student-week-identity > strong { font-size:34px; }
+  .student-week-deadline { justify-self:end; }
+  .student-week-track.weekly-log-list { width:100%; overflow-x:auto; grid-template-columns:repeat(12,34px); scrollbar-width:thin; }
+  .student-journal-toolbar { align-items:flex-start; padding-block:14px; }
+  .student-journal-toolbar-actions { flex-direction:column-reverse; align-items:flex-end; }
+  .journey-log-field { grid-template-columns:36px 44px minmax(0,1fr); }
+  .journey-field-number { font-size:23px; }
+  .journey-field-control { grid-column:2 / -1; }
+  .student-journal-footer { grid-template-columns:1fr; }
+  .student-weekly-actions { grid-column:auto; display:grid; grid-template-columns:1fr 1fr; }
+  .student-weekly-actions .secondary-button,.student-weekly-actions .primary-button { width:100%; }
+}

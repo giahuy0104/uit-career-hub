@@ -29,6 +29,12 @@ stateDiagram-v2
 - Lịch sử lưu `from_status`, `to_status`, actor, ngày hiệu lực, ghi chú và command id; không có API sửa/xóa.
 - Mỗi transition ghi audit và notification cho sinh viên cùng tất cả recruiter đang hoạt động của doanh nghiệp.
 - Các application khác đã được đóng ở transaction confirm placement trước đó không bị tác động bởi lifecycle này.
+- Quy trình học thuật của kế hoạch tham chiếu trực tiếp placement này và được mô tả tại
+  [`internship-plan-workflow.md`](./internship-plan-workflow.md). Trong rollout đầu, trạng thái kế hoạch chưa chặn
+  transition `HIRED → STARTED` để giữ tương thích với dữ liệu hiện có.
+- Khi placement ở `STARTED`, sinh viên báo cáo tiến độ theo tuần và doanh nghiệp xác nhận theo quy trình
+  [`internship-weekly-log-workflow.md`](./internship-weekly-log-workflow.md). Khi placement chuyển `COMPLETED`,
+  nhật ký trở thành dữ liệu theo dõi chỉ đọc và không được tạo thêm.
 
 ## Phiếu đánh giá sau hoàn thành
 
@@ -51,3 +57,6 @@ Khi placement ở `COMPLETED`, mỗi bên được gửi tối đa một phiếu
 - `GET/POST /api/v1/companies/me/applications/{applicationId}/internship-evaluations`: Company xem/gửi phiếu thuộc đúng doanh nghiệp.
 - Portal UIT **Theo dõi kết quả** dùng các API trên và không hiển thị CTA ngoài `availableActions` từ backend.
 - Portal UIT hiển thị cả hai phiếu trong placement; portal Student và Company chỉ mở form khi backend trả `canSubmit=true`.
+- API và UI lập/duyệt kế hoạch dùng nhóm `/student/internships`, `/company/internships` và
+  `/uit/internship-supervision`; mọi CTA lấy từ `availableActions` do backend tính theo actor và trạng thái.
+- Cùng nhóm route trên cung cấp `/weekly-logs`; UIT có thêm `/summary` và `/overdue` để giám sát tiến độ toàn trường.

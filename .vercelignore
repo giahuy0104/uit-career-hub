@@ -1,0 +1,19 @@
+# The linked Vercel project builds from /frontend. Keep repository-local
+# databases, reports, documents, archives, environment files, and artifacts
+# out of the deployment upload.
+*
+!frontend
+!frontend/**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+
+frontend/.env*
+!frontend/.env.example
+frontend/.vercel
+frontend/node_modules
+frontend/dist
+frontend/qa
+frontend/tests
+frontend/design-qa.md

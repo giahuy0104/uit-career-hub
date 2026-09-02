@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.4.0
-  description: Contract skeleton cho happy flow MVP của một trường UIT.
+  version: 1.6.0
+  description: Contract cho happy flow tuyển dụng, kế hoạch và nhật ký thực tập hằng tuần của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
     description: Local development
@@ -1815,6 +1815,428 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /student/internships:
+    get:
+      tags: [Placements]
+      operationId: listStudentInternships
+      summary: Sinh viên xem các kỳ thực tập thuộc chính mình và trạng thái kế hoạch
+      responses:
+        '200':
+          description: Danh sách kỳ thực tập của sinh viên
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanListEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /student/internships/{placementId}/plan:
+    get:
+      tags: [Placements]
+      operationId: getStudentInternshipPlan
+      summary: Sinh viên xem kế hoạch và lịch sử duyệt của kỳ thực tập
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      responses:
+        '200':
+          description: Chi tiết kỳ thực tập và kế hoạch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Placements]
+      operationId: saveStudentInternshipPlan
+      summary: Tạo hoặc cập nhật bản nháp kế hoạch thực tập
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipPlanSaveRequest' }
+      responses:
+        '200':
+          description: Đã lưu bản nháp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /student/internships/{placementId}/plan/submit:
+    post:
+      tags: [Placements]
+      operationId: submitStudentInternshipPlan
+      summary: Sinh viên nộp hoặc nộp lại kế hoạch cho bên đang chờ duyệt
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipPlanSubmitRequest' }
+      responses:
+        '200':
+          description: Đã tạo snapshot và chuyển kế hoạch sang hàng chờ duyệt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /company/internships:
+    get:
+      tags: [Placements]
+      operationId: listCompanyInternships
+      summary: Doanh nghiệp xem các kỳ thực tập thuộc doanh nghiệp
+      responses:
+        '200':
+          description: Danh sách ưu tiên các kế hoạch đang chờ doanh nghiệp duyệt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanListEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /company/internships/{placementId}:
+    get:
+      tags: [Placements]
+      operationId: getCompanyInternshipPlan
+      summary: Doanh nghiệp xem kế hoạch thuộc chính mình
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      responses:
+        '200':
+          description: Chi tiết kỳ thực tập và kế hoạch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /company/internships/{placementId}/plan/confirm:
+    post:
+      tags: [Placements]
+      operationId: confirmCompanyInternshipPlan
+      summary: Doanh nghiệp xác nhận kế hoạch để chuyển UIT duyệt
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipPlanReviewRequest' }
+      responses:
+        '200':
+          description: Kế hoạch chuyển sang chờ UIT duyệt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /company/internships/{placementId}/plan/request-revision:
+    post:
+      tags: [Placements]
+      operationId: requestCompanyInternshipPlanRevision
+      summary: Doanh nghiệp trả kế hoạch cho sinh viên chỉnh sửa
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipPlanRevisionRequest' }
+      responses:
+        '200':
+          description: Kế hoạch chuyển sang yêu cầu sinh viên sửa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /uit/internship-supervision:
+    get:
+      tags: [Placements]
+      operationId: listUitInternshipSupervision
+      summary: UIT theo dõi kế hoạch học thuật của toàn bộ kỳ thực tập
+      responses:
+        '200':
+          description: Danh sách ưu tiên các kế hoạch đang chờ UIT duyệt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanListEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /uit/internship-supervision/{placementId}:
+    get:
+      tags: [Placements]
+      operationId: getUitInternshipPlan
+      summary: UIT xem chi tiết kế hoạch và toàn bộ lịch sử duyệt
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      responses:
+        '200':
+          description: Chi tiết kỳ thực tập và kế hoạch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /uit/internship-supervision/{placementId}/plan/approve:
+    post:
+      tags: [Placements]
+      operationId: approveUitInternshipPlan
+      summary: UIT phê duyệt cuối kế hoạch thực tập
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipPlanReviewRequest' }
+      responses:
+        '200':
+          description: Kế hoạch đã được UIT phê duyệt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /uit/internship-supervision/{placementId}/plan/request-revision:
+    post:
+      tags: [Placements]
+      operationId: requestUitInternshipPlanRevision
+      summary: UIT trả kế hoạch cho sinh viên chỉnh sửa
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipPlanRevisionRequest' }
+      responses:
+        '200':
+          description: Kế hoạch chuyển sang yêu cầu sinh viên sửa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipPlanViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /student/internships/{placementId}/weekly-logs:
+    get:
+      tags: [Placements]
+      operationId: listStudentInternshipWeeklyLogs
+      summary: Sinh viên xem toàn bộ nhật ký hằng tuần của kỳ thực tập thuộc chính mình
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      responses:
+        '200':
+          description: Nhật ký, tiến độ xác nhận và tuần có thể tạo tiếp theo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Placements]
+      operationId: createStudentInternshipWeeklyLog
+      summary: Sinh viên tạo nhật ký cho tuần kế tiếp của kỳ thực tập đang diễn ra
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipWeeklyLogSaveRequest' }
+      responses:
+        '200':
+          description: Đã tạo bản nháp nhật ký theo lịch tính từ ngày bắt đầu thực tế
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /student/internships/{placementId}/weekly-logs/{logId}:
+    put:
+      tags: [Placements]
+      operationId: saveStudentInternshipWeeklyLog
+      summary: Sinh viên lưu nội dung nhật ký đang ở bản nháp hoặc được yêu cầu sửa
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/WeeklyLogId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipWeeklyLogSaveRequest' }
+      responses:
+        '200':
+          description: Đã lưu nhật ký và tăng version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /student/internships/{placementId}/weekly-logs/{logId}/submit:
+    post:
+      tags: [Placements]
+      operationId: submitStudentInternshipWeeklyLog
+      summary: Sinh viên nộp hoặc nộp lại nhật ký cho doanh nghiệp xác nhận
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/WeeklyLogId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipWeeklyLogSubmitRequest' }
+      responses:
+        '200':
+          description: Đã tạo snapshot bất biến và chuyển nhật ký sang chờ doanh nghiệp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /company/internships/{placementId}/weekly-logs:
+    get:
+      tags: [Placements]
+      operationId: listCompanyInternshipWeeklyLogs
+      summary: Doanh nghiệp xem nhật ký của sinh viên thực tập thuộc chính doanh nghiệp
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      responses:
+        '200':
+          description: Nhật ký và các thao tác xác nhận đang khả dụng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /company/internships/{placementId}/weekly-logs/{logId}/confirm:
+    post:
+      tags: [Placements]
+      operationId: confirmCompanyInternshipWeeklyLog
+      summary: Doanh nghiệp xác nhận nhật ký đã nộp
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/WeeklyLogId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipWeeklyLogReviewRequest' }
+      responses:
+        '200':
+          description: Nhật ký đã được doanh nghiệp xác nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /company/internships/{placementId}/weekly-logs/{logId}/request-revision:
+    post:
+      tags: [Placements]
+      operationId: requestCompanyInternshipWeeklyLogRevision
+      summary: Doanh nghiệp yêu cầu sinh viên chỉnh sửa nhật ký
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+        - $ref: '#/components/parameters/WeeklyLogId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternshipWeeklyLogRevisionRequest' }
+      responses:
+        '200':
+          description: Nhật ký đã được trả về kèm lý do chỉnh sửa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /uit/internship-supervision/{placementId}/weekly-logs:
+    get:
+      tags: [Placements]
+      operationId: listUitInternshipWeeklyLogs
+      summary: UIT xem nhật ký và lịch sử xác nhận của một kỳ thực tập
+      parameters:
+        - $ref: '#/components/parameters/PlacementId'
+      responses:
+        '200':
+          description: Dữ liệu giám sát chỉ đọc
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogViewEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /uit/internship-supervision/summary:
+    get:
+      tags: [Placements]
+      operationId: summarizeUitInternshipWeeklyLogs
+      summary: UIT xem số liệu tổng hợp về tiến độ nhật ký thực tập
+      responses:
+        '200':
+          description: Số kỳ đang diễn ra và số nhật ký theo trạng thái
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogGlobalSummaryEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /uit/internship-supervision/overdue:
+    get:
+      tags: [Placements]
+      operationId: listUitOverdueInternshipWeeklyLogs
+      summary: UIT xem các nhật ký chưa hoàn thành đã quá hạn tính tại thời điểm truy vấn
+      responses:
+        '200':
+          description: Danh sách nhật ký quá hạn, sắp theo hạn sớm nhất
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InternshipWeeklyLogOverdueEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /applications/{applicationId}/internship-evaluations:
     get:
       tags: [Placements]
@@ -2101,6 +2523,11 @@ components:
       schema: { type: string, format: uuid }
     PlacementId:
       name: placementId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WeeklyLogId:
+      name: logId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3316,6 +3743,396 @@ components:
         effectiveDate: { type: string, format: date }
         note: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }
+    InternshipPlanStatus:
+      type: string
+      enum:
+        - DRAFT
+        - PENDING_COMPANY_REVIEW
+        - COMPANY_REVISION_REQUIRED
+        - PENDING_UIT_REVIEW
+        - UIT_REVISION_REQUIRED
+        - APPROVED
+        - CANCELLED
+    InternshipPlanSaveRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion: { type: [integer, 'null'], minimum: 1 }
+        title: { type: [string, 'null'], maxLength: 200 }
+        department: { type: [string, 'null'], maxLength: 200 }
+        companySupervisorName: { type: [string, 'null'], maxLength: 200 }
+        companySupervisorEmail: { type: [string, 'null'], format: email, maxLength: 320 }
+        objectives: { type: [string, 'null'], maxLength: 4000 }
+        expectedTasks: { type: [string, 'null'], maxLength: 6000 }
+        expectedSkills: { type: [string, 'null'], maxLength: 4000 }
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+    InternshipPlanSubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+    InternshipPlanReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reasonCode: { type: [string, 'null'], maxLength: 80 }
+        note: { type: [string, 'null'], maxLength: 2000 }
+    InternshipPlanRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, reasonCode, note]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reasonCode: { type: string, minLength: 1, maxLength: 80 }
+        note: { type: string, minLength: 5, maxLength: 2000 }
+    InternshipPlanHistory:
+      type: object
+      required: [id, action, fromStatus, toStatus, actorType, actorUserId, actorName, reasonCode, note, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        action:
+          type: string
+          enum: [SUBMIT, COMPANY_CONFIRM, COMPANY_REQUEST_REVISION, UIT_APPROVE, UIT_REQUEST_REVISION, CANCEL]
+        fromStatus:
+          oneOf:
+            - { $ref: '#/components/schemas/InternshipPlanStatus' }
+            - { type: 'null' }
+        toStatus: { $ref: '#/components/schemas/InternshipPlanStatus' }
+        actorType: { type: string, enum: [STUDENT, COMPANY, UIT_ADMIN, SYSTEM] }
+        actorUserId: { type: [string, 'null'], format: uuid }
+        actorName: { type: string }
+        reasonCode: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    InternshipPlan:
+      type: object
+      required:
+        - id
+        - status
+        - version
+        - title
+        - department
+        - companySupervisorName
+        - companySupervisorEmail
+        - objectives
+        - expectedTasks
+        - expectedSkills
+        - startDate
+        - endDate
+        - currentSubmissionNo
+        - latestReasonCode
+        - latestNote
+        - submittedAt
+        - companyReviewedAt
+        - uitReviewedAt
+        - createdAt
+        - updatedAt
+        - history
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/InternshipPlanStatus' }
+        version: { type: integer, minimum: 1 }
+        title: { type: [string, 'null'] }
+        department: { type: [string, 'null'] }
+        companySupervisorName: { type: [string, 'null'] }
+        companySupervisorEmail: { type: [string, 'null'], format: email }
+        objectives: { type: [string, 'null'] }
+        expectedTasks: { type: [string, 'null'] }
+        expectedSkills: { type: [string, 'null'] }
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        currentSubmissionNo: { type: integer, minimum: 0 }
+        latestReasonCode: { type: [string, 'null'] }
+        latestNote: { type: [string, 'null'] }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        companyReviewedAt: { type: [string, 'null'], format: date-time }
+        uitReviewedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/InternshipPlanHistory' }
+    InternshipPlanPlacementSummary:
+      type: object
+      required: [id, applicationId, status, version, expectedStartDate, actualStartDate, completedDate, student, job]
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/PlacementStatus' }
+        version: { type: integer, minimum: 1 }
+        expectedStartDate: { type: string, format: date }
+        actualStartDate: { type: [string, 'null'], format: date }
+        completedDate: { type: [string, 'null'], format: date }
+        student:
+          type: object
+          required: [id, studentCode, fullName, faculty, major, cohort, email]
+          properties:
+            id: { type: string, format: uuid }
+            studentCode: { type: string }
+            fullName: { type: string }
+            faculty: { type: string }
+            major: { type: string }
+            cohort: { type: string }
+            email: { type: string, format: email }
+        job:
+          type: object
+          required: [id, title, company]
+          properties:
+            id: { type: string, format: uuid }
+            title: { type: string }
+            company:
+              type: object
+              required: [id, code, name]
+              properties:
+                id: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+    InternshipPlanView:
+      type: object
+      required: [placement, plan, availableActions]
+      properties:
+        placement: { $ref: '#/components/schemas/InternshipPlanPlacementSummary' }
+        plan:
+          oneOf:
+            - { $ref: '#/components/schemas/InternshipPlan' }
+            - { type: 'null' }
+        availableActions:
+          type: array
+          items: { type: string, enum: [SAVE, SUBMIT, CONFIRM, APPROVE, REQUEST_REVISION] }
+    InternshipPlanViewEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/InternshipPlanView' }
+    InternshipPlanListEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/InternshipPlanView' }
+    InternshipWeeklyLogStatus:
+      type: string
+      enum: [DRAFT, SUBMITTED, COMPANY_REVISION_REQUIRED, COMPANY_CONFIRMED, CANCELLED]
+    InternshipWeeklyLogSaveRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion: { type: [integer, 'null'], minimum: 1 }
+        weekNumber: { type: [integer, 'null'], minimum: 1 }
+        workSummary: { type: [string, 'null'], maxLength: 6000 }
+        outcomes: { type: [string, 'null'], maxLength: 4000 }
+        difficulties: { type: [string, 'null'], maxLength: 4000 }
+        nextPlan: { type: [string, 'null'], maxLength: 4000 }
+    InternshipWeeklyLogSubmitRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+    InternshipWeeklyLogReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reasonCode: { type: [string, 'null'], maxLength: 80 }
+        note: { type: [string, 'null'], maxLength: 2000 }
+    InternshipWeeklyLogRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, reasonCode, note]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        reasonCode: { type: string, minLength: 1, maxLength: 80 }
+        note: { type: string, minLength: 5, maxLength: 2000 }
+    InternshipWeeklyLogHistory:
+      type: object
+      required: [id, action, fromStatus, toStatus, actorType, actorUserId, actorName, reasonCode, note, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        action: { type: string, enum: [SUBMIT, COMPANY_CONFIRM, COMPANY_REQUEST_REVISION, CANCEL] }
+        fromStatus:
+          oneOf:
+            - { $ref: '#/components/schemas/InternshipWeeklyLogStatus' }
+            - { type: 'null' }
+        toStatus: { $ref: '#/components/schemas/InternshipWeeklyLogStatus' }
+        actorType: { type: string, enum: [STUDENT, COMPANY, SYSTEM] }
+        actorUserId: { type: [string, 'null'], format: uuid }
+        actorName: { type: string }
+        reasonCode: { type: [string, 'null'] }
+        note: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    InternshipWeeklyLog:
+      type: object
+      required:
+        - id
+        - placementId
+        - weekNumber
+        - periodStart
+        - periodEnd
+        - dueDate
+        - status
+        - version
+        - currentSubmissionNo
+        - workSummary
+        - outcomes
+        - difficulties
+        - nextPlan
+        - latestReasonCode
+        - latestNote
+        - submittedAt
+        - companyReviewedAt
+        - createdAt
+        - updatedAt
+        - overdue
+        - lateSubmission
+        - history
+        - availableActions
+      properties:
+        id: { type: string, format: uuid }
+        placementId: { type: string, format: uuid }
+        weekNumber: { type: integer, minimum: 1 }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        status: { $ref: '#/components/schemas/InternshipWeeklyLogStatus' }
+        version: { type: integer, minimum: 1 }
+        currentSubmissionNo: { type: integer, minimum: 0 }
+        workSummary: { type: [string, 'null'] }
+        outcomes: { type: [string, 'null'] }
+        difficulties: { type: [string, 'null'] }
+        nextPlan: { type: [string, 'null'] }
+        latestReasonCode: { type: [string, 'null'] }
+        latestNote: { type: [string, 'null'] }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        companyReviewedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        overdue: { type: boolean, description: Trường suy diễn tại thời điểm đọc, không lưu trong bảng. }
+        lateSubmission: { type: boolean }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/InternshipWeeklyLogHistory' }
+        availableActions:
+          type: array
+          items: { type: string, enum: [SAVE, SUBMIT, CONFIRM, REQUEST_REVISION] }
+    InternshipWeeklyLogPlacement:
+      type: object
+      required: [id, applicationId, status, expectedStartDate, actualStartDate, student, job]
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/PlacementStatus' }
+        expectedStartDate: { type: [string, 'null'], format: date }
+        actualStartDate: { type: [string, 'null'], format: date }
+        student:
+          type: object
+          required: [id, studentCode, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            studentCode: { type: string }
+            fullName: { type: string }
+        job:
+          type: object
+          required: [title, company]
+          properties:
+            title: { type: string }
+            company:
+              type: object
+              required: [id, name]
+              properties:
+                id: { type: string, format: uuid }
+                name: { type: string }
+    InternshipWeeklyLogSummary:
+      type: object
+      required: [total, confirmed, awaitingCompany, needsRevision, overdue, nextWeekNumber, canCreate]
+      properties:
+        total: { type: integer, minimum: 0 }
+        confirmed: { type: integer, minimum: 0 }
+        awaitingCompany: { type: integer, minimum: 0 }
+        needsRevision: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        nextWeekNumber: { type: integer, minimum: 1 }
+        canCreate: { type: boolean }
+    InternshipWeeklyLogView:
+      type: object
+      required: [placement, logs, summary]
+      properties:
+        placement: { $ref: '#/components/schemas/InternshipWeeklyLogPlacement' }
+        logs:
+          type: array
+          items: { $ref: '#/components/schemas/InternshipWeeklyLog' }
+        summary: { $ref: '#/components/schemas/InternshipWeeklyLogSummary' }
+    InternshipWeeklyLogViewEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/InternshipWeeklyLogView' }
+    InternshipWeeklyLogGlobalSummary:
+      type: object
+      required: [startedPlacements, totalLogs, draft, submitted, revisionRequired, confirmed, overdue]
+      properties:
+        startedPlacements: { type: integer, minimum: 0 }
+        totalLogs: { type: integer, minimum: 0 }
+        draft: { type: integer, minimum: 0 }
+        submitted: { type: integer, minimum: 0 }
+        revisionRequired: { type: integer, minimum: 0 }
+        confirmed: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+    InternshipWeeklyLogGlobalSummaryEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/InternshipWeeklyLogGlobalSummary' }
+    InternshipWeeklyLogOverduePlacement:
+      type: object
+      required: [id, applicationId, status, actualStartDate, student, job]
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/PlacementStatus' }
+        actualStartDate: { type: [string, 'null'], format: date }
+        student:
+          type: object
+          required: [id, studentCode, fullName, faculty, major, cohort]
+          properties:
+            id: { type: string, format: uuid }
+            studentCode: { type: string }
+            fullName: { type: string }
+            faculty: { type: string }
+            major: { type: string }
+            cohort: { type: string }
+        job:
+          type: object
+          required: [id, title, company]
+          properties:
+            id: { type: string, format: uuid }
+            title: { type: string }
+            company:
+              type: object
+              required: [id, code, name]
+              properties:
+                id: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+    InternshipWeeklyLogOverdueItem:
+      type: object
+      required: [placement, log]
+      properties:
+        placement: { $ref: '#/components/schemas/InternshipWeeklyLogOverduePlacement' }
+        log: { $ref: '#/components/schemas/InternshipWeeklyLog' }
+    InternshipWeeklyLogOverdueEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/InternshipWeeklyLogOverdueItem' }
     InternshipEvaluationRole:
       type: string
       enum: [STUDENT, COMPANY]

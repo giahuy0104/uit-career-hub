@@ -17,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { useAuth } from "../auth/AuthContext.jsx";
+import "./student-dashboard.css";
 
 const applicationStatusCopy = {
   UIT_REVIEWING: "UIT đang kiểm duyệt",
@@ -48,6 +49,19 @@ function formatDate(value, withTime = false) {
 
 function MetricCard({ label, value, helper, Icon, tone = "blue" }) {
   return <article className={`metric-card ${tone}`}><span className="metric-icon"><Icon size={22} weight="duotone" /></span><div><small>{label}</small><strong>{value}</strong><p>{helper}</p></div></article>;
+}
+
+function StudentMetric({ label, value, helper, Icon, tone }) {
+  return (
+    <article className={`student-metric student-metric--${tone}`}>
+      <div className="student-metric__label">
+        <span className="student-metric__icon" aria-hidden="true"><Icon size={20} weight="duotone" /></span>
+        <small>{label}</small>
+      </div>
+      <strong>{value}</strong>
+      <p>{helper}</p>
+    </article>
+  );
 }
 
 function Panel({ title, action, children }) {
@@ -100,32 +114,55 @@ export function LiveStudentDashboard({ navigate }) {
     ? `Thiếu ${data.profile.missingItems[0].toLowerCase()}`
     : "Hồ sơ đã sẵn sàng";
   const latest = data.latestApplication;
+  const profileCompletion = Math.max(0, Math.min(100, Number(data.metrics.profileCompleteness) || 0));
 
-  return <>
-    <div className="metric-grid four">
-      <MetricCard label="Hồ sơ hoàn thiện" value={`${data.metrics.profileCompleteness}%`} helper={profileHelper} Icon={User} />
-      <MetricCard label="Đơn đang xử lý" value={data.metrics.activeApplications} helper="Theo dữ liệu hiện tại" Icon={FileText} tone="amber" />
-      <MetricCard label="Lịch phỏng vấn sắp tới" value={data.metrics.upcomingInterviews} helper="Lịch chưa kết thúc" Icon={CalendarCheck} tone="purple" />
-      <MetricCard label="Offer cần phản hồi" value={data.metrics.pendingOffers} helper={data.metrics.pendingOffers ? "Cần quyết định sớm" : "Chưa có offer chờ xử lý"} Icon={UserCheck} tone="green" />
-    </div>
-    <div className="portal-two-column wide-left">
-      <Panel title="Việc bạn cần làm" action={<button className="link-button" onClick={() => navigate("applications")}>Xem đơn <ArrowRight size={14} /></button>}>
-        {data.tasks.length ? <div className="todo-list">{data.tasks.map((task) => {
+  return <div className="student-dashboard">
+    <section className="student-dashboard__metrics" aria-label="Chỉ số tổng quan">
+      <article className="student-profile-metric">
+        <div className="student-profile-metric__heading">
+          <span className="student-profile-metric__icon" aria-hidden="true"><User size={22} weight="duotone" /></span>
+          <div><small>Hồ sơ hoàn thiện</small><strong>{data.metrics.profileCompleteness}%</strong></div>
+        </div>
+        <div
+          className="student-profile-metric__progress"
+          role="progressbar"
+          aria-label="Mức độ hoàn thiện hồ sơ"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow={profileCompletion}
+        >
+          <span style={{ "--student-profile-progress": `${profileCompletion}%` }} />
+        </div>
+        <p>{profileHelper}</p>
+      </article>
+      <StudentMetric label="Đơn đang xử lý" value={data.metrics.activeApplications} helper="Theo dữ liệu hiện tại" Icon={FileText} tone="amber" />
+      <StudentMetric label="Lịch phỏng vấn sắp tới" value={data.metrics.upcomingInterviews} helper="Lịch chưa kết thúc" Icon={CalendarCheck} tone="purple" />
+      <StudentMetric label="Offer cần phản hồi" value={data.metrics.pendingOffers} helper={data.metrics.pendingOffers ? "Cần quyết định sớm" : "Chưa có offer chờ xử lý"} Icon={UserCheck} tone="green" />
+    </section>
+    <div className="student-dashboard__focus-grid">
+      <div className="student-dashboard__tasks">
+        <Panel title="Việc bạn cần làm" action={<button type="button" className="link-button" onClick={() => navigate("applications")}>Xem đơn <ArrowRight size={15} aria-hidden="true" /></button>}>
+        {data.tasks.length ? <div className="todo-list student-dashboard__task-list">{data.tasks.map((task) => {
           const isInterview = task.type === "UPCOMING_INTERVIEW";
           const isOffer = task.type === "RESPOND_OFFER";
           const destination = isInterview ? "interviews" : isOffer ? "applications" : "profile";
           const Icon = isInterview ? CalendarCheck : isOffer ? UserCheck : Warning;
-          return <button key={`${task.type}-${task.applicationId}-${task.dueAt || "none"}`} onClick={() => navigate(destination)}><span className={isOffer ? "todo-green" : isInterview ? "todo-blue" : "todo-warning"}><Icon size={20} /></span><div><strong>{task.title}</strong><small>{task.description}</small></div><Status tone={isOffer ? "success" : isInterview ? "info" : "urgent"}>{task.dueAt ? formatDate(task.dueAt, true) : isOffer ? "Cần phản hồi" : "Cần bổ sung"}</Status><ArrowRight size={18} /></button>;
+          return <button type="button" key={`${task.type}-${task.applicationId}-${task.dueAt || "none"}`} onClick={() => navigate(destination)}><span className={isOffer ? "todo-green" : isInterview ? "todo-blue" : "todo-warning"} aria-hidden="true"><Icon size={20} weight="duotone" /></span><div><strong>{task.title}</strong><small>{task.description}</small></div><Status tone={isOffer ? "success" : isInterview ? "info" : "urgent"}>{task.dueAt ? formatDate(task.dueAt, true) : isOffer ? "Cần phản hồi" : "Cần bổ sung"}</Status><ArrowRight className="student-dashboard__row-arrow" size={18} aria-hidden="true" /></button>;
         })}</div> : <Empty title="Không có việc cần xử lý" text="Hệ thống sẽ hiển thị tại đây khi có yêu cầu mới." />}
-      </Panel>
-      <Panel title="Tiến trình gần nhất">
-        {latest ? <div className="mini-timeline"><div className="done"><span><Check /></span><div><strong>Đã nộp hồ sơ</strong><small>{latest.jobTitle} · {latest.companyName}</small></div></div><div className="current"><span>2</span><div><strong>{applicationStatusCopy[latest.status] || latest.status}</strong><small>Cập nhật {formatDate(latest.lastTransitionAt, true)}</small></div></div><div><span>3</span><div><strong>Bước tiếp theo</strong><small>Hệ thống sẽ thông báo khi trạng thái thay đổi</small></div></div></div> : <Empty title="Chưa có đơn ứng tuyển" text="Hãy chọn cơ hội phù hợp để bắt đầu." />}
+        </Panel>
+      </div>
+      <div className="student-dashboard__journey">
+        <Panel title="Tiến trình gần nhất">
+          {latest ? <div className="mini-timeline student-dashboard__timeline"><div className="done"><span><Check aria-hidden="true" /></span><div><strong>Đã nộp hồ sơ</strong><small>{latest.jobTitle} · {latest.companyName}</small></div></div><div className="current"><span>2</span><div><strong>{applicationStatusCopy[latest.status] || latest.status}</strong><small>Cập nhật {formatDate(latest.lastTransitionAt, true)}</small></div></div><div><span>3</span><div><strong>Bước tiếp theo</strong><small>Hệ thống sẽ thông báo khi trạng thái thay đổi</small></div></div></div> : <Empty title="Chưa có đơn ứng tuyển" text="Hãy chọn cơ hội phù hợp để bắt đầu." />}
+        </Panel>
+      </div>
+    </div>
+    <div className="student-dashboard__opportunity-panel">
+      <Panel title="Cơ hội đang tuyển chưa ứng tuyển" action={<button type="button" className="link-button" onClick={() => navigate("jobs")}>Xem tất cả <ArrowRight size={15} aria-hidden="true" /></button>}>
+        {data.opportunities.length ? <div className="simple-table opportunities student-dashboard__opportunities"><div className="table-head"><span>Vị trí</span><span>Doanh nghiệp</span><span>Hình thức</span><span>Hạn nộp</span><span /></div>{data.opportunities.map((job) => <button type="button" key={job.jobId} onClick={() => navigate("jobs")}><span className="student-opportunity__position"><span className="student-opportunity__icon" aria-hidden="true"><Briefcase size={18} weight="duotone" /></span><strong>{job.title}</strong></span><span className="student-opportunity__company">{job.companyName}</span><span className="student-opportunity__mode"><Status tone="info">{workModeCopy[job.workMode] || job.workMode}</Status></span><time className="student-opportunity__deadline" dateTime={job.deadline}>{formatDate(job.deadline)}</time><ArrowRight className="student-opportunity__arrow" size={18} aria-hidden="true" /></button>)}</div> : <Empty title="Bạn đã xem hết cơ hội hiện tại" text="Quay lại sau khi doanh nghiệp đăng tin mới." />}
       </Panel>
     </div>
-    <Panel title="Cơ hội đang tuyển chưa ứng tuyển" action={<button className="link-button" onClick={() => navigate("jobs")}>Xem tất cả <ArrowRight size={15} /></button>}>
-      {data.opportunities.length ? <div className="simple-table opportunities"><div className="table-head"><span>Vị trí</span><span>Doanh nghiệp</span><span>Hình thức</span><span>Hạn nộp</span><span /></div>{data.opportunities.map((job) => <button key={job.jobId} onClick={() => navigate("jobs")}><strong>{job.title}</strong><span>{job.companyName}</span><span><Status tone="info">{workModeCopy[job.workMode] || job.workMode}</Status></span><span>{formatDate(job.deadline)}</span><ArrowRight size={17} /></button>)}</div> : <Empty title="Bạn đã xem hết cơ hội hiện tại" text="Quay lại sau khi doanh nghiệp đăng tin mới." />}
-    </Panel>
-  </>;
+  </div>;
 }
 
 export function LiveAdminDashboard({ navigate }) {

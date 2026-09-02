@@ -26,6 +26,7 @@ export const adminPortalConfig = {
     { key: "admin-documents", label: "Xác minh tài liệu", Icon: ClipboardText },
     { key: "admin-applications", label: "Duyệt hồ sơ sinh viên", Icon: UserCheck },
     { key: "admin-placements", label: "Theo dõi kết quả", Icon: GraduationCap },
+    { key: "admin-internships", label: "Quản lý thực tập", Icon: ClipboardText },
     { key: "admin-notifications", label: "Thông báo", Icon: Bell },
   ],
 };

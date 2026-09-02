@@ -1,0 +1,78 @@
+{
+  "input": "C:\\Users\\Windows\\Documents\\UIT\\\u0110\u1ed2 \u00c1N T\u1ed0T NGHI\u1ec6P\\uit-career-hub\\UIT_Career_Hub_Quy_Trinh_Kiem_Thu_3_Vai_Tro.docx",
+  "fonts_by_char_count": {},
+  "direct_run_formatting_runs": 131,
+  "direct_paragraph_formatting_paragraphs": 50,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 1,
+      "text": "TR\u01af\u1edcNG \u0110\u1ea0I H\u1eccC C\u00d4NG NGH\u1ec6 TH\u00d4NG TIN",
+      "style": "Normal"
+    },
+    {
+      "para_index": 1160,
+      "text": "UIT CAREER HUB  |  QUY TR\u00ccNH KI\u1ec2M TH\u1eec 3 VAI TR\u00d2",
+      "style": "Header"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 1,
+        "text": "TR\u01af\u1edcNG \u0110\u1ea0I H\u1eccC C\u00d4NG NGH\u1ec6 TH\u00d4NG TIN",
+        "style": "Normal"
+      },
+      {
+        "para_index": 4,
+        "text": "S\u1ed5 tay ki\u1ec3m th\u1eed th\u1ee7 c\u00f4ng, nghi\u1ec7p v\u1ee5 li\u00ean vai tr\u00f2 v\u00e0 ki\u1ec3m tra an to\u00e0n",
+        "style": "Subtitle"
+      },
+      {
+        "para_index": 5,
+        "text": "",
+        "style": "Normal"
+      },
+      {
+        "para_index": 6,
+        "text": "Nh\u00f3m sinh vi\u00ean: Ph\u1ea1m Th\u1ecb Ki\u1ec1u Di\u1ec5m - 23520286  |  Nguy\u1ec5n Tr\u01b0\u01a1ng Ng\u1ecdc H\u00e2n - 23520434",
+        "style": "Normal"
+      },
+      {
+        "para_index": 14,
+        "text": "",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 1,
+        "run_text": "TR\u01af\u1edcNG \u0110\u1ea0I H\u1eccC C\u00d4NG NGH\u1ec6 TH\u00d4NG TIN",
+        "style": "Normal"
+      },
+      {
+        "para_index": 3,
+        "run_text": "UIT CAREER HUB",
+        "style": "Title"
+      },
+      {
+        "para_index": 6,
+        "run_text": "Nh\u00f3m sinh vi\u00ean: Ph\u1ea1m Th\u1ecb Ki\u1ec1u Di\u1ec5m - 23520286  |  Nguy\u1ec5n Tr\u01b0\u01a1ng Ng\u1ecdc H\u00e2n - 23520",
+        "style": "Normal"
+      },
+      {
+        "para_index": 39,
+        "run_text": "T\u1ed5ng s\u1ed1 k\u1ecbch b\u1ea3n: ",
+        "style": "Normal"
+      },
+      {
+        "para_index": 184,
+        "run_text": "Gi\u1edbi h\u1ea1n: ",
+        "style": "Guide Note"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}
