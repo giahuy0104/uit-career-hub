@@ -55,8 +55,26 @@ jobs:
           cache: true
           install: false
 
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Package Spring Boot backend
+        working-directory: backend
+        run: |
+          chmod +x mvnw
+          ./mvnw -DskipTests package
+
+      - name: Create isolated E2E database
+        env:
+          PGPASSWORD: uit_ci_password
+        run: psql -h 127.0.0.1 -U uit_user -d postgres -c "CREATE DATABASE uit_career_hub_e2e"
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
