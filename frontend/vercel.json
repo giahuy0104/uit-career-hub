@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://uit-career-hub-api-041204.vercel.app/api/:path*"
+      "destination": "https://uit-career-hub-java-api-041204.onrender.com/api/:path*"
     },
     {
       "source": "/:path*",
