@@ -93,6 +93,10 @@ pnpm dev:frontend
 - Health check: http://localhost:3000/api/health
 - Database health: http://localhost:3000/api/health/database
 
+Sinh viên có thể tự đăng ký tại màn hình đăng nhập bằng họ tên, MSSV, email UIT và mật khẩu. Hệ thống
+tạo đồng thời tài khoản `STUDENT` và hồ sơ sinh viên trong PostgreSQL, sau đó đăng nhập ngay. MSSV
+phải trùng với phần tên của email UIT; tài khoản Công ty và UIT Admin không được tự đăng ký.
+
 Lệnh backend sẽ build Spring Boot rồi chạy JAR. Muốn thao tác trực tiếp trong thư mục backend:
 
 ```powershell

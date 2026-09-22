@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.6.0
+  version: 1.7.0
   description: Contract cho happy flow tuyển dụng, kế hoạch và nhật ký thực tập hằng tuần của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -51,6 +51,32 @@ paths:
           $ref: '#/components/responses/Locked'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: registerStudent
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentRegistrationRequest'
+      responses:
+        '201':
+          description: Tạo tài khoản sinh viên và đăng nhập thành công
+          headers:
+            Set-Cookie:
+              description: Refresh token xoay vòng trong cookie HttpOnly.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /auth/refresh:
     post:
       tags: [Auth]
@@ -2862,6 +2888,16 @@ components:
       properties:
         email: { type: string, format: email }
         password: { type: string, minLength: 8, maxLength: 128 }
+    StudentRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [fullName, studentCode, email, password, acceptedTerms]
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 120 }
+        studentCode: { type: string, pattern: '^[0-9]{8,12}$' }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+        acceptedTerms: { type: boolean, const: true }
     CompanyActivationRequest:
       type: object
       required: [token, password, acceptedTerms]

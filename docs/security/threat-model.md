@@ -23,7 +23,7 @@ Tài liệu này là threat model dựa trên contract và mã nguồn hiện t�
 
 | Actor | Quyền hợp lệ | Khả năng bị lạm dụng |
 |---|---|---|
-| Khách chưa đăng nhập | Login, refresh, logout, activation | Credential stuffing, token replay, payload lớn |
+| Khách chưa đăng nhập | Đăng ký sinh viên, login, refresh, logout, activation | Chiếm email chưa xác minh, tạo tài khoản hàng loạt, credential stuffing, token replay, payload lớn |
 | Student | Hồ sơ và đơn của chính mình | IDOR sang sinh viên khác, upload file độc hại |
 | UIT Admin | Duyệt và quản trị toàn trường | Lạm dụng quyền rộng, xuất dữ liệu hàng loạt |
 | Company recruiter | Job/candidate/offer thuộc doanh nghiệp | IDOR sang doanh nghiệp khác, lộ CV |

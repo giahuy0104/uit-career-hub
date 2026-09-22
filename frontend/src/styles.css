@@ -48,8 +48,12 @@ button { cursor: pointer; }
 .login-orbit-slot { position:absolute; z-index:2; left:67%; bottom:5.5%; width:clamp(150px,12vw,225px); aspect-ratio:1; transform:translateX(-50%); }
 .kinetic-orbit,.kinetic-orbit-canvas { width:100%; height:100%; display:block; }
 .kinetic-orbit { filter:drop-shadow(0 16px 17px rgba(16,42,77,.15)); }
-.login-panel { position:relative; min-height:100vh; min-height:100svh; padding:40px clamp(40px,5vw,92px); display:grid; place-items:center; border-left:1px solid #edf1f6; background:#fff; }
+.login-panel { position:relative; min-height:100vh; min-height:100svh; padding:40px clamp(40px,5vw,92px); display:grid; place-items:center; overflow-y:auto; border-left:1px solid #edf1f6; background:#fff; }
 .login-card { width:min(100%,470px); padding:0; border:0; background:#fff; }
+.login-card.register-card { padding-block:14px; }
+.register-card .login-card-heading { margin-bottom:22px; }
+.register-card .login-field { margin-bottom:13px; }
+.register-card .login-field > div { height:52px; }
 .login-card-heading { margin-bottom:34px; }
 .login-card-heading .eyebrow { margin-bottom:12px !important; font-size:10px; letter-spacing:.14em; }
 .login-card-heading h2 { margin:0 0 11px; color:#0c2444; font-size:clamp(32px,3vw,43px); line-height:1.08; letter-spacing:-.052em; }.login-card-heading p:last-child { margin:0; color:var(--muted); font-size:12px; line-height:1.6; }
@@ -61,6 +65,8 @@ button { cursor: pointer; }
 .login-password-toggle { width:34px; height:34px; flex:0 0 auto; display:grid; place-items:center; margin-right:-7px; padding:0; border:0; border-radius:7px; color:#60748e; background:transparent; }.login-password-toggle:hover { color:var(--blue); background:var(--blue-50); }.login-password-toggle:focus-visible { outline-offset:1px; }
 .login-error { margin:-2px 0 15px; padding:11px 13px; color:#a92f2f; border:1px solid #efb4b4; border-radius:8px; background:var(--red-bg); font-size:10px; line-height:1.45; }
 .login-submit { width:100%; min-height:56px; margin-top:4px; border-radius:10px; box-shadow:0 10px 24px rgba(9,104,232,.19); }.spin { animation:spin .85s linear infinite; } @keyframes spin { to { transform:rotate(360deg); } }
+.registration-terms { margin:-1px 0 14px; display:flex; align-items:flex-start; gap:9px; color:#53657d; font-size:9px; line-height:1.5; cursor:pointer; }.registration-terms input { width:15px; height:15px; flex:0 0 auto; margin:0; accent-color:var(--blue); }
+.auth-mode-switch { margin:17px 0 0; display:flex; justify-content:center; align-items:center; gap:5px; color:var(--muted); font-size:10px; }.auth-mode-switch button { padding:2px; color:var(--blue); border:0; background:transparent; font-weight:800; }.auth-mode-switch button:hover { text-decoration:underline; }
 .demo-accounts { margin-top:31px; padding-top:25px; border-top:1px solid var(--line); }.demo-accounts > div:first-child { margin-bottom:13px; text-align:center; }.demo-accounts > div:first-child span,.demo-accounts > div:first-child small { display:block; }.demo-accounts > div:first-child span { color:#33455c; font-size:11px; font-weight:800; }.demo-accounts > div:first-child small { margin-top:5px; color:var(--muted); font-size:9px; }
 .demo-accounts > div:last-child { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }.demo-accounts button { min-width:0; min-height:69px; padding:11px 10px; display:flex; align-items:flex-start; gap:8px; text-align:left; color:#3e526c; border:1px solid var(--line); border-radius:9px; background:#fff; transition:border-color .16s ease, background .16s ease, transform .16s ease; }.demo-accounts button:hover { color:var(--blue); border-color:#9cc3f2; background:var(--blue-50); transform:translateY(-1px); }.demo-accounts button svg { flex:0 0 auto; }.demo-accounts button strong,.demo-accounts button small { display:block; }.demo-accounts button strong { font-size:9px; }.demo-accounts button small { max-width:91px; margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:7px; }
 .login-privacy { margin:20px 0 0; display:flex; align-items:flex-start; gap:8px; color:var(--muted); font-size:8px; line-height:1.55; }.login-privacy svg { flex:0 0 auto; color:var(--green); }

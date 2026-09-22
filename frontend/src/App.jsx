@@ -496,7 +496,7 @@ function LiveApplyScreen({ job, navigate, user, onLogout }) {
 }
 
 export function App() {
-  const { user, loading, login, logout, activateCompanyAccount } = useAuth();
+  const { user, loading, login, registerStudent, logout, activateCompanyAccount } = useAuth();
   const [route, setRoute] = useState("jobs");
   const [selectedJob, setSelectedJob] = useState(null);
   const [navigationPayload, setNavigationPayload] = useState(null);
@@ -512,7 +512,7 @@ export function App() {
   if (loading) return <SessionLoadingScreen />;
   const activationToken = new URLSearchParams(window.location.search).get("activationToken");
   if (activationToken) return <CompanyActivationScreen token={activationToken} activate={activateCompanyAccount} onDone={() => { const url = new URL(window.location.href); url.searchParams.delete("activationToken"); window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`); window.location.reload(); }} />;
-  if (!user) return <LoginScreen onLogin={login} />;
+  if (!user) return <LoginScreen onLogin={login} onRegister={registerStudent} />;
 
   let content;
   if (role === "admin") content = <AdminPortal route={route} navigate={navigate} navigationPayload={navigationPayload} user={user} onLogout={logout} />;

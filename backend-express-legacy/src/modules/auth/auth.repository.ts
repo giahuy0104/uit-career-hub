@@ -77,6 +77,41 @@ async function queryOne<Row extends QueryResultRow>(
 export class AuthRepository {
   constructor(private readonly database: AuthDatabase) {}
 
+  async createStudentAccount(input: {
+    email: string;
+    passwordHash: string;
+    fullName: string;
+    studentCode: string;
+  }) {
+    const client = await this.database.connect();
+    await client.query("BEGIN");
+
+    try {
+      const user = await queryOne<{ id: string }>(
+        client,
+        `INSERT INTO users (email, role, status, password_hash, password_changed_at)
+         VALUES ($1, 'STUDENT', 'ACTIVE', $2, now())
+         RETURNING id`,
+        [input.email, input.passwordHash],
+      );
+      if (!user) throw new Error("Không thể tạo tài khoản sinh viên.");
+
+      await client.query(
+        `INSERT INTO student_profiles
+           (user_id, student_code, full_name, faculty, major, cohort)
+         VALUES ($1, $2, $3, 'Chưa cập nhật', 'Chưa cập nhật', 'Chưa cập nhật')`,
+        [user.id, input.studentCode, input.fullName],
+      );
+      await client.query("COMMIT");
+      return user.id;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async findUserByEmail(email: string) {
     const row = await queryOne<AuthUserRow>(
       this.database,

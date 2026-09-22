@@ -13,6 +13,14 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Vui lòng nhập mật khẩu.").max(128),
 });
 
+export const studentRegistrationSchema = z.object({
+  fullName: z.string().trim().min(2, "Họ và tên phải có ít nhất 2 ký tự.").max(120),
+  studentCode: z.string().trim().regex(/^[0-9]{8,12}$/, "Mã số sinh viên phải có từ 8 đến 12 chữ số."),
+  email: z.string().trim().toLowerCase().email("Email không hợp lệ.").max(254),
+  password: passwordSchema,
+  acceptedTerms: z.literal(true),
+});
+
 export const companyActivationSchema = z.object({
   token: z.string().min(32),
   password: passwordSchema,

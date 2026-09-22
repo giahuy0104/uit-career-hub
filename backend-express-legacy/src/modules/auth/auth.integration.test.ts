@@ -33,6 +33,7 @@ describeWithDatabase("auth API", () => {
       "DELETE FROM audit_logs WHERE actor_user_id = ANY($1::uuid[]) OR target_id = ANY($1::uuid[])",
       [createdUserIds],
     );
+    await cleanupClient.query("DELETE FROM student_profiles WHERE user_id = ANY($1::uuid[])", [createdUserIds]);
     await cleanupClient.query("DELETE FROM users WHERE id = ANY($1::uuid[])", [createdUserIds]);
     createdUserIds.length = 0;
   });
@@ -70,6 +71,34 @@ describeWithDatabase("auth API", () => {
       .set("Authorization", `Bearer ${login.body.data.accessToken}`);
     expect(me.status).toBe(200);
     expect(me.body.data.email).toBe(student.email);
+  });
+
+  it("should_register_a_student_and_start_a_session", async () => {
+    const studentCode = String(Math.floor(10_000_000 + Math.random() * 90_000_000));
+    const registration = await request(app)
+      .post("/api/v1/auth/register")
+      .send({
+        fullName: "Nguyễn Văn An",
+        studentCode,
+        email: `${studentCode}@student.uit.edu.vn`,
+        password: "Student@67890",
+        acceptedTerms: true,
+      });
+
+    expect(registration.status).toBe(201);
+    expect(registration.body.data.user).toMatchObject({
+      email: `${studentCode}@student.uit.edu.vn`,
+      role: "STUDENT",
+      status: "ACTIVE",
+    });
+    expect(registration.headers["set-cookie"]?.[0]).toContain("HttpOnly");
+    createdUserIds.push(registration.body.data.user.id);
+
+    const profile = await cleanupClient.query<{ student_code: string; full_name: string }>(
+      "SELECT student_code, full_name FROM student_profiles WHERE user_id = $1",
+      [registration.body.data.user.id],
+    );
+    expect(profile.rows[0]).toEqual({ student_code: studentCode, full_name: "Nguyễn Văn An" });
   });
 
   it("should_revoke_an_existing_access_token_when_the_user_becomes_inactive", async () => {

@@ -13,6 +13,53 @@ export class AuthService {
     private readonly tokens = new TokenService(),
   ) {}
 
+  async registerStudent(
+    input: {
+      fullName: string;
+      studentCode: string;
+      email: string;
+      password: string;
+    },
+    request: RequestMetadata,
+  ) {
+    const email = input.email.trim().toLowerCase();
+    const studentCode = input.studentCode.trim();
+    const fullName = input.fullName.trim().replace(/\s+/g, " ");
+    if (!this.isAllowedStudentEmail(email)) {
+      throw new AppError(400, "AUTH_REGISTRATION_EMAIL_NOT_ALLOWED", "Vui lòng sử dụng email UIT hợp lệ để đăng ký.");
+    }
+    if (email.slice(0, email.lastIndexOf("@")) !== studentCode.toLowerCase()) {
+      throw new AppError(400, "AUTH_REGISTRATION_STUDENT_CODE_MISMATCH", "Mã số sinh viên phải trùng với phần tên trong email UIT.");
+    }
+
+    let userId: string;
+    try {
+      userId = await this.repository.createStudentAccount({
+        email,
+        passwordHash: await hashPassword(input.password),
+        fullName,
+        studentCode,
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new AppError(409, "AUTH_REGISTRATION_CONFLICT", "Email hoặc mã số sinh viên đã được sử dụng.");
+      }
+      throw error;
+    }
+
+    const user = await this.repository.findUserById(userId);
+    if (!user) throw new Error("Không thể đọc tài khoản vừa đăng ký.");
+    await this.repository.recordAudit({
+      actorUserId: user.id,
+      action: "AUTH_STUDENT_REGISTERED",
+      targetType: "USER",
+      targetId: user.id,
+      metadata: { studentCode },
+      request,
+    });
+    return this.issueSession(user, request);
+  }
+
   async login(email: string, password: string, request: RequestMetadata) {
     let user = await this.repository.findUserByEmail(email.toLowerCase());
 

@@ -51,6 +51,15 @@ export function AuthProvider({ children }) {
     return response.data;
   }, []);
 
+  const registerStudent = useCallback(async (input) => {
+    const response = await apiRequest("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    setSession(response.data);
+    return response.data;
+  }, []);
+
   const activateCompanyAccount = useCallback(async (token, password) => {
     await apiRequest("/auth/company-activation", {
       method: "POST",
@@ -123,12 +132,13 @@ export function AuthProvider({ children }) {
     user: session?.user ?? null,
     loading,
     login,
+    registerStudent,
     activateCompanyAccount,
     logout,
     refresh,
     authorizedRequest,
     authorizedResponse,
-  }), [session, loading, login, activateCompanyAccount, logout, refresh, authorizedRequest, authorizedResponse]);
+  }), [session, loading, login, registerStudent, activateCompanyAccount, logout, refresh, authorizedRequest, authorizedResponse]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

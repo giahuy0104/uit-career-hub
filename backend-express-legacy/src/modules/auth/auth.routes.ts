@@ -5,7 +5,7 @@ import { rateLimit } from "express-rate-limit";
 import { env } from "../../config/env.js";
 import { createAuthenticate, type AccessPrincipalStore } from "../../middleware/auth.js";
 import { AppError } from "../../shared/app-error.js";
-import { companyActivationSchema, loginSchema } from "./auth.schemas.js";
+import { companyActivationSchema, loginSchema, studentRegistrationSchema } from "./auth.schemas.js";
 import { AuthService } from "./auth.service.js";
 import { TokenService } from "./token.service.js";
 
@@ -58,6 +58,14 @@ export function createAuthRouter(
   accessPrincipalStore: AccessPrincipalStore,
 ) {
   const router = Router();
+
+  router.post("/register", authLimiter, async (request, response) => {
+    const input = studentRegistrationSchema.parse(request.body);
+    const result = await service.registerStudent(input, requestMetadata(request));
+    setRefreshCookie(response, result.refreshToken);
+    response.setHeader("cache-control", "no-store");
+    response.status(201).json({ data: result.session });
+  });
 
   router.post("/login", authLimiter, async (request, response) => {
     const input = loginSchema.parse(request.body);

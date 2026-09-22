@@ -4,7 +4,7 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 
 ## Nguyên tắc bắt buộc
 
-1. Mọi API nghiệp vụ dưới `/api/v1` yêu cầu Bearer access token, ngoại trừ đăng nhập, làm mới phiên, đăng xuất và kích hoạt tài khoản doanh nghiệp theo contract xác thực.
+1. Mọi API nghiệp vụ dưới `/api/v1` yêu cầu Bearer access token, ngoại trừ đăng ký sinh viên, đăng nhập, làm mới phiên, đăng xuất và kích hoạt tài khoản doanh nghiệp theo contract xác thực.
 2. Kiểm tra vai trò được thực hiện tại route trước khi parse payload hoặc gọi service.
 3. `STUDENT` phải có `studentProfileId`; `COMPANY` phải có `companyId`. Đúng vai trò nhưng thiếu liên kết trả về `403 AUTH_CONTEXT_MISSING`.
 4. Quyền sở hữu được kiểm tra lại trong service/repository. Tài nguyên thuộc sinh viên hoặc doanh nghiệp khác trả về `404` để không làm lộ sự tồn tại của bản ghi.
