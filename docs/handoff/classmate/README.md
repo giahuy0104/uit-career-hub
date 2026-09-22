@@ -166,15 +166,7 @@ Invoke-RestMethod http://localhost:3000/api/health/database
 
 ## 7. Tài khoản development/demo
 
-| Vai trò | Email | Mật khẩu |
-|---|---|---|
-| UIT Admin | `admin.career@uit.edu.vn` | `Admin@12345` |
-| Student chính | `20521067@student.uit.edu.vn` | `Student@12345` |
-| Student bổ sung | `21520881@student.uit.edu.vn` | `Student@12345` |
-| VNG recruiter | `recruiter@vng.example` | `Company@12345` |
-| FPT recruiter | `recruiter@fpt.example` | `Company@12345` |
-
-Các tài khoản này chỉ dành cho development/demo. Production bundle luôn ẩn demo picker và không được sử dụng các mật khẩu trên.
+Tài khoản demo chỉ tồn tại trên database development/E2E riêng. Lấy credential từ secret cục bộ của người vận hành; không ghi credential vào tài liệu và không dùng tài khoản demo trên production. Production bundle luôn ẩn demo picker.
 
 ## 8. Cấu hình R2 và email
 

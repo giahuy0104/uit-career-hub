@@ -24,7 +24,13 @@ public record DatabaseUrl(String jdbcUrl, String username, String password, bool
         int port = uri.getPort() < 0 ? 5432 : uri.getPort();
         StringBuilder jdbc = new StringBuilder("jdbc:postgresql://")
                 .append(host).append(':').append(port).append(uri.getRawPath());
-        if (uri.getRawQuery() != null && !uri.getRawQuery().isBlank()) jdbc.append('?').append(uri.getRawQuery());
+        String query = uri.getRawQuery();
+        if (query != null && !query.isBlank()) {
+            jdbc.append('?').append(query);
+            if (usesVerifyFull(query) && !hasTlsTrustConfiguration(query)) {
+                jdbc.append("&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory");
+            }
+        }
         boolean local = host.equals("localhost") || host.equals("127.0.0.1") || host.equals("::1");
         return new DatabaseUrl(jdbc.toString(), user, password, local,
                 host.endsWith(".neon.tech") && host.contains("-pooler"));
@@ -32,5 +38,16 @@ public record DatabaseUrl(String jdbcUrl, String username, String password, bool
 
     private static String decode(String value) {
         return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
+    }
+
+    private static boolean usesVerifyFull(String query) {
+        return java.util.Arrays.stream(query.split("&"))
+                .anyMatch(part -> part.equalsIgnoreCase("sslmode=verify-full"));
+    }
+
+    private static boolean hasTlsTrustConfiguration(String query) {
+        return java.util.Arrays.stream(query.split("&"))
+                .map(part -> part.split("=", 2)[0])
+                .anyMatch(key -> key.equalsIgnoreCase("sslrootcert") || key.equalsIgnoreCase("sslfactory"));
     }
 }

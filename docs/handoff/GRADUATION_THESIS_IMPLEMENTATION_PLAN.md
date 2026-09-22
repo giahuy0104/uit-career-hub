@@ -14,7 +14,7 @@ Hệ thống hiện có:
 
 - Frontend React 19 + Vite cho ba portal Sinh viên, UIT Admin và Doanh nghiệp.
 - Backend Java 21 + Spring Boot 3.5 trong `backend/`.
-- Backend Express cũ chỉ còn trong `backend-express-legacy/` để đối chiếu, không phát triển tính năng mới tại đây.
+- Backend production duy nhất là Spring Boot Java trong `backend/`.
 - PostgreSQL với migration hiện tại đến `0018`.
 - `internship_placements` quản lý `HIRED → STARTED → COMPLETED`.
 - `internship_plans` quản lý kế hoạch thực tập qua hai lớp duyệt Company và UIT, có snapshot mỗi lần nộp.

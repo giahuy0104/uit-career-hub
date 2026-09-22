@@ -29,13 +29,7 @@ Chuẩn bị ba cửa sổ trình duyệt hoặc ba profile riêng để tránh 
 
 ## 2. Tài khoản trình bày
 
-| Vai trò | Email | Mật khẩu | Mục đích |
-|---|---|---|---|
-| UIT Admin | `admin.career@uit.edu.vn` | `Admin@12345` | Duyệt tin, xác nhận nơi thực tập |
-| Sinh viên | `20521067@student.uit.edu.vn` | `Student@12345` | Theo dõi ba đơn, phản hồi offer |
-| Sinh viên phụ | `21520881@student.uit.edu.vn` | `Student@12345` | Nhận offer vừa được doanh nghiệp tải PDF lên |
-| VNG recruiter | `recruiter@vng.example` | `Company@12345` | Minh họa doanh nghiệp đã gửi offer |
-| FPT recruiter | `recruiter@fpt.example` | `Company@12345` | Minh họa đơn tự đóng sau khi sinh viên nhận việc khác |
+Credential demo được nạp từ secret cục bộ của người trình bày. Không ghi mật khẩu vào tài liệu, không chạy kịch bản này với database production và không bật `E2E_ALLOW_REMOTE` cho môi trường người dùng thật.
 
 ## 3. Checkpoint ban đầu
 

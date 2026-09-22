@@ -13,7 +13,6 @@ artifacts
 coverage
 docs
 frontend
-backend-express-legacy
 playwright-report
 test-results
 *.log

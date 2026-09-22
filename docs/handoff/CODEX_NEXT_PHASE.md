@@ -64,7 +64,7 @@ mô tả đơn thuần là “website tìm việc”.
 ## 3. Hạ tầng và địa chỉ hiện tại
 
 - Frontend production: <https://uit-career-hub-web-041204.vercel.app>
-- Backend production: <https://uit-career-hub-api-041204.vercel.app>
+- Backend production: <https://uit-career-hub-java-api-041204.onrender.com>
 - Database: Neon PostgreSQL.
 - File private: Cloudflare R2, dùng presigned URL và kiểm tra ownership ở backend.
 - CI/CD: GitHub Actions và Vercel Git integration.
@@ -320,8 +320,8 @@ pnpm db:demo:check
 Health production chỉ đọc:
 
 ```powershell
-Invoke-RestMethod https://uit-career-hub-api-041204.vercel.app/api/health
-Invoke-RestMethod https://uit-career-hub-api-041204.vercel.app/api/health/database
+Invoke-RestMethod https://uit-career-hub-java-api-041204.onrender.com/api/health
+Invoke-RestMethod https://uit-career-hub-java-api-041204.onrender.com/api/health/database
 Invoke-RestMethod https://uit-career-hub-web-041204.vercel.app/api/health/database
 ```
 
@@ -353,7 +353,7 @@ Một tính năng chỉ được coi là hoàn thành khi đáp ứng đủ ph�
 - OpenAPI: `docs/api/openapi.yaml`
 - RBAC: `docs/security/rbac-matrix.md`
 - Reporting: `docs/domain/reporting.md`
-- Vercel/Neon: `docs/deployment/vercel-neon.md`
+- Vercel/Render/Neon: `docs/deployment/vercel-render-neon.md`
 - Cloudflare R2: `docs/deployment/cloudflare-r2.md`
 - Quy ước nhánh: `docs/branching.md` và `CONTRIBUTING.md`
 

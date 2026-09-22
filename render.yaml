@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: uit-career-hub-java-api-041204
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: https://uit-career-hub-web-041204.vercel.app
+      - key: PUBLIC_APP_URL
+        value: https://uit-career-hub-web-041204.vercel.app
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_MAX
+        value: "2"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_ISSUER
+        value: uit-career-hub-api
+      - key: JWT_AUDIENCE
+        value: uit-career-hub-web
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAME_SITE
+        value: lax
+      - key: UIT_EMAIL_DOMAINS
+        value: student.uit.edu.vn
+      - key: EMAIL_ENABLED
+        value: "false"
+      - key: OBJECT_STORAGE_ENABLED
+        value: "false"
+      - key: CRON_SECRET
+        generateValue: true

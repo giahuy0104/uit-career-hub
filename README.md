@@ -10,14 +10,13 @@ Tài liệu nghiệp vụ hiện tại: `docs/specification/UIT-Career-Hub-dac-t
 uit-career-hub/
 ├── frontend/        React + Vite, kế thừa prototype đã duyệt
 ├── backend/         Java 21 + Spring Boot 3.5 + Maven Wrapper
-├── backend-express-legacy/  Mã Express cũ, chỉ giữ để đối chiếu
 ├── database/        SQL migration và seed
 ├── docs/domain/     ERD và state machine
 ├── docs/api/        OpenAPI 3.1
 ├── docs/demo/       Checkpoint dữ liệu và kịch bản bảo vệ E2E
 ├── docs/handoff/    Bàn giao trạng thái và roadmap cho giai đoạn tiếp theo
 ├── docs/releases/   Checklist, phạm vi và ghi chú phát hành
-├── docs/deployment/ Cấu hình Vercel và Neon production
+├── docs/deployment/ Cấu hình Vercel, Render và Neon production
 ├── docs/security/   Ma trận phân quyền và ghi chú hardening
 ├── docs/testing/    Hướng dẫn Playwright E2E và database kiểm thử riêng
 └── docker-compose.yml (PostgreSQL local tùy chọn)
@@ -108,9 +107,10 @@ java -jar target\career-hub-api-0.0.1-SNAPSHOT.jar
 Trạng thái triển khai công khai:
 
 - Frontend: https://uit-career-hub-web-041204.vercel.app
-- URL `https://uit-career-hub-api-041204.vercel.app` vẫn là bản Express cũ; không dùng URL này để xác nhận back-end Java.
-- Back-end Spring Boot đã được kiểm tra ở local/CI nhưng chưa được triển khai lại lên môi trường chạy JVM.
-- Tài liệu `docs/deployment/vercel-neon.md` mô tả kiến trúc triển khai cũ và cần được cập nhật trước lần phát hành Java đầu tiên.
+- Backend Java: https://uit-career-hub-java-api-041204.onrender.com
+- Database: Neon PostgreSQL; chỉ backend nhận `DATABASE_URL`.
+- Frontend chuyển tiếp `/api/*` sang backend Java, giữ refresh cookie là cookie first-party.
+- Hướng dẫn: `docs/deployment/vercel-render-neon.md`.
 - Release MVP hiện tại: `docs/releases/v0.1.0.md`
 
 ## Kiểm tra
@@ -173,7 +173,7 @@ Kết nối DBeaver vào database local bằng: host `localhost`, port `5432`, d
 - `docs/demo/e2e-defense-script.md`
 - `docs/handoff/CODEX_NEXT_PHASE.md`
 - `docs/releases/v0.1.0.md`
-- `docs/deployment/vercel-neon.md`
+- `docs/deployment/vercel-render-neon.md`
 - `docs/decisions/001-modular-monolith-neon.md`
 - `docs/decisions/002-jwt-refresh-rbac.md`
 - `database/README.md`

@@ -84,10 +84,17 @@ async function main() {
   const pdf = createPdf();
   const startDate = futureDate(30);
   const passwords = {
-    company: process.env.E2E_COMPANY_PASSWORD || "Company@12345",
-    student: process.env.E2E_STUDENT_PASSWORD || "Student@12345",
-    admin: process.env.E2E_ADMIN_PASSWORD || "Admin@12345",
+    company: process.env.E2E_COMPANY_PASSWORD,
+    student: process.env.E2E_STUDENT_PASSWORD,
+    admin: process.env.E2E_ADMIN_PASSWORD,
   };
+  const missingPassword = Object.entries(passwords).find(([, password]) => !password);
+  if (missingPassword) {
+    throw new Error(
+      `Thiếu ${`E2E_${missingPassword[0].toUpperCase()}_PASSWORD`}. ` +
+        "Smoke test không dùng mật khẩu mặc định; hãy nạp secret của môi trường demo riêng.",
+    );
+  }
 
   console.log(`Smoke target: ${apiBaseUrl}`);
   const companyToken = await login("recruiter@vng.example", passwords.company);

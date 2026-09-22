@@ -2,7 +2,7 @@
 
 Phiên bản: `2026-08-11`
 
-Phạm vi: web app ba vai trò, Express API, Neon PostgreSQL, Cloudflare R2, Resend và Vercel Cron.
+Phạm vi: web app ba vai trò trên Vercel, Spring Boot API trên Render, Neon PostgreSQL, Cloudflare R2 và Resend.
 
 Tài liệu này là threat model dựa trên contract và mã nguồn hiện tại. Đây không phải biên bản pentest hộp đen hay bằng chứng backup/restore trên Neon. Mục tiêu là xác định tài sản, actor, trust boundary, threat, control hiện có và phần việc production còn lại.
 
@@ -36,7 +36,7 @@ Tài liệu này là threat model dựa trên contract và mã nguồn hiện t�
 ```mermaid
 flowchart LR
   B["Browser Student / UIT / Company"] -->|HTTPS, access token| F["Vercel frontend"]
-  F -->|same-origin /api rewrite| A["Express API"]
+  F -->|same-origin /api rewrite| A["Spring Boot API trên Render"]
   A -->|TLS, pooled connection| N["Neon PostgreSQL"]
   B -->|presigned PUT/GET, bearer URL| R["Private Cloudflare R2"]
   A -->|sign URL, HEAD, prefix check| R
@@ -63,8 +63,8 @@ Mức rủi ro là phần còn lại sau control hiện tại: `Thấp`, `Trung 
 | ADMIN-01 | UIT Admin bị chiếm hoặc lạm dụng quyền rộng (E/I) | RBAC tách vai trò, mutation quan trọng có audit. Xem [`rbac-routes.test.ts`](../../backend/src/security/rbac-routes.test.ts). | **Trung bình**: chưa có MFA và phân quyền chi tiết theo chức danh; bắt buộc trước rollout rộng. |
 | API-01 | Payload JSON/quần thể request gây DoS (DoS) | Body JSON giới hạn `1mb`; auth endpoint có rate limit; query có phân trang. Xem [`app.ts`](../../backend/src/app.ts). | **Trung bình**: API nghiệp vụ chưa có rate limit theo user/IP; đây là hardening kế tiếp. |
 | LOG-01 | Secret/PII/presigned URL xuất hiện trong log (I/R) | Lỗi 5xx dùng JSON event allow-list; không thu body/query/header/user PII; logger redaction key nhạy cảm, Bearer/JWT, URL credential và presigned signature. Xem [`structured-logger.ts`](../../backend/src/observability/structured-logger.ts), [`error-handler.ts`](../../backend/src/middleware/error-handler.ts). | **Trung bình**: redaction không thay thế DLP; cần kiểm tra retention/quyền truy cập log và test payload mới khi thêm integration. |
-| EMAIL-01 | Email lộ CV/offer/PII hoặc bị spoof (I/S) | Email chỉ mang title/body/deep link, không đính kèm file hay presigned URL; HTML được escape; outbox có retry/idempotency. Xem [`email-template.ts`](../../backend/src/modules/email/email-template.ts), [`email-delivery.service.ts`](../../backend/src/modules/email/email-delivery.service.ts), [`vercel-neon.md`](../deployment/vercel-neon.md). | **Trung bình**: chỉ bật gửi thật sau khi xác minh SPF/DKIM và review nội dung notification không chứa PII nhạy cảm. |
-| CONFIG-01 | Demo account/secret còn tồn tại khi mở cho user thật (S/E) | Production bundle hard-disable demo picker và quét demo credential; production-readiness gate kiểm tra reset flags, secret separation/rotation và demo users bằng read-only query. Xem [`production-readiness.ts`](../../backend/src/security/production-readiness.ts). | **Cao** cho đến khi operator thực sự suspend/xóa demo users và rotate external credentials; PR không tự động mutation production. |
+| EMAIL-01 | Email lộ CV/offer/PII hoặc bị spoof (I/S) | Email chỉ mang title/body/deep link, không đính kèm file hay presigned URL; HTML được escape; outbox có retry/idempotency. Xem [`EmailDeliveryService.java`](../../backend/src/main/java/vn/edu/uit/careerhub/email/EmailDeliveryService.java) và [`vercel-render-neon.md`](../deployment/vercel-render-neon.md). | **Trung bình**: chỉ bật gửi thật sau khi xác minh SPF/DKIM và review nội dung notification không chứa PII nhạy cảm. |
+| CONFIG-01 | Demo account/secret còn tồn tại khi mở cho user thật (S/E) | Production bundle hard-disable demo picker và build gate quét credential; Java chặn `db:seed` và `db:demo:reset` khi `NODE_ENV=production`. Xem [`DatabaseTasks.java`](../../backend/src/main/java/vn/edu/uit/careerhub/database/DatabaseTasks.java) và [checklist public](./public-release-checklist.md). | **Cao** cho đến khi operator thực sự suspend/xóa demo users và rotate external credentials; thay đổi production phải được xác nhận riêng. |
 | DB-01 | Mất dữ liệu hoặc restore không dùng được (DoS/T) | Drill có guard đã backup Neon test branch và restore vào PostgreSQL 17 local tạm; 17 migrations/28 tables/checksum/row counts khớp. Xem [`2026-08-11-neon-test-backup-restore.md`](./evidence/2026-08-11-neon-test-backup-restore.md). | **Trung bình**: cần lập lịch drill định kỳ, retention/RPO chính thức và đo RTO trên hạ tầng restore gần production hơn. |
 | OBS-01 | Sự cố/attack không được phát hiện (R) | Mỗi response có trace ID; lỗi 5xx được ghi structured JSON và có thể gửi webhook HTTPS với timeout/failure isolation. | **Trung bình**: production vẫn phải cấu hình endpoint, retention, dashboard và alert; business/auth metrics chưa được aggregate. |
 
