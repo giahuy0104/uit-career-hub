@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -58,6 +59,34 @@ public class AuthService {
         }
         repository.markLoginSucceeded(user.id());
         repository.recordAudit(user.id(), "AUTH_LOGIN_SUCCEEDED", "USER", user.id(), Map.of(), metadata);
+        return issueSession(user, metadata);
+    }
+
+    public IssuedSession registerStudent(StudentRegistrationRequest input, RequestMetadata metadata) {
+        String email = input.email().strip().toLowerCase();
+        String studentCode = input.studentCode().strip();
+        String fullName = input.fullName().strip().replaceAll("\\s+", " ");
+        if (!isAllowedStudentEmail(email)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "AUTH_REGISTRATION_EMAIL_NOT_ALLOWED",
+                    "Vui lòng sử dụng email UIT hợp lệ để đăng ký.");
+        }
+        String emailAccount = email.substring(0, email.lastIndexOf('@'));
+        if (!emailAccount.equalsIgnoreCase(studentCode)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "AUTH_REGISTRATION_STUDENT_CODE_MISMATCH",
+                    "Mã số sinh viên phải trùng với phần tên trong email UIT.");
+        }
+
+        UUID userId;
+        try {
+            userId = repository.createStudentAccount(email, passwords.encode(input.password()), fullName, studentCode);
+        } catch (DuplicateKeyException error) {
+            throw new AppException(HttpStatus.CONFLICT, "AUTH_REGISTRATION_CONFLICT",
+                    "Email hoặc mã số sinh viên đã được sử dụng.");
+        }
+        AuthUser user = repository.findUserById(userId)
+                .orElseThrow(() -> new IllegalStateException("Không thể đọc tài khoản vừa đăng ký."));
+        repository.recordAudit(userId, "AUTH_STUDENT_REGISTERED", "USER", userId,
+                Map.of("studentCode", studentCode), metadata);
         return issueSession(user, metadata);
     }
 

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DuplicateKeyException;
 
 import vn.edu.uit.careerhub.common.AppException;
 import vn.edu.uit.careerhub.config.AppProperties;
@@ -57,6 +58,60 @@ class AuthServiceTest {
                 .extracting(error -> ((AppException) error).code())
                 .isEqualTo("AUTH_INVALID_CREDENTIALS");
         verify(repository).recordAudit(isNull(), eq("AUTH_LOGIN_FAILED"), eq("USER"), isNull(), any(), eq(request));
+    }
+
+    @Test void registerStudentCreatesAnActiveAccountAndIssuesASession() {
+        UUID userId = UUID.randomUUID();
+        AuthUser registered = new AuthUser(userId, "22520001@student.uit.edu.vn", UserRole.STUDENT,
+                UserStatus.ACTIVE, "encoded", 0, null, "Nguyen Van An", "22520001", UUID.randomUUID(), null);
+        StudentRegistrationRequest input = new StudentRegistrationRequest("  Nguyen   Van An  ", "22520001",
+                "22520001@STUDENT.UIT.EDU.VN", "Password123", true);
+        when(passwords.encode("Password123")).thenReturn("encoded");
+        when(repository.createStudentAccount("22520001@student.uit.edu.vn", "encoded", "Nguyen Van An", "22520001"))
+                .thenReturn(userId);
+        when(repository.findUserById(userId)).thenReturn(Optional.of(registered));
+
+        AuthService.IssuedSession session = service.registerStudent(input, request);
+
+        assertThat(session.session().user().email()).isEqualTo("22520001@student.uit.edu.vn");
+        assertThat(session.refreshToken()).hasSize(64);
+        verify(repository).recordAudit(eq(userId), eq("AUTH_STUDENT_REGISTERED"), eq("USER"), eq(userId),
+                eq(Map.of("studentCode", "22520001")), eq(request));
+    }
+
+    @Test void registerStudentRejectsANonUitEmail() {
+        StudentRegistrationRequest input = new StudentRegistrationRequest("Nguyen Van An", "22520001",
+                "22520001@gmail.com", "Password123", true);
+
+        assertThatThrownBy(() -> service.registerStudent(input, request))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).code())
+                .isEqualTo("AUTH_REGISTRATION_EMAIL_NOT_ALLOWED");
+        verify(repository, never()).createStudentAccount(any(), any(), any(), any());
+    }
+
+    @Test void registerStudentRejectsAMismatchedStudentCode() {
+        StudentRegistrationRequest input = new StudentRegistrationRequest("Nguyen Van An", "22520001",
+                "22520002@student.uit.edu.vn", "Password123", true);
+
+        assertThatThrownBy(() -> service.registerStudent(input, request))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).code())
+                .isEqualTo("AUTH_REGISTRATION_STUDENT_CODE_MISMATCH");
+        verify(repository, never()).createStudentAccount(any(), any(), any(), any());
+    }
+
+    @Test void registerStudentMapsDuplicateEmailOrCodeToAConflict() {
+        StudentRegistrationRequest input = new StudentRegistrationRequest("Nguyen Van An", "22520001",
+                "22520001@student.uit.edu.vn", "Password123", true);
+        when(passwords.encode("Password123")).thenReturn("encoded");
+        when(repository.createStudentAccount(any(), any(), any(), any()))
+                .thenThrow(new DuplicateKeyException("duplicate"));
+
+        assertThatThrownBy(() -> service.registerStudent(input, request))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).code())
+                .isEqualTo("AUTH_REGISTRATION_CONFLICT");
     }
 
     @Test void loginRejectsAnAccountWithoutAPasswordYet() {

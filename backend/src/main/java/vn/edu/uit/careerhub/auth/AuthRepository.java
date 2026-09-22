@@ -69,6 +69,30 @@ public class AuthRepository {
                 .param("userId", userId).query(USER_MAPPER).optional();
     }
 
+    public UUID createStudentAccount(String email, String passwordHash, String fullName, String studentCode) {
+        return transactions.execute(status -> {
+            UUID userId = database.sql("""
+                    INSERT INTO users (email, role, status, password_hash, password_changed_at)
+                    VALUES (:email, 'STUDENT', 'ACTIVE', :passwordHash, now())
+                    RETURNING id
+                    """)
+                    .param("email", email)
+                    .param("passwordHash", passwordHash)
+                    .query(UUID.class)
+                    .single();
+            database.sql("""
+                    INSERT INTO student_profiles
+                      (user_id, student_code, full_name, faculty, major, cohort)
+                    VALUES (:userId, :studentCode, :fullName, 'Chưa cập nhật', 'Chưa cập nhật', 'Chưa cập nhật')
+                    """)
+                    .param("userId", userId)
+                    .param("studentCode", studentCode)
+                    .param("fullName", fullName)
+                    .update();
+            return userId;
+        });
+    }
+
     public void recordFailedLogin(UUID userId) {
         database.sql("""
                 UPDATE users

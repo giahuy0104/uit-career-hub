@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,6 +36,15 @@ public class AuthController {
         setRefreshCookie(response, result.refreshToken());
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         return ApiEnvelope.of(result.session());
+    }
+
+    @PostMapping("/register")
+    ResponseEntity<ApiEnvelope<AuthService.Session>> register(@Valid @RequestBody StudentRegistrationRequest input,
+            HttpServletRequest request, HttpServletResponse response) {
+        AuthService.IssuedSession result = service.registerStudent(input, RequestMetadata.from(request));
+        setRefreshCookie(response, result.refreshToken());
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiEnvelope.of(result.session()));
     }
 
     @PostMapping("/refresh")

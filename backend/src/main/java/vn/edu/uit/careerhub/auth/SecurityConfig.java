@@ -38,7 +38,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api", "/api/health/**", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/cron/daily-pending-notifications").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh",
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout", "/api/v1/auth/company-activation").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
