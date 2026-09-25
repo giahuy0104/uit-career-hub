@@ -1,5 +1,6 @@
 package vn.edu.uit.careerhub.applications;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
@@ -34,6 +35,14 @@ class ApplicationServiceTest {
     private final ApplicationService service = new ApplicationService(null, mock(ObjectProvider.class), null, null);
     private final RequestMetadata request = new RequestMetadata("127.0.0.1", "JUnit");
     private final AuthPrincipal recruiter = new AuthPrincipal(UUID.randomUUID(), "recruiter@vng.example", UserRole.COMPANY, UUID.randomUUID(), null, UUID.randomUUID());
+
+    @Test void acceptsAPdfHeaderAfterLeadingWhitespace() {
+        assertThat(ApplicationService.hasPdfHeader("\n%PDF-1.7\n".getBytes())).isTrue();
+    }
+
+    @Test void rejectsContentWithoutAPdfHeader() {
+        assertThat(ApplicationService.hasPdfHeader("not really a pdf".getBytes())).isFalse();
+    }
 
     @Test void recordResultRequiresAStartDateWhenPassing() {
         RecruitmentResult input = new RecruitmentResult(ResultOutcome.PASS, null, null, null, null, null);

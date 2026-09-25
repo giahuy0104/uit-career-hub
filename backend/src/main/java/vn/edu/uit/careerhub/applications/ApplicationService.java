@@ -41,6 +41,9 @@ import vn.edu.uit.careerhub.storage.ObjectStorage;
 
 @Service
 public class ApplicationService {
+    private static final byte[] PDF_HEADER = "%PDF-".getBytes(StandardCharsets.US_ASCII);
+    private static final int PDF_HEADER_SCAN_BYTES = 1024;
+
     private record Upload(UUID id,UUID ownerId,UUID applicationId,String documentType,String fileName,String mimeType,
             long size,String storageKey,String status,Instant expiresAt,UUID documentId) {}
     private final ApplicationRepository repository;
@@ -447,7 +450,20 @@ public class ApplicationService {
       """+(lock?" FOR UPDATE":"")).param("id",uploadId).param("owner",studentId).query(this::mapUpload).optional();}
     private Upload mapUpload(java.sql.ResultSet r,int n)throws java.sql.SQLException{return new Upload(r.getObject("id",UUID.class),r.getObject("owner_id",UUID.class),r.getObject("application_id",UUID.class),r.getString("document_type"),r.getString("file_name"),r.getString("mime_type"),r.getLong("file_size_bytes"),r.getString("storage_key"),r.getString("status"),r.getTimestamp("expires_at").toInstant(),r.getObject("student_document_id",UUID.class));}
     private void validateUploadState(Upload upload,String prefix){if(!"PENDING".equals(upload.status()))throw error(HttpStatus.CONFLICT,prefix+"_UPLOAD_CLOSED","Phiên tải tệp không còn hiệu lực.");if(!upload.expiresAt().isAfter(Instant.now())){repository.database().sql("UPDATE "+("STUDENT_DOCUMENT".equals(prefix)?"student_document_uploads":"offer_document_uploads")+" SET status='EXPIRED' WHERE id=:id").param("id",upload.id()).update();throw error(HttpStatus.GONE,prefix+"_UPLOAD_EXPIRED","URL tải tệp đã hết hạn.");}}
-    private void verifyPdf(ObjectStorage objects,Upload upload,String prefix){var metadata=objects.headObject(upload.storageKey());if(metadata==null)throw error(HttpStatus.CONFLICT,prefix+"_UPLOAD_MISSING","Kho lưu trữ chưa nhận được tệp.");String type=metadata.contentType()==null?null:metadata.contentType().split(";")[0].strip().toLowerCase();if(metadata.contentLength()!=upload.size()||!upload.mimeType().equals(type)){objects.deleteObject(upload.storageKey());throw error(HttpStatus.CONFLICT,prefix+"_UPLOAD_MISMATCH","Tệp không khớp dung lượng hoặc định dạng đã đăng ký.");}if(!"%PDF-".equals(new String(objects.readObjectPrefix(upload.storageKey(),5),StandardCharsets.US_ASCII))){objects.deleteObject(upload.storageKey());throw error(HttpStatus.CONFLICT,prefix+"_INVALID_PDF","Nội dung tệp không phải PDF hợp lệ.");}}
+    private void verifyPdf(ObjectStorage objects,Upload upload,String prefix){var metadata=objects.headObject(upload.storageKey());if(metadata==null)throw error(HttpStatus.CONFLICT,prefix+"_UPLOAD_MISSING","Kho lưu trữ chưa nhận được tệp.");String type=metadata.contentType()==null?null:metadata.contentType().split(";")[0].strip().toLowerCase();if(metadata.contentLength()!=upload.size()||!upload.mimeType().equals(type)){objects.deleteObject(upload.storageKey());throw error(HttpStatus.CONFLICT,prefix+"_UPLOAD_MISMATCH","Tệp không khớp dung lượng hoặc định dạng đã đăng ký.");}if(!hasPdfHeader(objects.readObjectPrefix(upload.storageKey(),PDF_HEADER_SCAN_BYTES))){objects.deleteObject(upload.storageKey());throw error(HttpStatus.CONFLICT,prefix+"_INVALID_PDF","Nội dung tệp không phải PDF hợp lệ.");}}
+
+    static boolean hasPdfHeader(byte[] prefix){
+        if(prefix==null||prefix.length<PDF_HEADER.length)return false;
+        int lastStart=Math.min(prefix.length,PDF_HEADER_SCAN_BYTES)-PDF_HEADER.length;
+        for(int start=0;start<=lastStart;start++){
+            boolean matches=true;
+            for(int offset=0;offset<PDF_HEADER.length;offset++){
+                if(prefix[start+offset]!=PDF_HEADER[offset]){matches=false;break;}
+            }
+            if(matches)return true;
+        }
+        return false;
+    }
 
     private AppException studentNotFound(){return error(HttpStatus.NOT_FOUND,"STUDENT_PROFILE_NOT_FOUND","Không tìm thấy hồ sơ sinh viên.");}
     private AppException applicationNotFound(){return error(HttpStatus.NOT_FOUND,"APPLICATION_NOT_FOUND","Không tìm thấy đơn ứng tuyển.");}
