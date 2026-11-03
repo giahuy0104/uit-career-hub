@@ -1,6 +1,6 @@
 import { accounts, login, logout } from "../../support/auth.mjs";
 import { expect, test } from "../../support/test.mjs";
-import { getDialog, openPortalSection, waitForApi } from "../../support/ui.mjs";
+import { getDialog, openPortalSection, openStudentInternships, waitForApi } from "../../support/ui.mjs";
 
 async function openWeek(page, weekNumber) {
   const week = page.locator(".weekly-log-list button").filter({ hasText: `Tuần ${weekNumber}` });
@@ -21,12 +21,12 @@ test("@full nhật ký thực tập tuần qua đủ ba vai trò", async ({ page
   await test.step("Sinh viên cập nhật và nộp nhật ký quá hạn", async () => {
     await logout(page);
     await login(page, accounts.student);
-    await openPortalSection(page, "Quá trình thực tập", "Quá trình thực tập");
+    await openStudentInternships(page);
     await openWeek(page, 2);
     await page.getByLabel("Kết quả đạt được *").fill("Hoàn thành API, bộ kiểm thử đơn vị và tài liệu mô tả endpoint.");
     await page.getByLabel("Kế hoạch tuần tiếp theo *").fill("Tích hợp API vào luồng chính và bổ sung kiểm thử tích hợp.");
 
-    let response = waitForApi(page, "PUT", "/weekly-logs/");
+    let response = waitForApi(page, "PUT", "/student/internships/");
     await page.getByRole("button", { name: "Lưu nhật ký" }).click();
     expect((await response).status()).toBe(200);
     await expect(page.getByText("Đã lưu nhật ký tuần 2.")).toBeVisible();
@@ -49,17 +49,17 @@ test("@full nhật ký thực tập tuần qua đủ ba vai trò", async ({ page
     const response = waitForApi(page, "POST", "/request-revision");
     await dialog.getByRole("button", { name: "Gửi yêu cầu" }).click();
     expect((await response).status()).toBe(200);
-    await expect(page.locator(".weekly-log-detail")).toContainText("Cần chỉnh sửa");
+    await expect(page.locator(".weekly-log-detail")).toContainText("Nội dung cần chỉnh sửa");
   });
 
   await test.step("Sinh viên sửa và nộp lại", async () => {
     await logout(page);
     await login(page, accounts.student);
-    await openPortalSection(page, "Quá trình thực tập", "Quá trình thực tập");
+    await openStudentInternships(page);
     await openWeek(page, 2);
-    await expect(page.getByText("Vui lòng bổ sung kết quả kiểm thử và sản phẩm đã bàn giao trong tuần.")).toBeVisible();
+    await expect(page.getByText("Vui lòng bổ sung kết quả kiểm thử và sản phẩm đã bàn giao trong tuần.").first()).toBeVisible();
     await page.getByLabel("Kết quả đạt được *").fill("Hoàn thành 18 ca kiểm thử; bàn giao mã nguồn, báo cáo coverage và tài liệu endpoint cho mentor.");
-    let response = waitForApi(page, "PUT", "/weekly-logs/");
+    let response = waitForApi(page, "PUT", "/student/internships/");
     await page.getByRole("button", { name: "Lưu nhật ký" }).click();
     expect((await response).status()).toBe(200);
     response = waitForApi(page, "POST", "/submit");
