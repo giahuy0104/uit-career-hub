@@ -143,6 +143,9 @@ WHERE job_post_id IN (SELECT id FROM demo_job_ids);
 DELETE FROM job_posts
 WHERE id IN (SELECT id FROM demo_job_ids);
 
+DELETE FROM student_document_uploads
+WHERE student_profile_id IN (SELECT id FROM demo_student_ids);
+
 DELETE FROM student_documents
 WHERE student_profile_id IN (SELECT id FROM demo_student_ids);
 
@@ -164,6 +167,9 @@ WHERE user_id IN (SELECT id FROM demo_user_ids);
 
 DELETE FROM account_activation_tokens
 WHERE user_id IN (SELECT id FROM demo_user_ids);
+
+DELETE FROM email_deliveries
+WHERE recipient_user_id IN (SELECT id FROM demo_user_ids);
 
 DELETE FROM users
 WHERE id IN (SELECT id FROM demo_user_ids);
