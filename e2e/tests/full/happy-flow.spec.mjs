@@ -48,10 +48,10 @@ test("@full happy flow ba vai trò đến placement", async ({ page }) => {
 
   await test.step("Student ứng tuyển hai bước", async () => {
     await logout(page);
-    await login(page, accounts.student);
+    await login(page, accounts.studentAuxiliary);
     await expect(page.getByRole("heading", { name: "Tổng quan", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Việc làm", exact: true }).first().click();
-    await expect(page.getByRole("heading", { name: "Cơ hội dành cho bạn" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Việc làm", level: 1 })).toBeVisible();
     await page.getByLabel("Tìm việc làm").fill(jobTitle);
     await page.locator(".job-row").filter({ hasText: jobTitle }).click();
     await page.getByRole("button", { name: "Ứng tuyển", exact: true }).click();
@@ -62,7 +62,7 @@ test("@full happy flow ba vai trò đến placement", async ({ page }) => {
     const applyResponse = waitForApi(page, "POST", "/applications");
     await page.getByRole("button", { name: "Gửi đơn ứng tuyển" }).click();
     expect((await applyResponse).status()).toBe(201);
-    await expect(page.getByRole("heading", { name: "Đơn ứng tuyển của tôi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Đơn ứng tuyển", level: 1 })).toBeVisible();
     await selectApplication(page, jobTitle);
     await expect(page.locator(".active-application .status-pill")).toHaveText("UIT đang kiểm duyệt");
   });
@@ -109,7 +109,7 @@ test("@full happy flow ba vai trò đến placement", async ({ page }) => {
 
   await test.step("Student nhận offer", async () => {
     await logout(page);
-    await login(page, accounts.student);
+    await login(page, accounts.studentAuxiliary);
     await page.getByRole("button", { name: "Đơn ứng tuyển", exact: true }).first().click();
     await selectApplication(page, jobTitle);
     await page.getByRole("button", { name: "Nhận offer", exact: true }).click();
@@ -179,7 +179,7 @@ test("@full happy flow ba vai trò đến placement", async ({ page }) => {
 
   await test.step("Student xem đánh giá và gửi phản hồi riêng", async () => {
     await logout(page);
-    await login(page, accounts.student);
+    await login(page, accounts.studentAuxiliary);
     await page.getByRole("button", { name: "Đơn ứng tuyển", exact: true }).first().click();
     await selectApplication(page, jobTitle);
     await expect(page.locator(".active-application .status-pill")).toHaveText("Đã nhận việc");

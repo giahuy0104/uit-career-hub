@@ -19,6 +19,12 @@ export async function openPortalSection(page, navigationName, heading) {
   await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
 }
 
+// The student internship page replaces the page header with the student's internship profile.
+export async function openStudentInternships(page) {
+  await page.getByRole("navigation").getByRole("button", { name: "Quá trình thực tập", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Thông tin kỳ thực tập" })).toBeVisible();
+}
+
 export async function selectApplication(page, jobTitle) {
   await page.getByLabel("Tìm đơn ứng tuyển").fill(jobTitle);
   const row = page.locator(".application-row").filter({ hasText: jobTitle });

@@ -38,6 +38,7 @@ app:
     refresh-cookie-secure: ${AUTH_COOKIE_SECURE:false}
     refresh-cookie-same-site: ${AUTH_COOKIE_SAME_SITE:lax}
     uit-email-domains: ${UIT_EMAIL_DOMAINS:student.uit.edu.vn,uit.edu.vn}
+    trusted-proxy-hops: ${TRUSTED_PROXY_HOPS:0}
   email:
     enabled: ${EMAIL_ENABLED:false}
     api-key: ${RESEND_API_KEY:}

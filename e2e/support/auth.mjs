@@ -34,7 +34,7 @@ export async function login(page, account, { useDemoButton = false, dashboardPat
     await page.getByRole("button", { name: new RegExp(`^${account.demoLabel}\\b`) }).click();
   } else {
     await page.getByLabel("Email").fill(account.email);
-    await page.getByLabel("Mật khẩu").fill(account.password);
+    await page.getByLabel("Mật khẩu", { exact: true }).fill(account.password);
   }
 
   const loginResponse = page.waitForResponse((response) =>

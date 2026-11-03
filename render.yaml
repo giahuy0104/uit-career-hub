@@ -30,6 +30,8 @@ services:
         value: "true"
       - key: AUTH_COOKIE_SAME_SITE
         value: lax
+      - key: TRUSTED_PROXY_HOPS
+        value: "2"
       - key: UIT_EMAIL_DOMAINS
         value: student.uit.edu.vn
       - key: EMAIL_ENABLED

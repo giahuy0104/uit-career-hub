@@ -1,11 +1,11 @@
 import { accounts, login, logout } from "../../support/auth.mjs";
 import { expect, test } from "../../support/test.mjs";
-import { getDialog, openPortalSection, waitForApi } from "../../support/ui.mjs";
+import { getDialog, openPortalSection, openStudentInternships, waitForApi } from "../../support/ui.mjs";
 
 test("@full kế hoạch thực tập qua đủ ba vai trò và hai vòng chỉnh sửa", async ({ page }) => {
   await test.step("Sinh viên tạo, lưu nháp và nộp kế hoạch", async () => {
     await login(page, accounts.student);
-    await openPortalSection(page, "Quá trình thực tập", "Quá trình thực tập");
+    await openStudentInternships(page);
 
     await page.getByLabel("Tên kế hoạch / vị trí thực tập").fill("Kế hoạch thực tập Platform Engineering");
     await page.getByLabel("Bộ phận thực tập").fill("Platform Engineering");
@@ -45,8 +45,8 @@ test("@full kế hoạch thực tập qua đủ ba vai trò và hai vòng chỉn
   await test.step("Sinh viên sửa, nộp lại và doanh nghiệp xác nhận", async () => {
     await logout(page);
     await login(page, accounts.student);
-    await openPortalSection(page, "Quá trình thực tập", "Quá trình thực tập");
-    await expect(page.getByText("Vui lòng bổ sung sản phẩm bàn giao dự kiến cho từng nhóm công việc.")).toBeVisible();
+    await openStudentInternships(page);
+    await expect(page.getByText("Vui lòng bổ sung sản phẩm bàn giao dự kiến cho từng nhóm công việc.").first()).toBeVisible();
     await page.getByLabel("Công việc dự kiến").fill("Phát triển REST API; bàn giao mã nguồn, bộ kiểm thử và tài liệu vận hành cuối kỳ.");
     let response = waitForApi(page, "PUT", "/student/internships/");
     await page.getByRole("button", { name: "Lưu bản nháp" }).click();
@@ -80,7 +80,7 @@ test("@full kế hoạch thực tập qua đủ ba vai trò và hai vòng chỉn
 
     await logout(page);
     await login(page, accounts.student);
-    await openPortalSection(page, "Quá trình thực tập", "Quá trình thực tập");
+    await openStudentInternships(page);
     await page.getByLabel("Mục tiêu thực tập").fill("Vận dụng kiến thức thiết kế API, kiểm thử và cơ sở dữ liệu để hoàn thành sản phẩm theo chuẩn đầu ra học phần.");
     response = waitForApi(page, "PUT", "/student/internships/");
     await page.getByRole("button", { name: "Lưu bản nháp" }).click();
