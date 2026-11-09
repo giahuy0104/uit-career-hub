@@ -6,6 +6,7 @@ import {
   ClipboardText,
   GraduationCap,
   House,
+  Sparkle,
   Tag,
   UserCheck,
 } from "@phosphor-icons/react";
@@ -27,6 +28,7 @@ export const adminPortalConfig = {
     { key: "admin-applications", label: "Duyệt hồ sơ sinh viên", Icon: UserCheck },
     { key: "admin-placements", label: "Theo dõi kết quả", Icon: GraduationCap },
     { key: "admin-internships", label: "Quản lý thực tập", Icon: ClipboardText },
+    { key: "admin-ai", label: "Trợ lý AI", Icon: Sparkle },
     { key: "admin-notifications", label: "Thông báo", Icon: Bell },
   ],
 };

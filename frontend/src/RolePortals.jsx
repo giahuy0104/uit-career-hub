@@ -44,6 +44,7 @@ import {
 import { NotificationInbox } from "./notifications/NotificationInbox.jsx";
 import { InternshipPlanWorkspace } from "./internships/InternshipPlanWorkspace.jsx";
 import { AdminReports } from "./reports/AdminReports.jsx";
+import { AiSettingsPanel } from "./internships/AiAssistant.jsx";
 import { AdminPlacementLifecycle } from "./placements/AdminPlacementLifecycle.jsx";
 import { InternshipEvaluationPanel } from "./placements/InternshipEvaluationPanel.jsx";
 import { AdminTaxonomyManagement } from "./taxonomy/TaxonomyManagement.jsx";
@@ -538,6 +539,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     "admin-applications": ["Duyệt hồ sơ sinh viên", "Xác minh điều kiện và tài liệu trước khi chuyển hồ sơ đến doanh nghiệp."],
     "admin-placements": ["Theo dõi kết quả tuyển dụng", "Theo dõi từ phỏng vấn đến nhận việc, thực tập và hoàn thành."],
     "admin-internships": ["Quản lý thực tập", "Phê duyệt kế hoạch, theo dõi nhật ký hằng tuần và phát hiện trường hợp quá hạn."],
+    "admin-ai": ["Trợ lý AI", "Bật/tắt trợ lý AI và theo dõi số lượt dùng, độ trễ của các chức năng góp ý và tóm tắt."],
     "admin-notifications": ["Thông báo", "Các yêu cầu mới và thay đổi trạng thái cần bộ phận UIT theo dõi."],
   };
   const activeRoute = titles[route] ? route : "admin-dashboard";
@@ -553,6 +555,7 @@ export function AdminPortal({ route, navigate, navigationPayload, user, onLogout
     {activeRoute === "admin-applications" && <LiveAdminApplicationReview targetApplicationId={navigationPayload?.notification?.resourceId} />}
     {activeRoute === "admin-placements" && <><AdminPlacements targetApplicationId={navigationPayload?.notification?.resourceId} /><AdminPlacementLifecycle /></>}
     {activeRoute === "admin-internships" && <InternshipPlanWorkspace role="admin" targetPlacementId={navigationPayload?.notification?.payload?.placementId} />}
+    {activeRoute === "admin-ai" && <AiSettingsPanel />}
     {activeRoute === "admin-notifications" && <NotificationInbox role="admin" onOpen={(notification, destination) => navigate(destination, { notification })} />}
     {modal === "company" && <CompanyCreatePartnerModal close={() => setModal(null)} onComplete={() => setCompaniesVersion(value => value + 1)} />}
   </WorkspaceShell>;

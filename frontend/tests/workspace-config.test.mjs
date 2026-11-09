@@ -19,6 +19,7 @@ test("admin navigation exposes only API-backed screens", () => {
     "admin-applications",
     "admin-placements",
     "admin-internships",
+    "admin-ai",
     "admin-notifications",
   ]);
   assert.equal(keys.includes("admin-scheduler"), false);
@@ -35,6 +36,7 @@ test("quick navigation resolves labels for each protected portal", () => {
   assert.equal(findQuickNavigationTarget("student", "quá trình thực tập")?.key, "internships");
   assert.equal(findQuickNavigationTarget("company", "sinh viên thực tập")?.key, "company-internships");
   assert.equal(findQuickNavigationTarget("admin", "quản lý thực tập")?.key, "admin-internships");
+  assert.equal(findQuickNavigationTarget("admin", "trợ lý ai")?.key, "admin-ai");
   assert.equal(findQuickNavigationTarget("admin", "scheduler"), null);
   assert.equal(findQuickNavigationTarget("company", ""), null);
 });

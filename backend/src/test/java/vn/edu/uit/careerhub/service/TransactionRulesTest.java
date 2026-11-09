@@ -27,6 +27,10 @@ class TransactionRulesTest {
         assertThat(attribute(WeeklyLogService.class, "review")).isNotNull();
     }
 
+    @Test void aiSettingsChangeAndItsAuditCommitTogether() {
+        assertThat(attribute(AiAssistantService.class, "updateSettings")).isNotNull();
+    }
+
     @Test void expiringAnUploadCommitsButOtherFailuresRollBack() {
         for (Class<?> type : new Class<?>[] {StudentDocumentService.class, RecruitmentResultService.class}) {
             String method = type == StudentDocumentService.class ? "completeStudentUpload" : "completeOfferUpload";

@@ -3,6 +3,7 @@ package vn.edu.uit.careerhub.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -41,6 +42,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import vn.edu.uit.careerhub.ai.AiClient;
+import vn.edu.uit.careerhub.ai.AiCompletion;
+import vn.edu.uit.careerhub.ai.AiPrompt;
 import vn.edu.uit.careerhub.database.DatabaseTasks;
 import vn.edu.uit.careerhub.repository.InternshipPlanRepository;
 import vn.edu.uit.careerhub.storage.ObjectStorage;
@@ -80,6 +84,8 @@ class RealDatabaseIntegrationTest {
     @Autowired DatabaseTasks tasks;
     @Autowired PasswordEncoder encoder;
     @MockitoBean ObjectStorage storage;
+    /** Stands in for Gemini: the AI SQL and endpoints run for real, no request leaves the machine. */
+    @MockitoBean AiClient aiClient;
     @MockitoSpyBean InternshipPlanRepository planRepository;
 
     @DynamicPropertySource
@@ -93,6 +99,8 @@ class RealDatabaseIntegrationTest {
         registry.add("app.security.trusted-proxy-hops", () -> "0");
         registry.add("app.email.enabled", () -> "false");
         registry.add("app.storage.enabled", () -> "false");
+        registry.add("app.ai.api-key", () -> "integration-test-key");
+        registry.add("app.ai.daily-limit-per-user", () -> "0");
     }
 
     static void assertSafeTestDatabase(String url) {
@@ -116,6 +124,14 @@ class RealDatabaseIntegrationTest {
         when(storage.createUploadUrl(anyString(), anyString(), anyLong())).thenReturn("https://storage.test/upload");
         when(storage.createDownloadUrl(anyString(), anyString(), anyLong())).thenReturn("https://storage.test/download");
         when(storage.headObject(anyString())).thenReturn(new ObjectStorage.Metadata(1000, "application/pdf", "etag-1"));
+        when(aiClient.model()).thenReturn("gemini-test");
+        when(aiClient.generate(any(AiPrompt.class))).thenAnswer(invocation -> {
+            AiPrompt prompt = invocation.getArgument(0);
+            String text = prompt.user().contains("<ke_hoach_sinh_vien>")
+                    ? "{\"overall\":\"Kế hoạch khá rõ\",\"strengths\":[],\"issues\":[]}"
+                    : "{\"overview\":\"Tiến độ ổn\",\"keyPoints\":[\"API\"],\"flags\":[{\"weekNumber\":1,\"type\":\"TOO_SHORT\",\"detail\":\"Ngắn\"}]}";
+            return new AiCompletion(text, 50, 10);
+        });
         when(storage.readObjectPrefix(anyString(), anyInt())).thenReturn("%PDF-1.7".getBytes(StandardCharsets.US_ASCII));
     }
 
@@ -265,6 +281,7 @@ class RealDatabaseIntegrationTest {
         plan.put("startDate", LocalDate.now().toString());
         plan.put("endDate", LocalDate.now().plusMonths(2).toString());
         int version = call("PUT", "/student/internships/" + placement + "/plan", student, plan, 200, false).at("/data/plan/version").asInt();
+        aiAgainstRealSql(placement, student, vng, admin, plan, version);
         version = call("POST", "/student/internships/" + placement + "/plan/submit", student, Map.of("expectedVersion", version), 200, true).at("/data/plan/version").asInt();
         UUID placementId = UUID.fromString(placement);
         doThrow(new IllegalStateException("boom after transition")).when(planRepository).find(eq(placementId));
@@ -292,6 +309,7 @@ class RealDatabaseIntegrationTest {
         call("POST", "/student/internships/" + placement + "/weekly-logs/" + logId + "/submit", student, Map.of("expectedVersion", logVersion), 200, true);
         logVersion = db.sql("SELECT version FROM internship_weekly_logs WHERE id=:id").param("id", UUID.fromString(logId)).query(Integer.class).single();
         call("POST", "/company/internships/" + placement + "/weekly-logs/" + logId + "/confirm", vng, Map.of("expectedVersion", logVersion), 200, true);
+        aiLogSummaryAgainstRealSql(placement, student, vng, admin);
         call("GET", "/uit/internship-supervision/summary", admin, null, 200, false);
         call("GET", "/uit/internship-supervision/overdue", admin, null, 200, false);
 
@@ -311,6 +329,61 @@ class RealDatabaseIntegrationTest {
         var missingCron = mvc.perform(MockMvcRequestBuilders.get("/api/v1/cron/daily-pending-notifications")).andReturn().getResponse();
         assertThat(missingCron.getStatus()).isEqualTo(401);
         assertThat(mvc.perform(MockMvcRequestBuilders.get("/api/health/database")).andReturn().getResponse().getStatus()).isEqualTo(200);
+    }
+
+    /** AI1 on the draft plan: answer is cached, the plan row is untouched, the call is logged without content. */
+    private void aiAgainstRealSql(String placement, String student, String vng, String admin, Map<String, Object> plan, int planVersion) throws Exception {
+        UUID placementId = UUID.fromString(placement);
+        Map<String, Object> draft = Map.of("objectives", plan.get("objectives"), "expectedTasks", plan.get("expectedTasks"),
+                "expectedSkills", plan.get("expectedSkills"));
+        String path = "/student/internships/" + placement + "/plan/ai-review";
+
+        assertThat(call("POST", path, student, draft, 200, false).at("/data/status").asText()).isEqualTo("SUCCESS");
+        JsonNode cached = call("POST", path, student, draft, 200, false).at("/data");
+        assertThat(cached.at("/status").asText()).isEqualTo("CACHED");
+        assertThat(cached.at("/result/overall").asText()).isEqualTo("Kế hoạch khá rõ");
+        call("POST", path, vng, draft, 403, false);
+        call("POST", path, student, Map.of("objectives", " "), 400, false);
+
+        assertThat(db.sql("SELECT status FROM internship_plans WHERE placement_id=:id").param("id", placementId).query(String.class).single())
+                .isEqualTo("DRAFT");
+        assertThat(db.sql("SELECT version FROM internship_plans WHERE placement_id=:id").param("id", placementId).query(Integer.class).single())
+                .isEqualTo(planVersion);
+        assertThat(db.sql("SELECT count(*) FROM ai_suggestions WHERE feature='PLAN_REVIEW' AND target_id=:id").param("id", placementId).query(Long.class).single())
+                .isEqualTo(1);
+
+        // Switching AI off answers "no suggestion" (not an error) and is audited; switching back restores it.
+        call("PUT", "/uit/ai/settings", admin, Map.of("enabled", false), 200, false);
+        JsonNode disabled = call("POST", path, student, Map.of("objectives", "Một mục tiêu mới"), 200, false).at("/data");
+        assertThat(disabled.at("/available").asBoolean()).isFalse();
+        assertThat(disabled.at("/status").asText()).isEqualTo("DISABLED");
+        JsonNode settings = call("PUT", "/uit/ai/settings", admin, Map.of("enabled", true), 200, false).at("/data");
+        assertThat(settings.at("/enabled").asBoolean()).isTrue();
+        assertThat(settings.at("/configured").asBoolean()).isTrue();
+        assertThat(settings.at("/updatedBy").asText()).isNotBlank();
+        assertThat(db.sql("SELECT count(*) FROM audit_logs WHERE action IN ('AI_ENABLED','AI_DISABLED') AND created_at > now() - interval '1 minute'")
+                .query(Long.class).single()).isGreaterThanOrEqualTo(2);
+        call("GET", "/uit/ai/settings", student, null, 403, false);
+    }
+
+    /** AI2 on the submitted log, for the host company and UIT; other companies cannot see it. */
+    private void aiLogSummaryAgainstRealSql(String placement, String student, String vng, String admin) throws Exception {
+        UUID placementId = UUID.fromString(placement);
+        JsonNode company = call("POST", "/company/internships/" + placement + "/weekly-logs/ai-summary", vng, null, 200, false).at("/data");
+        assertThat(company.at("/status").asText()).isEqualTo("SUCCESS");
+        assertThat(company.at("/result/flags/0/weekNumber").asInt()).isEqualTo(1);
+        assertThat(company.at("/result/weekCount").asInt()).isEqualTo(1);
+        assertThat(call("POST", "/uit/internship-supervision/" + placement + "/weekly-logs/ai-summary", admin, null, 200, false)
+                .at("/data/status").asText()).isEqualTo("CACHED");
+        call("POST", "/company/internships/" + placement + "/weekly-logs/ai-summary", login(FPT, COMPANY_PASSWORD), null, 404, false);
+        call("POST", "/company/internships/" + placement + "/weekly-logs/ai-summary", student, null, 403, false);
+
+        JsonNode usage = call("GET", "/uit/ai/settings", admin, null, 200, false).at("/data/usage");
+        assertThat(usage.isArray()).isTrue();
+        assertThat(db.sql("""
+                SELECT count(*) FROM ai_call_logs
+                WHERE target_id=:id AND status='SUCCESS' AND prompt_tokens=50 AND output_tokens=10 AND latency_ms IS NOT NULL
+                """).param("id", placementId).query(Long.class).single()).isEqualTo(2);
     }
 
     @Test
