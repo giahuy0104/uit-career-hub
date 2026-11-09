@@ -183,7 +183,7 @@ final class AiPrompts {
     private static String statusLabel(WeeklyLogStatus status) {
         return switch (status) {
             case SUBMITTED -> "Chờ doanh nghiệp xác nhận";
-            case COMPANY_REVISION_REQUIRED -> "Doanh nghiệp yêu cầu sửa";
+            case COMPANY_REVISION_REQUIRED -> "Doanh nghiệp yêu cầu sửa, đây là nội dung lần nộp gần nhất";
             case COMPANY_CONFIRMED -> "Đã xác nhận";
             default -> status.name();
         };
@@ -198,8 +198,17 @@ final class AiPrompts {
         return Map.of("type", "OBJECT", "properties", properties, "required", required);
     }
 
-    private static String orDash(String value) { return value == null || value.isBlank() ? "—" : value.strip(); }
-    private static String orEmpty(String value) { return value == null || value.isBlank() ? "(để trống)" : value.strip(); }
+    private static String orDash(String value) { return value == null || value.isBlank() ? "—" : data(value); }
+    private static String orEmpty(String value) { return value == null || value.isBlank() ? "(để trống)" : data(value); }
+
+    /**
+     * User text goes between our &lt;...&gt; tags, so it must not be able to close them: a log containing
+     * "&lt;/nhat_ky&gt;" followed by instructions would otherwise read as text outside the data. Angle
+     * brackets become look-alike characters that keep the meaning for the model.
+     */
+    static String data(String value) {
+        return value.strip().replace('<', '‹').replace('>', '›');
+    }
     private static String text(Object value) { return value == null ? "" : value.toString().strip(); }
     private static List<?> list(Object value) { return value instanceof List<?> items ? items : List.of(); }
 

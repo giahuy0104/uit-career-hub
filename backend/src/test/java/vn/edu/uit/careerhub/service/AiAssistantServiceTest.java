@@ -3,9 +3,11 @@ package vn.edu.uit.careerhub.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -69,6 +71,8 @@ class AiAssistantServiceTest {
 
     @BeforeEach void wire() {
         service = service("key");
+        // Slots are free unless a test says otherwise.
+        lenient().when(repository.reserveProviderCall(any(), anyInt())).thenReturn(true);
     }
 
     private AiAssistantService service(String apiKey) {
@@ -145,19 +149,37 @@ class AiAssistantServiceTest {
 
         assertThat(result.status()).isEqualTo("CACHED");
         assertThat(client.calls).isZero();
-        verify(repository, never()).providerCallsToday(any());
+        verify(repository, never()).reserveProviderCall(any(), anyInt());
+    }
+
+    @Test void aSlotIsReservedBeforeTheProviderIsCalled() {
+        when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
+        when(repository.enabled()).thenReturn(true);
+        when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.reserveProviderCall(student.userId(), 3)).thenAnswer(invocation -> {
+            assertThat(client.calls).as("slot must be taken before Gemini is called").isZero();
+            return true;
+        });
+        client.answer = "{\"overall\":\"Ổn\"}";
+
+        assertThat(service.reviewPlan(student, placementId, draft).status()).isEqualTo("SUCCESS");
+        verify(repository).reserveProviderCall(student.userId(), 3);
+        assertThat(client.calls).isEqualTo(1);
     }
 
     @Test void dailyLimitStopsFurtherProviderCalls() {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.providerCallsToday(student.userId())).thenReturn(3);
+        when(repository.reserveProviderCall(student.userId(), 3)).thenReturn(false);
 
         AiSuggestion result = service.reviewPlan(student, placementId, draft);
 
         assertThat(result.status()).isEqualTo("RATE_LIMITED");
         assertThat(client.calls).isZero();
+        verify(repository).logCall(eq(student.userId()), any(), eq(AiFeature.PLAN_REVIEW), eq(placementId),
+                eq(AiCallStatus.RATE_LIMITED), any(), isNull(), isNull(), isNull(), isNull());
     }
 
     @Test void logSummaryIsLimitedToTheHostCompanyAndNeedsSubmittedLogs() {
@@ -167,14 +189,14 @@ class AiAssistantServiceTest {
         assertThatThrownBy(() -> service.summarizeWeeklyLogs(otherCompany, placementId)).isInstanceOf(AppException.class);
         assertThatThrownBy(() -> service.summarizeWeeklyLogs(student, placementId)).isInstanceOf(AppException.class);
 
-        when(repository.submittedLogs(placementId)).thenReturn(List.of());
+        when(repository.lastSubmittedLogs(placementId)).thenReturn(List.of());
         assertThat(service.summarizeWeeklyLogs(company, placementId).status()).isEqualTo("NO_DATA");
         assertThat(client.calls).isZero();
     }
 
     @Test void logSummaryReturnsNormalizedFlags() {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.APPROVED)));
-        when(repository.submittedLogs(placementId)).thenReturn(List.of(
+        when(repository.lastSubmittedLogs(placementId)).thenReturn(List.of(
                 new AiWeeklyLogEntry(1, WeeklyLogStatus.COMPANY_CONFIRMED, "Nguyễn Văn An dựng môi trường", "Xong", null, "Viết API"),
                 new AiWeeklyLogEntry(2, WeeklyLogStatus.SUBMITTED, "Viết API", "Xong 2 endpoint", "Chưa có quyền DB", "Test")));
         when(repository.enabled()).thenReturn(true);
@@ -240,6 +262,38 @@ class AiAssistantServiceTest {
                 .contains("[đã ẩn]", "[số điện thoại]");
     }
 
+    @Test void namesOutsideTheKnownListAndTheJobTitleAreMaskedToo() {
+        when(repository.placement(placementId)).thenReturn(Optional.of(new AiPlacementContext(placementId, PlacementStatus.STARTED,
+                studentProfileId, companyId, "Nguyễn Văn An", "25410230", "an@gm.uit.edu.vn",
+                "Thực tập Backend - liên hệ chị Ngọc Hân", "Báo cáo cho anh Phạm Quốc Huy", "Java", InternshipPlanStatus.DRAFT,
+                "Trần Bình", "binh@acme.vn")));
+        when(repository.enabled()).thenReturn(true);
+        when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        client.answer = "{\"overall\":\"Ổn\"}";
+
+        service.reviewPlan(student, placementId, new AiPlanReviewRequest(
+                "Học từ mentor Đức và bạn Lê Thị Mai", "Pair với Võ Minh Khoa", "Spring Boot"));
+
+        assertThat(client.lastPrompt.user())
+                .doesNotContain("Ngọc Hân", "Phạm Quốc Huy", "Đức", "Lê Thị Mai", "Võ Minh Khoa")
+                .contains("Thực tập Backend", "[tên người]", "Spring Boot");
+    }
+
+    @Test void logSummaryMasksColleaguesNamedInTheLogs() {
+        when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.APPROVED)));
+        when(repository.lastSubmittedLogs(placementId)).thenReturn(List.of(new AiWeeklyLogEntry(1, WeeklyLogStatus.SUBMITTED,
+                "Họp với anh Tuấn và chị Hoàng Thu Trang", "Xong", "Cần anh Khánh cấp quyền", "Test")));
+        when(repository.enabled()).thenReturn(true);
+        when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        client.answer = "{\"overview\":\"Ổn\"}";
+
+        service.summarizeWeeklyLogs(company, placementId);
+
+        assertThat(client.lastPrompt.user()).doesNotContain("Tuấn", "Thu Trang", "Khánh").contains("anh [tên người]");
+    }
+
     @Test void changedContentIsACacheMissWhileSameContentReusesTheKey() {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
@@ -267,7 +321,7 @@ class AiAssistantServiceTest {
         client.answer = "{\"overall\":\"Ổn\"}";
 
         assertThat(service.reviewPlan(student, placementId, draft).status()).isEqualTo("SUCCESS");
-        verify(repository, never()).providerCallsToday(any());
+        verify(repository, never()).reserveProviderCall(any(), anyInt());
     }
 
     @Test void literalNullOrWrongShapeFromTheModelIsAFailureNotAServerError() {
@@ -287,7 +341,7 @@ class AiAssistantServiceTest {
     @Test void uitStaffCanSummarizeAnyPlacement() {
         AuthPrincipal admin = new AuthPrincipal(UUID.randomUUID(), "admin@uit.edu.vn", UserRole.UIT_ADMIN, UUID.randomUUID(), null, null);
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.APPROVED)));
-        when(repository.submittedLogs(placementId)).thenReturn(List.of(
+        when(repository.lastSubmittedLogs(placementId)).thenReturn(List.of(
                 new AiWeeklyLogEntry(1, WeeklyLogStatus.SUBMITTED, "Làm API", "Xong", null, "Test")));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
@@ -307,7 +361,7 @@ class AiAssistantServiceTest {
             logs.add(new AiWeeklyLogEntry(week, WeeklyLogStatus.COMPANY_CONFIRMED, "Tuần " + week, "Xong", null, "Tiếp"));
         }
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.APPROVED)));
-        when(repository.submittedLogs(placementId)).thenReturn(logs);
+        when(repository.lastSubmittedLogs(placementId)).thenReturn(logs);
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
         when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());

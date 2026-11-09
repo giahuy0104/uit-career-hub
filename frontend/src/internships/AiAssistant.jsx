@@ -40,20 +40,27 @@ function formatTime(value) {
   return value ? dateTimeFormatter.format(new Date(value)) : "";
 }
 
-/** Calls an AI endpoint on demand and keeps the last answer. */
-function useAiRequest() {
+/**
+ * Calls an AI endpoint on demand and keeps the last answer, together with the input it was made
+ * from. When `inputKey` no longer matches that input the answer is marked stale, so nobody mistakes
+ * it for feedback on the current content.
+ */
+function useAiRequest(inputKey) {
   const { authorizedRequest } = useAuth();
   const [busy, setBusy] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
+  const [answeredKey, setAnsweredKey] = useState(null);
   const [error, setError] = useState("");
 
   const run = async (path, body) => {
     if (busy) return;
+    const requestKey = inputKey;
     setBusy(true);
     setError("");
     try {
       const response = await authorizedRequest(path, { method: "POST", body: JSON.stringify(body || {}) });
       setSuggestion(response.data);
+      setAnsweredKey(requestKey);
     } catch (requestError) {
       setSuggestion(null);
       setError(requestError?.message || "Không thể kết nối đến hệ thống.");
@@ -62,15 +69,18 @@ function useAiRequest() {
     }
   };
 
-  return { busy, suggestion, error, run, dismiss: () => { setSuggestion(null); setError(""); } };
+  const stale = Boolean(suggestion) && answeredKey !== inputKey;
+  return { busy, suggestion, stale, error, run, dismiss: () => { setSuggestion(null); setError(""); } };
 }
 
 /** Frame shared by every AI result: clear label, disclaimer and a way to ignore it. */
-function AiResultFrame({ suggestion, error, onDismiss, children }) {
+function AiResultFrame({ suggestion, stale, staleText, error, onDismiss, children }) {
   if (error) return <div className="ai-card ai-card-muted" role="alert"><Warning />{error}</div>;
   if (!suggestion) return null;
-  if (!suggestion.available) return <div className="ai-card ai-card-muted" role="status"><Info /><span><strong>Chưa có gợi ý.</strong> {suggestion.message}</span></div>;
-  return <section className="ai-card" aria-label="Gợi ý từ AI">
+  // A "no suggestion" notice about old input is just noise once the input changed.
+  if (!suggestion.available) return stale ? null : <div className="ai-card ai-card-muted" role="status"><Info /><span><strong>Chưa có gợi ý.</strong> {suggestion.message}</span></div>;
+  return <section className={`ai-card ${stale ? "ai-card-stale" : ""}`} aria-label="Gợi ý từ AI">
+    {stale && <p className="ai-stale-note" role="status"><Warning />{staleText}</p>}
     <header className="ai-card-header">
       <span className="ai-badge"><Sparkle weight="fill" />Gợi ý từ AI</span>
       <small>{suggestion.status === "CACHED" ? "Kết quả đã lưu" : "Vừa tạo"} · {formatTime(suggestion.generatedAt)}</small>
@@ -83,7 +93,8 @@ function AiResultFrame({ suggestion, error, onDismiss, children }) {
 
 /** AI1: student asks for feedback on the plan currently in the form (no need to save first). */
 export function AiPlanReview({ placementId, form }) {
-  const { busy, suggestion, error, run, dismiss } = useAiRequest();
+  const planKey = JSON.stringify([form.objectives, form.expectedTasks, form.expectedSkills].map((value) => value?.trim() || ""));
+  const { busy, suggestion, stale, error, run, dismiss } = useAiRequest(planKey);
   const hasContent = [form.objectives, form.expectedTasks, form.expectedSkills].some((value) => value?.trim());
   const result = suggestion?.result;
 
@@ -98,7 +109,8 @@ export function AiPlanReview({ placementId, form }) {
         {busy ? <><CircleNotch className="spin" />AI đang đọc...</> : <><Lightning />Nhờ AI góp ý</>}
       </button>
     </div>
-    <AiResultFrame suggestion={suggestion} error={error} onDismiss={dismiss}>
+    <AiResultFrame suggestion={suggestion} stale={stale} error={error} onDismiss={dismiss}
+      staleText="Kế hoạch đã thay đổi sau lần góp ý này. Bấm “Nhờ AI góp ý” để nhận góp ý cho nội dung mới.">
       {result && <>
         <p className="ai-overview">{result.overall}</p>
         {result.strengths?.length > 0 && <div className="ai-block"><h4>Điểm đã tốt</h4><ul className="ai-list ai-list-good">{result.strengths.map((item, index) => <li key={index}><CheckCircle weight="fill" />{item}</li>)}</ul></div>}
@@ -117,20 +129,24 @@ export function AiPlanReview({ placementId, form }) {
   </div>;
 }
 
-/** AI2: company/UIT reviewer asks for a summary of the submitted weekly logs. */
-export function AiWeeklyLogSummary({ role, placementId, onSelectWeek }) {
-  const { busy, suggestion, error, run, dismiss } = useAiRequest();
+/**
+ * AI2: company/UIT reviewer asks for a summary of the weekly logs as last submitted.
+ * `logsKey` changes whenever a log is submitted again or reviewed, which marks an older summary stale.
+ */
+export function AiWeeklyLogSummary({ role, placementId, logsKey, onSelectWeek }) {
+  const { busy, suggestion, stale, error, run, dismiss } = useAiRequest(logsKey);
   const result = suggestion?.result;
 
   return <div className="ai-assist">
     <div className="ai-assist-bar">
-      <span><Sparkle weight="duotone" />Tóm tắt các tuần đã nộp và đánh dấu tuần cần xem kỹ. AI không duyệt thay bạn.</span>
+      <span><Sparkle weight="duotone" />Tóm tắt nội dung lần nộp gần nhất của các tuần và đánh dấu tuần cần xem kỹ. Phần sinh viên đang sửa nhưng chưa nộp lại không được tính. AI không duyệt thay bạn.</span>
       <button type="button" className="secondary-button small ai-trigger" disabled={busy}
         onClick={() => void run(`${roleBase[role]}/${placementId}/weekly-logs/ai-summary`)}>
         {busy ? <><CircleNotch className="spin" />AI đang đọc...</> : <><Lightning />Tóm tắt bằng AI</>}
       </button>
     </div>
-    <AiResultFrame suggestion={suggestion} error={error} onDismiss={dismiss}>
+    <AiResultFrame suggestion={suggestion} stale={stale} error={error} onDismiss={dismiss}
+      staleText="Nhật ký đã có thay đổi (nộp lại hoặc được xử lý) sau lần tóm tắt này. Bấm “Tóm tắt bằng AI” để cập nhật.">
       {result && <>
         <p className="ai-overview">{result.overview}</p>
         {result.keyPoints?.length > 0 && <div className="ai-block"><h4>Ý chính ({result.weekCount} tuần)</h4><ul className="ai-list">{result.keyPoints.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}

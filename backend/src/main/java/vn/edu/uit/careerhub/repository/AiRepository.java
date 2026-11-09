@@ -55,13 +55,19 @@ public class AiRepository {
                 .optional();
     }
 
-    /** Logs the student has submitted at least once; drafts stay private to the student. */
-    public List<AiWeeklyLogEntry> submittedLogs(UUID placementId) {
+    /**
+     * Logs the student has submitted at least once, with the content of their latest submission.
+     * Drafts stay private to the student, and while a log is back for revision the student edits
+     * the live row directly, so the content is read from the submission snapshot instead.
+     */
+    public List<AiWeeklyLogEntry> lastSubmittedLogs(UUID placementId) {
         return database.sql("""
-          SELECT week_number,status,work_summary,outcomes,difficulties,next_plan
-          FROM internship_weekly_logs
-          WHERE placement_id=:id AND status IN ('SUBMITTED','COMPANY_REVISION_REQUIRED','COMPANY_CONFIRMED')
-          ORDER BY week_number
+          SELECT l.week_number,l.status,s.snapshot->>'workSummary' work_summary,s.snapshot->>'outcomes' outcomes,
+            s.snapshot->>'difficulties' difficulties,s.snapshot->>'nextPlan' next_plan
+          FROM internship_weekly_logs l
+          JOIN internship_weekly_log_submissions s ON s.weekly_log_id=l.id AND s.submission_no=l.current_submission_no
+          WHERE l.placement_id=:id AND l.status IN ('SUBMITTED','COMPANY_REVISION_REQUIRED','COMPANY_CONFIRMED')
+          ORDER BY l.week_number
           """).param("id", placementId).query((row, number) -> new AiWeeklyLogEntry(
                 row.getInt("week_number"), WeeklyLogStatus.valueOf(row.getString("status")),
                 row.getString("work_summary"), row.getString("outcomes"), row.getString("difficulties"),
@@ -102,13 +108,19 @@ public class AiRepository {
                 .param("enabled", enabled).param("ip", request.ipAddress()).param("agent", request.userAgent()).update();
     }
 
-    /** Calls that reached (or tried to reach) the provider today, Vietnam time. Cache hits are free. */
-    public int providerCallsToday(UUID userId) {
+    /**
+     * Takes one provider-call slot for today (Vietnam time) if the user still has one. A single
+     * upsert holds the row lock while it checks and increments, so concurrent requests cannot both
+     * take the last slot. Cache hits never get here, so they stay free.
+     */
+    public boolean reserveProviderCall(UUID userId, int dailyLimit) {
         return database.sql("""
-          SELECT count(*) FROM ai_call_logs
-          WHERE user_id=:userId AND status IN ('SUCCESS','FAILED')
-            AND created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh')
-          """).param("userId", userId).query(Integer.class).single();
+          INSERT INTO ai_daily_usage(user_id,usage_date,provider_calls)
+          VALUES(:userId,(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date,1)
+          ON CONFLICT(user_id,usage_date) DO UPDATE SET provider_calls=ai_daily_usage.provider_calls+1,updated_at=now()
+            WHERE ai_daily_usage.provider_calls < :limit
+          RETURNING provider_calls
+          """).param("userId", userId).param("limit", dailyLimit).query(Integer.class).optional().isPresent();
     }
 
     public void logCall(UUID userId, UserRole role, AiFeature feature, UUID targetId, AiCallStatus status, String model,

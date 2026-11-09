@@ -20,6 +20,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -46,6 +50,8 @@ import vn.edu.uit.careerhub.ai.AiClient;
 import vn.edu.uit.careerhub.ai.AiCompletion;
 import vn.edu.uit.careerhub.ai.AiPrompt;
 import vn.edu.uit.careerhub.database.DatabaseTasks;
+import vn.edu.uit.careerhub.entity.AiWeeklyLogEntry;
+import vn.edu.uit.careerhub.repository.AiRepository;
 import vn.edu.uit.careerhub.repository.InternshipPlanRepository;
 import vn.edu.uit.careerhub.storage.ObjectStorage;
 
@@ -83,6 +89,7 @@ class RealDatabaseIntegrationTest {
     @Autowired JdbcClient db;
     @Autowired DatabaseTasks tasks;
     @Autowired PasswordEncoder encoder;
+    @Autowired AiRepository aiRepository;
     @MockitoBean ObjectStorage storage;
     /** Stands in for Gemini: the AI SQL and endpoints run for real, no request leaves the machine. */
     @MockitoBean AiClient aiClient;
@@ -384,6 +391,41 @@ class RealDatabaseIntegrationTest {
                 SELECT count(*) FROM ai_call_logs
                 WHERE target_id=:id AND status='SUCCESS' AND prompt_tokens=50 AND output_tokens=10 AND latency_ms IS NOT NULL
                 """).param("id", placementId).query(Long.class).single()).isEqualTo(2);
+
+        // While a log is back for revision the student edits the live row; AI2 must still read the
+        // content of the latest submission, not the unsubmitted edits.
+        db.sql("UPDATE internship_weekly_logs SET status='COMPANY_REVISION_REQUIRED',work_summary='Đang sửa, chưa nộp' WHERE placement_id=:id")
+                .param("id", placementId).update();
+        List<AiWeeklyLogEntry> sent = aiRepository.lastSubmittedLogs(placementId);
+        assertThat(sent).hasSize(1);
+        assertThat(sent.get(0).workSummary()).isEqualTo("Tóm tắt công việc.");
+    }
+
+    /** The daily limit is a hard cap: parallel requests cannot all take the last slots. */
+    @Test
+    void dailyAiSlotsCannotBeOverbookedByConcurrentRequests() throws Exception {
+        UUID userId = db.sql("SELECT id FROM users WHERE email=:e").param("e", ADMIN).query(UUID.class).single();
+        db.sql("DELETE FROM ai_daily_usage WHERE user_id=:id").param("id", userId).update();
+        int limit = 3;
+        int requests = 12;
+        ExecutorService pool = Executors.newFixedThreadPool(requests);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<Boolean>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < requests; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return aiRepository.reserveProviderCall(userId, limit);
+                }));
+            }
+            start.countDown();
+            long granted = 0;
+            for (Future<Boolean> result : results) if (result.get()) granted++;
+            assertThat(granted).isEqualTo(limit);
+        } finally {
+            pool.shutdownNow();
+            db.sql("DELETE FROM ai_daily_usage WHERE user_id=:id").param("id", userId).update();
+        }
     }
 
     @Test

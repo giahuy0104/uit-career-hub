@@ -75,14 +75,18 @@ public class AiAssistantService {
                     "Hãy nhập ít nhất mục tiêu, công việc hoặc kỹ năng trước khi nhờ AI góp ý.");
         }
         List<String> known = personalValues(placement);
-        AiPrompt prompt = AiPrompts.planReview(placement.jobTitle(),
+        AiPrompt prompt = AiPrompts.planReview(PiiMasker.mask(placement.jobTitle(), known),
                 PiiMasker.mask(placement.jobDescription(), known), PiiMasker.mask(placement.jobRequirements(), known),
                 PiiMasker.mask(input.objectives(), known), PiiMasker.mask(input.expectedTasks(), known),
                 PiiMasker.mask(input.expectedSkills(), known));
         return run(principal, AiFeature.PLAN_REVIEW, placementId, prompt, AiPrompts::normalizePlanReview);
     }
 
-    /** AI2: summary of the submitted weekly logs, for the host company or UIT staff. */
+    /**
+     * AI2: summary of the weekly logs as last submitted, for the host company or UIT staff. A log the
+     * company sent back for revision is summarised from its latest submission, not from the edits the
+     * student is still making.
+     */
     public AiSuggestion summarizeWeeklyLogs(AuthPrincipal principal, UUID placementId) {
         AiPlacementContext placement = repository.placement(placementId).orElseThrow(this::notFound);
         boolean allowed = switch (principal.role()) {
@@ -92,7 +96,7 @@ public class AiAssistantService {
         };
         if (!allowed) throw notFound();
 
-        List<AiWeeklyLogEntry> logs = repository.submittedLogs(placementId);
+        List<AiWeeklyLogEntry> logs = repository.lastSubmittedLogs(placementId);
         if (logs.isEmpty()) {
             return unavailable(AiFeature.WEEKLY_LOG_SUMMARY, "NO_DATA", "Sinh viên chưa nộp nhật ký nào để tóm tắt.");
         }
@@ -100,7 +104,7 @@ public class AiAssistantService {
         List<AiWeeklyLogEntry> masked = logs.stream().map(log -> new AiWeeklyLogEntry(log.weekNumber(), log.status(),
                 PiiMasker.mask(log.workSummary(), known), PiiMasker.mask(log.outcomes(), known),
                 PiiMasker.mask(log.difficulties(), known), PiiMasker.mask(log.nextPlan(), known))).toList();
-        AiPrompt prompt = AiPrompts.weeklyLogSummary(placement.jobTitle(), masked);
+        AiPrompt prompt = AiPrompts.weeklyLogSummary(PiiMasker.mask(placement.jobTitle(), known), masked);
         Set<Integer> weeks = masked.stream().skip(Math.max(0, masked.size() - AiPrompts.MAX_LOG_WEEKS))
                 .map(AiWeeklyLogEntry::weekNumber).collect(Collectors.toSet());
         return run(principal, AiFeature.WEEKLY_LOG_SUMMARY, placementId, prompt,
@@ -144,7 +148,9 @@ public class AiAssistantService {
         }
 
         int limit = properties.dailyLimitPerUser();
-        if (limit > 0 && repository.providerCallsToday(principal.userId()) >= limit) {
+        // Take the slot before calling the provider, in one atomic statement, so parallel requests
+        // cannot both see the last free slot and both reach Gemini.
+        if (limit > 0 && !repository.reserveProviderCall(principal.userId(), limit)) {
             log(principal, feature, targetId, AiCallStatus.RATE_LIMITED, model, null, null, null);
             return unavailable(feature, AiCallStatus.RATE_LIMITED.name(),
                     "Bạn đã dùng hết " + limit + " lượt AI hôm nay. Vui lòng thử lại vào ngày mai.");

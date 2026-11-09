@@ -11,6 +11,10 @@
 .ai-card-header small { color: #667085; }
 .ai-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #efeafd; color: #5a3fc0; font-size: 12.5px; font-weight: 700; }
 .ai-dismiss { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: #667085; cursor: pointer; }
+.ai-card-stale { border-left-color: #b8a9e6; }
+.ai-card-stale > :not(.ai-card-header):not(.ai-stale-note):not(.ai-dismiss) { opacity: .6; }
+.ai-stale-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 9px 11px; border: 1px solid #f3d38a; border-radius: 9px; background: #fff8e6; color: #7a5300; font-size: 13.5px; line-height: 1.5; }
+.ai-stale-note svg { flex: none; margin-top: 2px; }
 .ai-dismiss:hover { background: #f2f4f7; color: #172033; }
 
 .ai-overview { margin: 0; font-size: 15px; line-height: 1.6; }
