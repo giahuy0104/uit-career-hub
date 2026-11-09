@@ -38,6 +38,13 @@ Migration `0017` tạo `internship_evaluations` cho phiếu Company và Student 
 trong khoảng 1–5, một phiếu cho mỗi vai trò/placement và một command cho mỗi placement; phiếu chỉ có API tạo/đọc,
 không có API sửa hoặc xóa.
 
+Migration `0020` thêm hạ tầng trợ lý AI (Gemini): `ai_settings` (một dòng, công tắc bật/tắt do UIT điều khiển),
+`ai_call_logs` (thời gian, người gọi, chức năng, độ trễ, token; không lưu nội dung gửi cho AI) và `ai_suggestions`
+(kết quả đã tạo, khóa theo hash nội dung để không gọi lại AI khi nội dung chưa đổi). AI không ghi vào bảng kế hoạch hay nhật ký.
+
+Migration `0021` thêm `ai_daily_usage` (một dòng mỗi người/ngày theo giờ Việt Nam) để giữ lượt gọi AI một cách nguyên tử:
+lượt được trừ bằng một câu upsert có điều kiện trước khi gọi Gemini, nên các request đồng thời không thể cùng dùng lượt cuối.
+
 ## Lệnh
 
 ```powershell

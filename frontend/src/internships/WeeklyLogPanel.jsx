@@ -22,6 +22,7 @@ import {
 
 import { useAuth } from "../auth/AuthContext.jsx";
 import { EmptyHint, Panel, Status } from "../shared/WorkspaceShell.jsx";
+import { AiWeeklyLogSummary } from "./AiAssistant.jsx";
 import "./weekly-log.css";
 
 const statusCopy = {
@@ -165,6 +166,9 @@ export function WeeklyLogPanel({ role, placementId }) {
   const orderedLogs = useMemo(() => [...logs].sort((a, b) => b.weekNumber - a.weekNumber), [logs]);
   const chronologicalLogs = useMemo(() => [...logs].sort((a, b) => a.weekNumber - b.weekNumber), [logs]);
   const logsByWeek = useMemo(() => new Map(logs.map((log) => [log.weekNumber, log])), [logs]);
+  // What AI2 summarises: each submitted week's status and latest submission number.
+  const aiLogsKey = useMemo(() => chronologicalLogs.filter((log) => log.currentSubmissionNo > 0)
+    .map((log) => `${log.id}:${log.status}:${log.currentSubmissionNo}`).join("|"), [chronologicalLogs]);
 
   const load = async (keepSelection = true) => {
     setLoading(true);
@@ -355,6 +359,7 @@ export function WeeklyLogPanel({ role, placementId }) {
       </div>
       {role === "admin" && globalSummary && <div className="weekly-global-summary"><div><small>Toàn trường</small><strong>{globalSummary.startedPlacements} kỳ đang diễn ra · {globalSummary.totalLogs} nhật ký</strong></div><span><Warning />{overdueTotal ?? globalSummary.overdue} nhật ký quá hạn cần theo dõi</span></div>}
       {error && <p className="review-error weekly-log-error" role="alert"><Warning />{error}</p>}
+      {role !== "student" && logs.length > 0 && <AiWeeklyLogSummary key={placementId} role={role} placementId={placementId} logsKey={aiLogsKey} onSelectWeek={(weekNumber) => { const log = logsByWeek.get(weekNumber); if (log) setSelectedId(log.id); }} />}
       <div className="weekly-log-toolbar">
         <p>{role === "student" ? "Tạo và hoàn thành nhật ký theo đúng thứ tự tuần." : role === "company" ? "Kiểm tra nội dung trước khi xác nhận hoặc gửi góp ý." : "UIT theo dõi tiến độ; nội dung nhật ký do sinh viên và doanh nghiệp xác nhận."}</p>
         {role === "student" && data?.summary.canCreate && <button type="button" className="primary-button" disabled={busy} onClick={() => void create()}>{busy ? <CircleNotch className="spin" /> : <Plus />}Tạo tuần {data.summary.nextWeekNumber}</button>}

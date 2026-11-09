@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../auth/AuthContext.jsx";
 import { EmptyHint, MetricCard, Panel, Status, userInitials } from "../shared/WorkspaceShell.jsx";
 import { WeeklyLogPanel } from "./WeeklyLogPanel.jsx";
+import { AiPlanReview } from "./AiAssistant.jsx";
 import "./internship-plan.css";
 
 const statusCopy = {
@@ -288,6 +289,7 @@ export function InternshipPlanWorkspace({ role, targetPlacementId }) {
             <div className="internship-heading"><span className="large-avatar small">{userInitials(selected.placement.student.fullName)}</span><div><h2>{selected.placement.student.fullName}</h2><p>{selected.placement.student.studentCode} · {selected.placement.job.title}</p><small>{selected.placement.job.company.name}</small></div>{selected.plan && <span className="version-label">Phiên bản {selected.plan.version} · Lần nộp {selected.plan.currentSubmissionNo}</span>}</div>
             {selected.plan?.latestNote && ["COMPANY_REVISION_REQUIRED", "UIT_REVISION_REQUIRED"].includes(selected.plan.status) && <div className="internship-revision-note"><Warning /><div><strong>Nội dung cần chỉnh sửa</strong><p>{selected.plan.latestNote}</p></div></div>}
             <PlanFields item={selected} form={form} setForm={setForm} editable={selected.availableActions.includes("SAVE")} />
+            {selected.availableActions.includes("SAVE") && <AiPlanReview key={selected.placement.id} placementId={selected.placement.id} form={form} />}
             {error && <p className="form-error" role="alert"><Warning />{error}</p>}
             <div className="review-actions internship-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => void load()}><ClockCounterClockwise />Làm mới</button>{selected.availableActions.includes("SAVE") && <button type="button" className="secondary-button" disabled={busy} onClick={() => void save()}>{busy ? <CircleNotch className="spin" /> : <PencilSimple />}Lưu bản nháp</button>}{selected.availableActions.includes("SUBMIT") && <button type="button" className="primary-button" disabled={busy || !selected.plan} onClick={() => void submit()}><PaperPlaneTilt />Nộp kế hoạch</button>}</div>
           </Panel>
