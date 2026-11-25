@@ -123,6 +123,23 @@ public class AiRepository {
           """).param("userId", userId).param("limit", dailyLimit).query(Integer.class).optional().isPresent();
     }
 
+    /**
+     * Gives back a slot taken by {@link #reserveProviderCall} when the provider was overloaded.
+     * The row never drops to zero (table check), so the last slot removes the row instead.
+     */
+    public void releaseProviderCall(UUID userId) {
+        int updated = database.sql("""
+          UPDATE ai_daily_usage SET provider_calls=provider_calls-1,updated_at=now()
+          WHERE user_id=:userId AND usage_date=(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND provider_calls>1
+          """).param("userId", userId).update();
+        if (updated == 0) {
+            database.sql("""
+              DELETE FROM ai_daily_usage
+              WHERE user_id=:userId AND usage_date=(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND provider_calls=1
+              """).param("userId", userId).update();
+        }
+    }
+
     public void logCall(UUID userId, UserRole role, AiFeature feature, UUID targetId, AiCallStatus status, String model,
             Integer latencyMs, Integer promptTokens, Integer outputTokens, String errorCode) {
         database.sql("""

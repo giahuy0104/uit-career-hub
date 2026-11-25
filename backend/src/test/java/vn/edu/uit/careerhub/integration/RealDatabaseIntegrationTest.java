@@ -422,6 +422,12 @@ class RealDatabaseIntegrationTest {
             long granted = 0;
             for (Future<Boolean> result : results) if (result.get()) granted++;
             assertThat(granted).isEqualTo(limit);
+
+            aiRepository.releaseProviderCall(userId);
+            assertThat(aiRepository.reserveProviderCall(userId, limit)).as("a released slot can be used again").isTrue();
+            assertThat(aiRepository.reserveProviderCall(userId, limit)).isFalse();
+            for (int i = 0; i <= limit; i++) aiRepository.releaseProviderCall(userId);
+            assertThat(db.sql("SELECT count(*) FROM ai_daily_usage WHERE user_id=:id").param("id", userId).query(Long.class).single()).isZero();
         } finally {
             pool.shutdownNow();
             db.sql("DELETE FROM ai_daily_usage WHERE user_id=:id").param("id", userId).update();

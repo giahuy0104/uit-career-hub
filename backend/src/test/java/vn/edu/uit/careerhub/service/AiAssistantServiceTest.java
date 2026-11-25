@@ -168,6 +168,22 @@ class AiAssistantServiceTest {
         assertThat(client.calls).isEqualTo(1);
     }
 
+    @Test void overloadedProviderGivesTheSlotBackButOtherFailuresDoNot() {
+        when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
+        when(repository.enabled()).thenReturn(true);
+        when(repository.cached(any(), any(), any())).thenReturn(Optional.empty());
+
+        client.failure = new AiClientException("TIMEOUT", "slow");
+        service.reviewPlan(student, placementId, draft);
+        verify(repository, never()).releaseProviderCall(any());
+
+        client.failure = new AiClientException("HTTP_503", "overloaded");
+        AiSuggestion suggestion = service.reviewPlan(student, placementId, draft);
+        assertThat(suggestion.available()).isFalse();
+        assertThat(suggestion.message()).contains("quá tải");
+        verify(repository).releaseProviderCall(student.userId());
+    }
+
     @Test void dailyLimitStopsFurtherProviderCalls() {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);

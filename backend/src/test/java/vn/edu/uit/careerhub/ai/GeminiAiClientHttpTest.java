@@ -6,7 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +26,8 @@ class GeminiAiClientHttpTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final AtomicReference<HttpExchange> lastExchange = new AtomicReference<>();
     private final AtomicReference<String> lastBody = new AtomicReference<>();
+    private final AtomicInteger calls = new AtomicInteger();
+    private volatile int overloadedCalls = 0;
     private volatile int status = 200;
     private volatile String reply = "";
     private HttpServer server;
@@ -33,15 +38,17 @@ class GeminiAiClientHttpTest {
         server.createContext("/", exchange -> {
             lastExchange.set(exchange);
             lastBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            boolean overloaded = calls.incrementAndGet() <= overloadedCalls;
             byte[] bytes = reply.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
+            exchange.sendResponseHeaders(overloaded ? 503 : status, bytes.length == 0 ? -1 : bytes.length);
             if (bytes.length > 0) exchange.getResponseBody().write(bytes);
             exchange.close();
         });
         server.start();
         String base = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1beta/";
-        client = new GeminiAiClient(new AiProperties("secret-key", "gemini-test", base, 5, 30), mapper);
+        client = new GeminiAiClient(new AiProperties("secret-key", "gemini-test", base, 5, 30), mapper,
+                List.of(Duration.ofMillis(1), Duration.ofMillis(1)));
     }
 
     @AfterEach void stop() {
@@ -64,6 +71,36 @@ class GeminiAiClientHttpTest {
         assertThat(mapper.readTree(lastBody.get()).at("/contents/0/parts/0/text").asText()).isEqualTo("user");
         assertThat(completion.text()).isEqualTo("{\"overall\":\"ok\"}");
         assertThat(completion.promptTokens()).isEqualTo(10);
+    }
+
+    @Test void overloadedProviderIsRetriedUntilItAnswers() {
+        overloadedCalls = 2;
+        reply = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"{}\"}]},\"finishReason\":\"STOP\"}]}";
+
+        assertThat(client.generate(new AiPrompt("s", "u", Map.of())).text()).isEqualTo("{}");
+        assertThat(calls).hasValue(3);
+    }
+
+    @Test void overloadedProviderIsTriedAtMostThreeTimesAndOtherErrorsOnce() {
+        status = 503;
+        assertThatThrownBy(() -> client.generate(new AiPrompt("s", "u", Map.of())))
+                .isInstanceOfSatisfying(AiClientException.class, e -> assertThat(e.providerOverloaded()).isTrue());
+        assertThat(calls).hasValue(3);
+
+        calls.set(0);
+        status = 429;
+        assertThatThrownBy(() -> client.generate(new AiPrompt("s", "u", Map.of())))
+                .isInstanceOfSatisfying(AiClientException.class, e -> assertThat(e.providerOverloaded()).isFalse());
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test void retriesStopWhenTheNextDelayWouldPassTheTimeout() {
+        status = 503;
+        String base = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1beta";
+        GeminiAiClient slow = new GeminiAiClient(new AiProperties("k", "m", base, 5, 30), mapper, List.of(Duration.ofSeconds(60)));
+
+        assertThatThrownBy(() -> slow.generate(new AiPrompt("s", "u", Map.of()))).isInstanceOf(AiClientException.class);
+        assertThat(calls).hasValue(1);
     }
 
     @Test void httpErrorsBecomeShortCodes() {
