@@ -164,6 +164,11 @@ public class AiAssistantService {
             result = normalize.apply(json.object(completion.text()));
         } catch (AiClientException error) {
             log(principal, feature, targetId, AiCallStatus.FAILED, model, elapsedMs(started), null, error.code());
+            if (error.providerOverloaded()) {
+                if (limit > 0) repository.releaseProviderCall(principal.userId());
+                return unavailable(feature, AiCallStatus.FAILED.name(),
+                        "AI đang quá tải nên chưa có gợi ý. Lượt này không bị tính, vui lòng thử lại sau ít phút.");
+            }
             return unavailable(feature, AiCallStatus.FAILED.name(),
                     "AI đang lỗi hoặc phản hồi chậm nên chưa có gợi ý. Vui lòng thử lại sau.");
         } catch (RuntimeException error) {

@@ -15,6 +15,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import vn.edu.uit.careerhub.config.AiProperties;
@@ -22,13 +23,22 @@ import vn.edu.uit.careerhub.config.AiProperties;
 /** Google Gemini generateContent API, asked to answer as JSON that follows a schema. */
 @Component
 public class GeminiAiClient implements AiClient {
+    private static final List<Duration> RETRY_DELAYS = List.of(Duration.ofSeconds(1), Duration.ofSeconds(2));
+
     private final AiProperties properties;
     private final ObjectMapper mapper;
+    private final List<Duration> retryDelays;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
+    @Autowired
     public GeminiAiClient(AiProperties properties, ObjectMapper mapper) {
+        this(properties, mapper, RETRY_DELAYS);
+    }
+
+    GeminiAiClient(AiProperties properties, ObjectMapper mapper, List<Duration> retryDelays) {
         this.properties = properties;
         this.mapper = mapper;
+        this.retryDelays = retryDelays;
     }
 
     @Override
@@ -39,13 +49,38 @@ public class GeminiAiClient implements AiClient {
         if (!properties.configured()) {
             throw new AiClientException("NOT_CONFIGURED", "Chưa cấu hình GEMINI_API_KEY.");
         }
+        String body = requestBody(prompt);
+        long deadline = System.nanoTime() + Duration.ofSeconds(Math.max(5, properties.timeoutSeconds())).toNanos();
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return send(body, Duration.ofNanos(Math.max(1, deadline - System.nanoTime())));
+            } catch (AiClientException error) {
+                if (!error.providerOverloaded() || attempt >= retryDelays.size()) throw error;
+                Duration delay = retryDelays.get(attempt);
+                // The configured timeout covers all attempts, so retrying never makes the user wait longer.
+                if (System.nanoTime() + delay.toNanos() >= deadline) throw error;
+                pause(delay);
+            }
+        }
+    }
+
+    private static void pause(Duration delay) {
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new AiClientException("INTERRUPTED", "Yêu cầu AI bị gián đoạn.", error);
+        }
+    }
+
+    private AiCompletion send(String body, Duration timeout) {
         String base = properties.baseUrl().replaceAll("/+$", "");
         URI uri = URI.create(base + "/models/" + URLEncoder.encode(properties.model(), StandardCharsets.UTF_8) + ":generateContent");
         HttpRequest request = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(Math.max(5, properties.timeoutSeconds())))
+                .timeout(timeout)
                 .header("Content-Type", "application/json")
                 .header("x-goog-api-key", properties.apiKey())
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody(prompt), StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
         HttpResponse<String> response;
         try {

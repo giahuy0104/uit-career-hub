@@ -15,4 +15,7 @@ public class AiClientException extends RuntimeException {
     }
 
     public String code() { return code; }
+
+    /** The provider refused the call because it is overloaded, so nothing was generated. */
+    public boolean providerOverloaded() { return "HTTP_503".equals(code); }
 }

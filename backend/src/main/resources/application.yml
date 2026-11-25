@@ -56,7 +56,7 @@ app:
   cron-secret: ${CRON_SECRET:}
   ai:
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-2.5-flash}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     daily-limit-per-user: ${AI_DAILY_LIMIT_PER_USER:30}
