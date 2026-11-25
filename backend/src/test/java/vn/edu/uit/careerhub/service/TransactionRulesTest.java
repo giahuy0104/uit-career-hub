@@ -27,6 +27,10 @@ class TransactionRulesTest {
         assertThat(attribute(WeeklyLogService.class, "review")).isNotNull();
     }
 
+    @Test void jobPreferencesAndTheirAuditCommitTogether() {
+        assertThat(attribute(JobRecommendationService.class, "savePreferences")).isNotNull();
+    }
+
     @Test void aiSettingsChangeAndItsAuditCommitTogether() {
         assertThat(attribute(AiAssistantService.class, "updateSettings")).isNotNull();
     }

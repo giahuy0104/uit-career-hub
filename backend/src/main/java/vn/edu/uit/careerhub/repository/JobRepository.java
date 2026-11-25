@@ -83,6 +83,15 @@ public class JobRepository {
         return new PageResult(items.query(String.class).list().stream().map(json::object).toList(),count.query(Long.class).single());
     }
 
+    /** Open jobs the student has no application for. shortcut: newest 200 only; rank in SQL if there are ever more open jobs. */
+    public List<Map<String,Object>> recruitingNotAppliedBy(UUID studentProfileId) {
+        return database.sql(JOB_SELECT+"""
+             WHERE j.status='RECRUITING' AND j.deadline>=current_date AND c.partner_status='ACTIVE'
+              AND NOT EXISTS(SELECT 1 FROM applications a WHERE a.job_post_id=j.id AND a.student_profile_id=:studentId)
+            ORDER BY j.reviewed_at DESC NULLS LAST,j.created_at DESC LIMIT 200
+            """).param("studentId",studentProfileId).query(String.class).list().stream().map(json::object).toList();
+    }
+
     public String companyStatus(UUID companyId) {
         return database.sql("SELECT partner_status FROM companies WHERE id=:id FOR SHARE").param("id",companyId).query(String.class).optional().orElse(null);
     }
