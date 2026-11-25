@@ -67,7 +67,13 @@ export function notificationRoute(role, notification) {
 
 export function NotificationInbox({ role, onOpen }) {
   const { authorizedRequest } = useAuth();
-  const { unreadCount, markOneReadLocally, markAllReadLocally, refreshUnreadCount } = useNotifications();
+  const {
+    unreadCount,
+    notificationRevision,
+    markOneReadLocally,
+    markAllReadLocally,
+    refreshUnreadCount,
+  } = useNotifications();
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, totalItems: 0 });
   const [page, setPage] = useState(1);
@@ -94,7 +100,7 @@ export function NotificationInbox({ role, onOpen }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, notificationRevision]);
 
   const openNotification = async (notification) => {
     setError("");

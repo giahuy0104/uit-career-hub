@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import vn.edu.uit.careerhub.dto.NotificationDto;
 import vn.edu.uit.careerhub.dto.NotificationPageResult;
+import vn.edu.uit.careerhub.dto.NotificationSnapshot;
 import vn.edu.uit.careerhub.util.JsonSupport;
 
 @Repository
@@ -45,6 +46,29 @@ public class NotificationRepository {
         Long count = database.sql("SELECT count(*) FROM notifications WHERE recipient_user_id = :userId AND read_at IS NULL")
                 .param("userId", recipientUserId).query(Long.class).single();
         return count == null ? 0 : count;
+    }
+
+    public NotificationSnapshot snapshot(UUID recipientUserId) {
+        return database.sql("""
+                SELECT (SELECT count(*) FROM notifications
+                        WHERE recipient_user_id = :userId AND read_at IS NULL) AS unread_count,
+                       latest.id AS latest_id,
+                       latest.created_at AS latest_created_at
+                FROM (SELECT 1) AS seed
+                LEFT JOIN LATERAL (
+                    SELECT id, created_at
+                    FROM notifications
+                    WHERE recipient_user_id = :userId
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT 1
+                ) AS latest ON true
+                """)
+                .param("userId", recipientUserId)
+                .query((result, row) -> new NotificationSnapshot(
+                        result.getLong("unread_count"),
+                        result.getObject("latest_id", UUID.class),
+                        instant(result, "latest_created_at")))
+                .single();
     }
 
     public boolean markRead(UUID recipientUserId, UUID notificationId) {

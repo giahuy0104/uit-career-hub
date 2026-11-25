@@ -45,6 +45,9 @@ Migration `0020` thêm hạ tầng trợ lý AI (Gemini): `ai_settings` (một d
 Migration `0021` thêm `ai_daily_usage` (một dòng mỗi người/ngày theo giờ Việt Nam) để giữ lượt gọi AI một cách nguyên tử:
 lượt được trừ bằng một câu upsert có điều kiện trước khi gọi Gemini, nên các request đồng thời không thể cùng dùng lượt cuối.
 
+Migration `0022` bổ sung index theo người nhận và thời điểm tạo để SSE lấy snapshot thông báo mới nhất mà không
+phải quét toàn bộ hộp thư của người dùng. Bản nháp của migration này từng mang số `0020`.
+
 ## Lệnh
 
 ```powershell
