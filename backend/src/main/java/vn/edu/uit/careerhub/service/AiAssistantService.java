@@ -26,8 +26,11 @@ import vn.edu.uit.careerhub.dto.RequestMetadata;
 import vn.edu.uit.careerhub.dto.request.AiPlanReviewRequest;
 import vn.edu.uit.careerhub.dto.response.AiSuggestion;
 import vn.edu.uit.careerhub.entity.AiCachedSuggestion;
+import vn.edu.uit.careerhub.entity.AiJobMatchEntry;
 import vn.edu.uit.careerhub.entity.AiPlacementContext;
 import vn.edu.uit.careerhub.entity.AiWeeklyLogEntry;
+import vn.edu.uit.careerhub.entity.JobPreferences;
+import vn.edu.uit.careerhub.entity.NamedRef;
 import vn.edu.uit.careerhub.enums.AiCallStatus;
 import vn.edu.uit.careerhub.enums.AiFeature;
 import vn.edu.uit.careerhub.enums.InternshipPlanStatus;
@@ -111,6 +114,22 @@ public class AiAssistantService {
                 raw -> AiPrompts.normalizeLogSummary(raw, weeks));
     }
 
+    /**
+     * AI3: why the jobs already ranked by the system fit the student. Only skill names the student chose
+     * and public job text are sent; nothing that identifies the student.
+     */
+    AiSuggestion explainJobMatches(AuthPrincipal principal, JobPreferences student, List<AiJobMatchEntry> jobs) {
+        if (jobs.isEmpty()) {
+            return unavailable(AiFeature.JOB_MATCH, "NO_DATA", "Chưa có tin phù hợp để giải thích.");
+        }
+        List<AiJobMatchEntry> masked = jobs.stream().map(job -> new AiJobMatchEntry(job.jobId(), PiiMasker.mask(job.title(), List.of()),
+                PiiMasker.mask(job.description(), List.of()), PiiMasker.mask(job.requirements(), List.of()),
+                job.matchedSkills(), job.missingSkills())).toList();
+        AiPrompt prompt = AiPrompts.jobMatch(student.skills().stream().map(NamedRef::name).toList(), masked);
+        List<UUID> ids = jobs.stream().map(AiJobMatchEntry::jobId).toList();
+        return run(principal, AiFeature.JOB_MATCH, principal.studentProfileId(), prompt, raw -> AiPrompts.normalizeJobMatch(raw, ids));
+    }
+
     public Map<String, Object> settings() {
         Map<String, Object> result = new LinkedHashMap<>(repository.settings());
         result.put("configured", properties.configured());
@@ -164,6 +183,11 @@ public class AiAssistantService {
             result = normalize.apply(json.object(completion.text()));
         } catch (AiClientException error) {
             log(principal, feature, targetId, AiCallStatus.FAILED, model, elapsedMs(started), null, error.code());
+            if (error.providerOverloaded()) {
+                if (limit > 0) repository.releaseProviderCall(principal.userId());
+                return unavailable(feature, AiCallStatus.FAILED.name(),
+                        "AI đang quá tải nên chưa có gợi ý. Lượt này không bị tính, vui lòng thử lại sau ít phút.");
+            }
             return unavailable(feature, AiCallStatus.FAILED.name(),
                     "AI đang lỗi hoặc phản hồi chậm nên chưa có gợi ý. Vui lòng thử lại sau.");
         } catch (RuntimeException error) {

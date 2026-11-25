@@ -31,6 +31,8 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Sinh viên | `GET/PATCH /students/me`, danh sách/upload/download tài liệu, chọn CV mặc định | ✓ | — | — |
 | Sinh viên | danh bạ đối tác `GET /companies`, `GET /companies/{id}` | ✓ | — | — |
 | Sinh viên | `GET /students/me/dashboard` | ✓ | — | — |
+| Sinh viên | `GET/PUT /students/me/job-preferences`, `GET /students/me/job-recommendations`, `POST .../ai-explanation` | ✓ | — | — |
+| Dùng chung | `GET /taxonomy/options` | ✓ | — | ✓ |
 | Sinh viên | `GET/POST /applications` và `GET /applications/{id}` | ✓ | — | — |
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |
 | Sinh viên | xem/gửi phiếu kỳ thực tập của chính mình `/applications/{id}/internship-evaluations` | ✓ | — | — |

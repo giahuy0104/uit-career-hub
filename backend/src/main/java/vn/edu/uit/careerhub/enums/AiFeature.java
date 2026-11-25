@@ -5,5 +5,7 @@ public enum AiFeature {
     /** AI1: feedback on a student's plan draft before submission. */
     PLAN_REVIEW,
     /** AI2: summary of submitted weekly logs for company and UIT reviewers. */
-    WEEKLY_LOG_SUMMARY
+    WEEKLY_LOG_SUMMARY,
+    /** AI3: explanation of the jobs the system ranked for a student. */
+    JOB_MATCH
 }

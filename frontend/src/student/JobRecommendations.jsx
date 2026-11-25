@@ -1,0 +1,84 @@
+import { useEffect, useState } from "react";
+import { CircleNotch, Lightning, Sparkle, Warning } from "@phosphor-icons/react";
+
+import { useAuth } from "../auth/AuthContext.jsx";
+import { AiResultFrame, useAiRequest } from "../internships/AiAssistant.jsx";
+import "./job-match.css";
+
+const criterionLabels = {
+  REQUIRED_SKILLS: "Kỹ năng bắt buộc",
+  OPTIONAL_SKILLS: "Kỹ năng thêm",
+  CATEGORY: "Nhóm ngành",
+  OPPORTUNITY_TYPE: "Loại cơ hội",
+};
+
+const points = (value) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
+
+/** AI3: ranking computed by the system; the AI only adds an explanation when asked. */
+export function JobRecommendations({ selectedId, onSelect, onEditSkills }) {
+  const { authorizedRequest } = useAuth();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
+  const items = data?.items || [];
+  const { busy, suggestion, stale, error: aiError, run, dismiss } = useAiRequest(items.map((item) => item.job.id).join());
+
+  useEffect(() => {
+    let ignore = false;
+    setError("");
+    authorizedRequest("/students/me/job-recommendations")
+      .then((response) => { if (!ignore) setData(response.data); })
+      .catch((requestError) => { if (!ignore) setError(requestError?.message || "Không thể tải gợi ý việc làm."); });
+    return () => { ignore = true; };
+  }, [authorizedRequest, reload]);
+
+  const explained = suggestion?.result?.items || [];
+  const titleOf = (jobId) => items.find((item) => item.job.id === jobId)?.job.title;
+
+  return <section className="job-match" aria-label="Việc phù hợp với bạn">
+    <header>
+      <div><h2><Sparkle weight="duotone" />Phù hợp với bạn</h2><p>Xếp theo kỹ năng và mong muốn bạn đã chọn. Điểm do hệ thống tính, không phải AI.</p></div>
+      <button type="button" className="secondary-button small" onClick={onEditSkills}>Sửa kỹ năng</button>
+    </header>
+    {error
+      ? <div className="portal-error" role="alert"><Warning />{error}<button type="button" className="secondary-button small" onClick={() => setReload((value) => value + 1)}>Thử lại</button></div>
+      : !data
+        ? <div className="portal-loading" role="status"><CircleNotch className="spin" />Đang tìm việc phù hợp...</div>
+        : data.needsSkills
+          ? <div className="job-match-empty"><strong>Bạn chưa chọn kỹ năng</strong><p>Chọn kỹ năng trong hồ sơ để nhận gợi ý việc làm.</p><button type="button" className="primary-button small" onClick={onEditSkills}>Chọn kỹ năng</button></div>
+          : items.length === 0
+            ? <div className="job-match-empty"><strong>Chưa có tin phù hợp</strong><p>Các tin đang tuyển chưa trùng kỹ năng nào của bạn, hoặc bạn đã ứng tuyển rồi.</p></div>
+            : <>
+              <ol className="job-match-list">{items.map(({ job, score, criteria, matchedSkills, missingSkills, optionalSkills }) => <li key={job.id}>
+                <button type="button" aria-pressed={selectedId === job.id} className={selectedId === job.id ? "selected" : ""} onClick={() => onSelect(job.id)}>
+                  <span className="job-match-score"><strong>{score}</strong><small>/100</small></span>
+                  <span className="job-match-body">
+                    <strong>{job.title}</strong><small>{job.company.name}</small>
+                    <span className="job-match-tags">
+                      {matchedSkills.map((name) => <i key={name} className="have">{name}</i>)}
+                      {missingSkills.map((name) => <i key={name} className="miss">Thiếu {name}</i>)}
+                      {optionalSkills.map((name) => <i key={name}>Nên có {name}</i>)}
+                    </span>
+                  </span>
+                </button>
+                <details><summary>Cách tính điểm</summary><ul>{criteria.map((item) => <li key={item.key}>{criterionLabels[item.key] || item.key}<span>{points(item.earned)} / {item.weight}</span></li>)}</ul></details>
+              </li>)}</ol>
+              <div className="ai-assist">
+                <div className="ai-assist-bar">
+                  <span><Sparkle weight="duotone" />Nhờ AI giải thích vì sao hợp và nên chuẩn bị gì cho {Math.min(5, items.length)} tin đầu. AI không đổi thứ tự.</span>
+                  <button type="button" className="secondary-button small ai-trigger" disabled={busy} onClick={() => void run("/students/me/job-recommendations/ai-explanation")}>
+                    {busy ? <><CircleNotch className="spin" />AI đang đọc...</> : <><Lightning />Nhờ AI giải thích</>}
+                  </button>
+                </div>
+                <AiResultFrame suggestion={suggestion} stale={stale} error={aiError} onDismiss={dismiss}
+                  staleText="Danh sách gợi ý đã đổi sau lần giải thích này. Bấm “Nhờ AI giải thích” để cập nhật.">
+                  <ul className="job-match-explain">{explained.filter((item) => titleOf(item.jobId)).map((item) => <li key={item.jobId}>
+                    <button type="button" className="text-button" onClick={() => onSelect(item.jobId)}>{titleOf(item.jobId)}</button>
+                    <p>{item.why}</p>
+                    {item.prepare && <p><strong>Nên chuẩn bị:</strong> {item.prepare}</p>}
+                  </li>)}</ul>
+                </AiResultFrame>
+              </div>
+            </>}
+  </section>;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, CircleNotch, Info, Lightning, Sparkle, Warning, X } from "@phosphor-icons/react";
+import { Check, CheckCircle, CircleNotch, Info, Lightning, Sparkle, Warning, X } from "@phosphor-icons/react";
 
 import { useAuth } from "../auth/AuthContext.jsx";
 import { Panel, Status } from "../shared/WorkspaceShell.jsx";
@@ -27,6 +27,7 @@ const flagCopy = {
 const featureLabel = {
   PLAN_REVIEW: "Góp ý kế hoạch (AI1)",
   WEEKLY_LOG_SUMMARY: "Tóm tắt nhật ký (AI2)",
+  JOB_MATCH: "Giải thích việc phù hợp (AI3)",
 };
 
 const roleBase = {
@@ -45,7 +46,7 @@ function formatTime(value) {
  * from. When `inputKey` no longer matches that input the answer is marked stale, so nobody mistakes
  * it for feedback on the current content.
  */
-function useAiRequest(inputKey) {
+export function useAiRequest(inputKey) {
   const { authorizedRequest } = useAuth();
   const [busy, setBusy] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
@@ -74,7 +75,7 @@ function useAiRequest(inputKey) {
 }
 
 /** Frame shared by every AI result: clear label, disclaimer and a way to ignore it. */
-function AiResultFrame({ suggestion, stale, staleText, error, onDismiss, children }) {
+export function AiResultFrame({ suggestion, stale, staleText, error, onDismiss, children }) {
   if (error) return <div className="ai-card ai-card-muted" role="alert"><Warning />{error}</div>;
   if (!suggestion) return null;
   // A "no suggestion" notice about old input is just noise once the input changed.
@@ -204,48 +205,77 @@ export function AiSettingsPanel() {
     ? <div className="portal-error" role="alert"><Warning />{error}<button type="button" className="secondary-button small" onClick={() => void load()}>Thử lại</button></div>
     : <div className="portal-loading" role="status"><CircleNotch className="spin" />Đang tải cấu hình AI...</div>}</Panel>;
 
-  const totals = data.usage.reduce((sum, row) => ({
-    total: sum.total + row.total, success: sum.success + row.success, cached: sum.cached + row.cached, failed: sum.failed + row.failed,
-  }), { total: 0, success: 0, cached: 0, failed: 0 });
   const active = data.enabled && data.configured;
+  const total = data.usage.reduce((sum, row) => sum + row.total, 0);
+  const skipped = data.usage.reduce((sum, row) => sum + row.skipped, 0);
+  const hero = !data.enabled
+    ? ["Trợ lý AI đang tắt", "Bật công tắc để sinh viên và người duyệt dùng được gợi ý AI."]
+    : data.configured
+      ? ["Trợ lý AI đang bật", "Sinh viên, doanh nghiệp và UIT có thể dùng gợi ý AI."]
+      : ["Còn một bước để AI chạy", "Thêm khóa Gemini trên máy chủ rồi khởi động lại backend."];
+  const steps = [
+    { label: "Khóa API", done: data.configured, text: data.configured ? "Đã cấu hình trên máy chủ" : "Thiếu GEMINI_API_KEY trên máy chủ" },
+    { label: "Công tắc nhà trường", done: data.enabled, text: data.enabled ? "Đang bật" : "Đang tắt" },
+    { label: "Người dùng", done: active, text: active ? "Có thể nhận gợi ý AI" : "Thấy “chưa có gợi ý”" },
+  ];
 
   return <div className="ai-settings">
-    <Panel title="Trạng thái trợ lý AI" action={<Status tone={active ? "success" : "neutral"}>{active ? "Đang hoạt động" : "Không hoạt động"}</Status>}>
-      <div className="ai-settings-row">
-        <div>
-          <strong>Cho phép dùng AI trên toàn hệ thống</strong>
-          <p>Khi tắt, sinh viên và người duyệt chỉ thấy “chưa có gợi ý”; quy trình thực tập vẫn chạy bình thường.</p>
-          {data.updatedBy && <small>Cập nhật bởi {data.updatedBy} · {formatTime(data.updatedAt)}</small>}
+    <div className="ai-settings-main">
+      <section className="ai-ready" aria-label="Mức sẵn sàng của trợ lý AI">
+        <div className="ai-ready-top">
+          <div><h2>{hero[0]}</h2><p>{hero[1]}</p></div>
+          <button type="button" role="switch" aria-checked={data.enabled} aria-label="Bật hoặc tắt trợ lý AI"
+            className={`ai-switch ${data.enabled ? "on" : ""}`} disabled={busy} onClick={() => void toggle()}>
+            <i aria-hidden="true"><span /></i>{busy ? "Đang lưu..." : data.enabled ? "Đang bật" : "Đang tắt"}
+          </button>
         </div>
-        <button type="button" role="switch" aria-checked={data.enabled} aria-label="Bật hoặc tắt trợ lý AI"
-          className={`ai-switch ${data.enabled ? "on" : ""}`} disabled={busy} onClick={() => void toggle()}><span /></button>
-      </div>
-      {!data.configured && <p className="ai-card ai-card-muted"><Warning />Máy chủ chưa có GEMINI_API_KEY nên AI chưa thể chạy, dù công tắc đang bật.</p>}
-      {error && <p className="form-error" role="alert"><Warning />{error}</p>}
-      <dl className="ai-settings-facts">
-        <div><dt>Mô hình</dt><dd>{data.model}</dd></div>
-        <div><dt>Giới hạn mỗi người/ngày</dt><dd>{data.dailyLimitPerUser > 0 ? `${data.dailyLimitPerUser} lượt` : "Không giới hạn"}</dd></div>
-        <div><dt>Chi phí</dt><dd>0 đ (gói miễn phí Gemini)</dd></div>
-      </dl>
-    </Panel>
+        {error && <p className="form-error" role="alert"><Warning />{error}</p>}
+        <ol className="ai-steps">{steps.map((step) => <li key={step.label} className={step.done ? "done" : ""}>
+          <i aria-hidden="true">{step.done ? <Check weight="bold" /> : <Warning weight="bold" />}</i>
+          <div><strong>{step.label}</strong><span>{step.text}</span></div>
+        </li>)}</ol>
+      </section>
 
-    <Panel title={`Thống kê sử dụng ${data.usageWindowDays} ngày`} action={<Status tone="info">{totals.total} lượt</Status>}>
-      <div className="weekly-log-summary ai-usage-summary">
-        <div><span>Gọi AI thành công</span><strong>{totals.success}</strong></div>
-        <div><span>Dùng kết quả đã lưu</span><strong>{totals.cached}</strong></div>
-        <div className={totals.failed ? "needs-attention" : ""}><span>Lỗi</span><strong>{totals.failed}</strong></div>
-      </div>
-      {data.usage.length === 0
-        ? <p className="ai-empty">Chưa có lượt dùng AI nào trong khoảng thời gian này.</p>
-        : <div className="ai-usage-table-wrap"><table className="ai-usage-table">
-          <thead><tr><th>Chức năng</th><th>Tổng</th><th>Thành công</th><th>Đã lưu</th><th>Lỗi</th><th>Bỏ qua</th><th>Độ trễ TB</th><th>Token vào/ra</th></tr></thead>
-          <tbody>{data.usage.map((row) => <tr key={row.feature}>
-            <td>{featureLabel[row.feature] || row.feature}</td><td>{row.total}</td><td>{row.success}</td><td>{row.cached}</td><td>{row.failed}</td><td>{row.skipped}</td>
-            <td>{row.avgLatencyMs != null ? `${(row.avgLatencyMs / 1000).toFixed(1)} s` : "—"}</td>
-            <td>{row.promptTokens.toLocaleString("vi-VN")} / {row.outputTokens.toLocaleString("vi-VN")}</td>
-          </tr>)}</tbody>
-        </table></div>}
-      <p className="ai-disclaimer">Hệ thống chỉ ghi thời gian, người dùng, chức năng, độ trễ và số token cho mỗi lượt gọi; không lưu nội dung gửi cho AI.</p>
-    </Panel>
+      <section className="ai-settings-card" aria-label="Thống kê sử dụng">
+        <header><h2>Sử dụng trong {data.usageWindowDays} ngày</h2><span>{total} lượt</span></header>
+        {total === skipped
+          ? <div className="ai-usage-empty"><Sparkle weight="duotone" /><strong>Chưa có lượt gọi AI nào được xử lý</strong>
+            <p>{skipped > 0
+              ? `Đã có ${skipped} lượt bấm nhưng bị bỏ qua vì AI đang tắt, thiếu khóa hoặc hết lượt trong ngày.`
+              : "Thống kê sẽ hiện ở đây sau lượt dùng đầu tiên."}</p></div>
+          : data.usage.map((row) => <AiUsageRow key={row.feature} row={row} />)}
+      </section>
+    </div>
+
+    <aside className="ai-settings-side" aria-label="Cấu hình và quyền riêng tư">
+      <section className="ai-settings-card">
+        <header><h2>Cấu hình</h2></header>
+        <dl className="ai-settings-facts">
+          <div><dt>Mô hình</dt><dd>{data.model}</dd></div>
+          <div><dt>Mỗi người</dt><dd>{data.dailyLimitPerUser > 0 ? `${data.dailyLimitPerUser} lượt/ngày` : "Không giới hạn"}</dd></div>
+          <div><dt>Chi phí</dt><dd>0 đ (gói miễn phí)</dd></div>
+          {data.updatedBy && <div><dt>Cập nhật</dt><dd>{data.updatedBy}<br />{formatTime(data.updatedAt)}</dd></div>}
+        </dl>
+      </section>
+      <section className="ai-settings-card">
+        <header><h2>Quyền riêng tư</h2></header>
+        <p>Hệ thống chỉ ghi thời gian, người dùng, chức năng, độ trễ và số token cho mỗi lượt gọi; không lưu nội dung gửi cho AI.</p>
+        <p>Khi AI tắt, quy trình thực tập vẫn chạy bình thường.</p>
+      </section>
+    </aside>
+  </div>;
+}
+
+const usageParts = [["success", "Thành công"], ["cached", "Dùng kết quả đã lưu"], ["failed", "Lỗi"], ["skipped", "Bỏ qua"]];
+
+function AiUsageRow({ row }) {
+  return <div className="ai-usage-row">
+    <div className="ai-usage-head"><strong>{featureLabel[row.feature] || row.feature}</strong>
+      <span>{row.total} lượt{row.avgLatencyMs != null && `, trung bình ${(row.avgLatencyMs / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} giây`}</span></div>
+    <div className="ai-usage-bar" role="img" aria-label={usageParts.map(([key, label]) => `${label}: ${row[key]}`).join(", ")}>
+      {usageParts.filter(([key]) => row[key] > 0).map(([key]) => <i key={key} className={key} style={{ flexGrow: row[key] }} />)}
+    </div>
+    <ul className="ai-usage-legend">{usageParts.map(([key, label]) => <li key={key}><i aria-hidden="true" className={key} />{label}<strong>{row[key]}</strong></li>)}</ul>
+    <small>Token vào / ra: {row.promptTokens.toLocaleString("vi-VN")} / {row.outputTokens.toLocaleString("vi-VN")}</small>
   </div>;
 }

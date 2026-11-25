@@ -48,6 +48,9 @@ lượt được trừ bằng một câu upsert có điều kiện trước khi 
 Migration `0022` bổ sung index theo người nhận và thời điểm tạo để SSE lấy snapshot thông báo mới nhất mà không
 phải quét toàn bộ hộp thư của người dùng. Bản nháp của migration này từng mang số `0020`.
 
+Migration `0023` thêm kỹ năng (`student_skills`), nhóm ngành và loại cơ hội sinh viên quan tâm, cùng chức năng AI
+`JOB_MATCH`. Điểm phù hợp do hệ thống tính, AI chỉ giải thích.
+
 ## Lệnh
 
 ```powershell
