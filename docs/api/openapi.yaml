@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.7.0
+  version: 1.8.0
   description: Contract cho happy flow tuyển dụng, kế hoạch và nhật ký thực tập hằng tuần của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -170,6 +170,147 @@ paths:
                 $ref: '#/components/schemas/StudentProfileEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /taxonomy/options:
+    get:
+      tags: [Students]
+      operationId: listTaxonomyOptions
+      description: Kỹ năng và nhóm ngành đang hoạt động, cho sinh viên và doanh nghiệp.
+      responses:
+        '200':
+          description: Danh mục để chọn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [skills, categories]
+                    properties:
+                      skills: { type: array, items: { type: object, properties: { id: { type: string, format: uuid }, name: { type: string } } } }
+                      categories: { type: array, items: { type: object, properties: { id: { type: string, format: uuid }, name: { type: string } } } }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /students/me/job-preferences:
+    get:
+      tags: [Students]
+      operationId: getMyJobPreferences
+      responses:
+        '200':
+          description: Kỹ năng và mong muốn của sinh viên
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [skills, categories, opportunityTypes]
+                    properties:
+                      skills: { type: array, items: { type: object, required: [id, name], properties: { id: { type: string, format: uuid }, name: { type: string } } } }
+                      categories: { type: array, items: { type: object, required: [id, name], properties: { id: { type: string, format: uuid }, name: { type: string } } } }
+                      opportunityTypes: { type: array, items: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] } }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [Students]
+      operationId: saveMyJobPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skillIds, categoryIds, opportunityTypes]
+              properties:
+                skillIds: { type: array, maxItems: 30, items: { type: string, format: uuid } }
+                categoryIds: { type: array, maxItems: 10, items: { type: string, format: uuid } }
+                opportunityTypes: { type: array, maxItems: 4, items: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] } }
+      responses:
+        '200':
+          description: Đã lưu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [skills, categories, opportunityTypes]
+                    properties:
+                      skills: { type: array, items: { type: object, required: [id, name], properties: { id: { type: string, format: uuid }, name: { type: string } } } }
+                      categories: { type: array, items: { type: object, required: [id, name], properties: { id: { type: string, format: uuid }, name: { type: string } } } }
+                      opportunityTypes: { type: array, items: { type: string, enum: [INTERNSHIP, PART_TIME, FULL_TIME, FRESHER] } }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /students/me/job-recommendations:
+    get:
+      tags: [Students]
+      operationId: listMyJobRecommendations
+      description: Tối đa 10 tin còn hạn, chưa ứng tuyển. Điểm do hệ thống tính (kỹ năng 70, nhóm ngành 20, loại cơ hội 10; mục sinh viên để trống thì không tính).
+      responses:
+        '200':
+          description: Danh sách đã xếp hạng
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [needsSkills, items]
+                    properties:
+                      needsSkills: { type: boolean }
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          required: [job, score, criteria, matchedSkills, missingSkills, optionalSkills]
+                          properties:
+                            job: { type: object }
+                            score: { type: integer, minimum: 0, maximum: 100 }
+                            criteria: { type: array, items: { type: object, properties: { key: { type: string, enum: [REQUIRED_SKILLS, OPTIONAL_SKILLS, CATEGORY, OPPORTUNITY_TYPE] }, weight: { type: integer }, earned: { type: number } } } }
+                            matchedSkills: { type: array, items: { type: string } }
+                            missingSkills: { type: array, items: { type: string } }
+                            optionalSkills: { type: array, items: { type: string } }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /students/me/job-recommendations/ai-explanation:
+    post:
+      tags: [Students]
+      operationId: explainMyJobRecommendations
+      description: AI giải thích tối đa 5 tin đầu, không đổi điểm hay thứ tự. Khi AI không dùng được vẫn trả 200 với available=false.
+      responses:
+        '200':
+          description: Gợi ý từ AI
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [available, feature, status]
+                    properties:
+                      available: { type: boolean }
+                      feature: { type: string, const: JOB_MATCH }
+                      status: { type: string, enum: [SUCCESS, CACHED, FAILED, DISABLED, NOT_CONFIGURED, RATE_LIMITED, NO_DATA] }
+                      message: { type: [string, 'null'] }
+                      result:
+                        type: [object, 'null']
+                        properties:
+                          items: { type: array, items: { type: object, properties: { jobId: { type: string, format: uuid }, why: { type: string }, prepare: { type: string } } } }
+                      model: { type: [string, 'null'] }
+                      generatedAt: { type: [string, 'null'] }
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /students/me/documents:
     get:
       tags: [Students]

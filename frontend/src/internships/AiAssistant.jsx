@@ -27,6 +27,7 @@ const flagCopy = {
 const featureLabel = {
   PLAN_REVIEW: "Góp ý kế hoạch (AI1)",
   WEEKLY_LOG_SUMMARY: "Tóm tắt nhật ký (AI2)",
+  JOB_MATCH: "Giải thích việc phù hợp (AI3)",
 };
 
 const roleBase = {
@@ -45,7 +46,7 @@ function formatTime(value) {
  * from. When `inputKey` no longer matches that input the answer is marked stale, so nobody mistakes
  * it for feedback on the current content.
  */
-function useAiRequest(inputKey) {
+export function useAiRequest(inputKey) {
   const { authorizedRequest } = useAuth();
   const [busy, setBusy] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
@@ -74,7 +75,7 @@ function useAiRequest(inputKey) {
 }
 
 /** Frame shared by every AI result: clear label, disclaimer and a way to ignore it. */
-function AiResultFrame({ suggestion, stale, staleText, error, onDismiss, children }) {
+export function AiResultFrame({ suggestion, stale, staleText, error, onDismiss, children }) {
   if (error) return <div className="ai-card ai-card-muted" role="alert"><Warning />{error}</div>;
   if (!suggestion) return null;
   // A "no suggestion" notice about old input is just noise once the input changed.

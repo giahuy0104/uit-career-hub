@@ -45,6 +45,9 @@ Migration `0020` thêm hạ tầng trợ lý AI (Gemini): `ai_settings` (một d
 Migration `0021` thêm `ai_daily_usage` (một dòng mỗi người/ngày theo giờ Việt Nam) để giữ lượt gọi AI một cách nguyên tử:
 lượt được trừ bằng một câu upsert có điều kiện trước khi gọi Gemini, nên các request đồng thời không thể cùng dùng lượt cuối.
 
+Migration `0023` thêm kỹ năng (`student_skills`), nhóm ngành và loại cơ hội sinh viên quan tâm, cùng chức năng AI
+`JOB_MATCH`. Điểm phù hợp do hệ thống tính, AI chỉ giải thích. Số `0022` để dành cho thông báo realtime.
+
 ## Lệnh
 
 ```powershell

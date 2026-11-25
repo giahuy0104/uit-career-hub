@@ -1,0 +1,10 @@
+.tag-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
+.tag-picker legend { padding: 0; color: #344256; font-size: 13px; font-weight: 700; }
+.tag-picker > p, .tag-picker small { margin: 4px 0 0; color: #566579; font-size: 12.5px; line-height: 1.5; }
+.tag-picker > input { width: 100%; max-width: 320px; min-height: 38px; margin-top: 8px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; }
+.tag-picker-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tag-picker-options button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: 999px; background: #fff; color: #344256; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tag-picker-options button:hover:not(:disabled) { border-color: var(--blue); }
+.tag-picker-options button:focus-visible { outline: 3px solid rgba(9, 104, 232, .35); outline-offset: 2px; }
+.tag-picker-options button.selected { border-color: var(--blue); background: var(--blue-50); color: #075cd0; }
+.tag-picker-options button:disabled { opacity: .5; cursor: not-allowed; }

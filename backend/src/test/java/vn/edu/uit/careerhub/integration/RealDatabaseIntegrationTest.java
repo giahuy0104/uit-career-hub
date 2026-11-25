@@ -134,7 +134,8 @@ class RealDatabaseIntegrationTest {
         when(aiClient.model()).thenReturn("gemini-test");
         when(aiClient.generate(any(AiPrompt.class))).thenAnswer(invocation -> {
             AiPrompt prompt = invocation.getArgument(0);
-            String text = prompt.user().contains("<ke_hoach_sinh_vien>")
+            String text = prompt.user().contains("<tin so=") ? "{\"items\":[{\"index\":1,\"why\":\"Cùng dùng Java\",\"prepare\":\"Ôn kiểm thử\"}]}"
+                    : prompt.user().contains("<ke_hoach_sinh_vien>")
                     ? "{\"overall\":\"Kế hoạch khá rõ\",\"strengths\":[],\"issues\":[]}"
                     : "{\"overview\":\"Tiến độ ổn\",\"keyPoints\":[\"API\"],\"flags\":[{\"weekNumber\":1,\"type\":\"TOO_SHORT\",\"detail\":\"Ngắn\"}]}";
             return new AiCompletion(text, 50, 10);
@@ -399,6 +400,69 @@ class RealDatabaseIntegrationTest {
         List<AiWeeklyLogEntry> sent = aiRepository.lastSubmittedLogs(placementId);
         assertThat(sent).hasSize(1);
         assertThat(sent.get(0).workSummary()).isEqualTo("Tóm tắt công việc.");
+    }
+
+    /** AI3: preferences drive the ranking, applied jobs disappear, and the explanation is cached. */
+    @Test
+    void jobRecommendationsFollowTheStudentsPreferences() throws Exception {
+        String admin = login(ADMIN, ADMIN_PASSWORD);
+        String vng = login(VNG, COMPANY_PASSWORD);
+        String student = login(studentEmail(), STUDENT_PASSWORD);
+
+        JsonNode options = call("GET", "/taxonomy/options", student, null, 200, false).at("/data");
+        call("GET", "/taxonomy/options", vng, null, 200, false);
+        call("GET", "/taxonomy/options", admin, null, 403, false);
+        String java = id(options.at("/skills"), "Java");
+        String react = id(options.at("/skills"), "React");
+        String software = id(options.at("/categories"), "Kỹ thuật phần mềm");
+
+        assertThat(call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/needsSkills").asBoolean()).isTrue();
+        assertThat(call("POST", "/students/me/job-recommendations/ai-explanation", student, null, 200, false).at("/data/status").asText()).isEqualTo("NO_DATA");
+
+        Map<String, Object> draft = jobDraft("Tin gợi ý " + System.nanoTime());
+        draft.put("skillIds", List.of(java));
+        draft.put("categoryIds", List.of(software));
+        String good = call("POST", "/companies/me/jobs", vng, draft, 201, false).at("/data/id").asText();
+        call("POST", "/companies/me/jobs/" + good + "/submit", vng, null, 200, true);
+        call("POST", "/uit/jobs/" + good + "/approve", admin, null, 200, true);
+        String untagged = recruitingJob(vng, admin, "Tin không gắn thẻ " + System.nanoTime());
+
+        Map<String, Object> preferences = Map.of("skillIds", List.of(java, java), "categoryIds", List.of(software), "opportunityTypes", List.of("INTERNSHIP"));
+        JsonNode saved = call("PUT", "/students/me/job-preferences", student, preferences, 200, false).at("/data");
+        assertThat(saved.at("/skills")).hasSize(1);
+        assertThat(saved.at("/opportunityTypes/0").asText()).isEqualTo("INTERNSHIP");
+        assertThat(call("GET", "/students/me/job-preferences", student, null, 200, false).at("/data")).isEqualTo(saved);
+        call("PUT", "/students/me/job-preferences", vng, preferences, 403, false);
+        call("PUT", "/students/me/job-preferences", student, Map.of("skillIds", List.of(UUID.randomUUID()), "categoryIds", List.of(), "opportunityTypes", List.of()), 400, false);
+        call("PUT", "/students/me/job-preferences", student, Map.of("skillIds", List.of()), 400, false);
+        assertThat(call("GET", "/students/me/job-preferences", student, null, 200, false).at("/data")).as("a rejected save changes nothing").isEqualTo(saved);
+
+        JsonNode items = call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/items");
+        assertThat(items.at("/0/score").asInt()).isEqualTo(100);
+        List<String> ids = new java.util.ArrayList<>();
+        items.forEach(item -> ids.add(item.at("/job/id").asText()));
+        assertThat(ids).contains(good).doesNotContain(untagged);
+
+        JsonNode answer = call("POST", "/students/me/job-recommendations/ai-explanation", student, null, 200, false).at("/data");
+        assertThat(answer.at("/status").asText()).isEqualTo("SUCCESS");
+        assertThat(answer.at("/result/items/0/jobId").asText()).isEqualTo(items.at("/0/job/id").asText());
+        assertThat(call("POST", "/students/me/job-recommendations/ai-explanation", student, null, 200, false).at("/data/status").asText()).isEqualTo("CACHED");
+        call("POST", "/students/me/job-recommendations/ai-explanation", vng, null, 403, false);
+
+        String cv = verifiedDocument(student, admin, "CV");
+        call("POST", "/applications", student, Map.of("jobId", good, "documents", List.of(Map.of("documentId", cv)), "consentToShare", true), 201, true);
+        List<String> after = new java.util.ArrayList<>();
+        call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/items").forEach(item -> after.add(item.at("/job/id").asText()));
+        assertThat(after).doesNotContain(good);
+
+        call("PUT", "/students/me/job-preferences", student, Map.of("skillIds", List.of(react), "categoryIds", List.of(), "opportunityTypes", List.of()), 200, false);
+        call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/items")
+                .forEach(item -> assertThat(item.at("/matchedSkills").toString()).contains("React"));
+    }
+
+    private String id(JsonNode options, String name) {
+        for (JsonNode option : options) if (name.equals(option.at("/name").asText())) return option.at("/id").asText();
+        throw new AssertionError("Không có " + name);
     }
 
     /** The daily limit is a hard cap: parallel requests cannot all take the last slots. */

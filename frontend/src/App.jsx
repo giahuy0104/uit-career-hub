@@ -45,6 +45,8 @@ const AdminPortal = lazy(() => import("./RolePortals.jsx").then((module) => ({ d
 const CompanyPortal = lazy(() => import("./RolePortals.jsx").then((module) => ({ default: module.CompanyPortal })));
 const StudentExtraScreen = lazy(() => import("./RolePortals.jsx").then((module) => ({ default: module.StudentExtraScreen })));
 
+const JobRecommendations = lazy(() => import("./student/JobRecommendations.jsx").then((module) => ({ default: module.JobRecommendations })));
+
 const opportunityLabels = {
   INTERNSHIP: "Thực tập",
   PART_TIME: "Bán thời gian",
@@ -146,6 +148,8 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
     >
       <div className="jobs-layout workspace-jobs-layout">
         <section className="jobs-list-pane">
+          {!initialCompanyId && <Suspense fallback={null}><JobRecommendations selectedId={selected?.id} onEditSkills={() => navigate("profile")}
+            onSelect={(jobId) => { clearFilters(); setSelectedId(jobId); setMobileDetailOpen(true); }} /></Suspense>}
           <div className="search-row">
             <label className="search-field"><MagnifyingGlass size={22} /><input aria-label="Tìm việc làm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty hoặc kỹ năng" /></label>
             <button className={`secondary-button ${filtersOpen ? "selected" : ""}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}><FunnelSimple size={20} />Bộ lọc</button>
