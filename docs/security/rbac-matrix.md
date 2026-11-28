@@ -36,6 +36,8 @@ Tài liệu này là nguồn đối chiếu quyền truy cập backend của UIT
 | Sinh viên | `POST /students/me/job-events` | ✓ | — | — |
 | UIT | `GET /uit/internship-supervision/risk` | — | ✓ | — |
 | UIT | `PUT /uit/ai/features/{feature}` | — | ✓ | — |
+| Doanh nghiệp | `POST /companies/me/jobs/tag-suggestions` | — | — | ✓ |
+| Sinh viên | `POST /students/me/job-search` | ✓ | — | — |
 | Dùng chung | `POST /ai/feedback` (chỉ kết quả AI mà chính người gọi được xem) | ✓ | ✓ | ✓ |
 | Sinh viên | `GET/POST /applications` và `GET /applications/{id}` | ✓ | — | — |
 | Sinh viên | resubmit, withdraw, cancel interview, accept/decline offer | ✓ | — | — |

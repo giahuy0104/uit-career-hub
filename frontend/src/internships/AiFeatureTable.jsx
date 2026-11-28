@@ -10,7 +10,11 @@ export const featureNames = {
   JOB_MATCH: "Giải thích việc phù hợp",
   JOB_RANKER: "Xếp hạng việc làm",
   INTERNSHIP_RISK: "Cảnh báo sớm thực tập",
+  SKILL_SUGGEST: "Gợi ý kỹ năng khi viết tin",
+  SEMANTIC_SEARCH: "Tìm việc theo nghĩa",
 };
+
+const kindLabel = { LLM: "Gemini", MODEL: "Học máy", EMBEDDING: "Embedding + học máy" };
 
 const number = (value, digits = 2) => Number(value).toLocaleString("vi-VN", { maximumFractionDigits: digits });
 const share = (part, total) => (total ? `${Math.round((100 * part) / total)}%` : "—");
@@ -28,7 +32,7 @@ function AiFeatureRow({ row, onChange }) {
   const [limit, setLimit] = useState(row.dailyLimitPerUser ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const llm = row.kind === "LLM";
+  const llm = row.kind !== "MODEL";   // calls Gemini, so it has usage and an optional limit
   const votes = row.feedback.helpful + row.feedback.notHelpful;
   const limitChanged = String(limit) !== String(row.dailyLimitPerUser ?? "");
 
@@ -50,7 +54,7 @@ function AiFeatureRow({ row, onChange }) {
     <header>
       <div>
         <strong>{featureNames[row.feature] || row.feature}</strong>
-        <span className={`ai-kind ${llm ? "llm" : "model"}`}>{llm ? "Gemini" : "Học máy"}</span>
+        <span className={`ai-kind ${row.kind === "LLM" ? "llm" : "model"}`}>{kindLabel[row.kind] || row.kind}</span>
       </div>
       <button type="button" role="switch" aria-checked={row.enabled} aria-label={`Bật hoặc tắt ${featureNames[row.feature]}`}
         className={`ai-mini-switch ${row.enabled ? "on" : ""}`} disabled={busy} onClick={() => void save(!row.enabled, limit)}>
@@ -63,7 +67,7 @@ function AiFeatureRow({ row, onChange }) {
       {row.model?.test?.["ndcg@5"] != null && <div><dt>Kiểm tra offline</dt><dd>NDCG@5 {number(row.model.test["ndcg@5"], 3)}</dd></div>}
       {row.model?.test?.auc != null && <div><dt>Kiểm tra offline</dt><dd>AUC {number(row.model.test.auc, 3)}</dd></div>}
       {row.online && <div><dt>Thực tế 30 ngày</dt><dd>{row.online.impressions} lượt hiện · {share(row.online.clicks, row.online.impressions)} bấm · {share(row.online.applications, row.online.impressions)} ứng tuyển</dd></div>}
-      <div><dt>Người dùng đánh giá hữu ích</dt><dd>{votes ? `${share(row.feedback.helpful, votes)} trên ${votes} lượt` : "Chưa có đánh giá"}</dd></div>
+      {row.kind !== "EMBEDDING" && <div><dt>Người dùng đánh giá hữu ích</dt><dd>{votes ? `${share(row.feedback.helpful, votes)} trên ${votes} lượt` : "Chưa có đánh giá"}</dd></div>}
     </dl>
     {llm && <div className="ai-feature-limit">
       <label><span>Hạn mức riêng mỗi người/ngày</span>

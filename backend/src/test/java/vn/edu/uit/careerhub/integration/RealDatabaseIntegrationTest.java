@@ -94,6 +94,9 @@ class RealDatabaseIntegrationTest {
     @MockitoBean ObjectStorage storage;
     /** Stands in for Gemini: the AI SQL and endpoints run for real, no request leaves the machine. */
     @MockitoBean AiClient aiClient;
+    /** Embeddings come from a deterministic fake; no request leaves the machine. */
+    @MockitoBean vn.edu.uit.careerhub.ai.EmbeddingClient embeddingClient;
+    private final vn.edu.uit.careerhub.ai.FakeEmbeddingClient fakeEmbeddings = new vn.edu.uit.careerhub.ai.FakeEmbeddingClient();
     @MockitoSpyBean InternshipPlanRepository planRepository;
 
     @DynamicPropertySource
@@ -133,6 +136,8 @@ class RealDatabaseIntegrationTest {
         when(storage.createDownloadUrl(anyString(), anyString(), anyLong())).thenReturn("https://storage.test/download");
         when(storage.headObject(anyString())).thenReturn(new ObjectStorage.Metadata(1000, "application/pdf", "etag-1"));
         when(aiClient.model()).thenReturn("gemini-test");
+        when(embeddingClient.model()).thenReturn("fake-embedding");
+        when(embeddingClient.embed(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> fakeEmbeddings.embed(invocation.getArgument(0)));
         when(aiClient.generate(any(AiPrompt.class))).thenAnswer(invocation -> {
             AiPrompt prompt = invocation.getArgument(0);
             String text = prompt.user().contains("<tin so=") ? "{\"items\":[{\"index\":1,\"why\":\"Cùng dùng Java\",\"prepare\":\"Ôn kiểm thử\"}]}"
@@ -432,6 +437,51 @@ class RealDatabaseIntegrationTest {
         assertThat(sent.get(0).workSummary()).isEqualTo("Tóm tắt công việc.");
     }
 
+    /** Đợt B: tag suggestions while writing a post, and search by meaning with stored job embeddings. */
+    @Test
+    void textIntelligenceSuggestsTagsAndSearchesByMeaning() throws Exception {
+        String admin = login(ADMIN, ADMIN_PASSWORD);
+        String vng = login(VNG, COMPANY_PASSWORD);
+        String student = login(studentEmail(), STUDENT_PASSWORD);
+
+        Map<String, Object> post = Map.of("title", "Thực tập sinh Java Backend",
+                "description", "Phát triển REST API bằng Java và Spring Boot, viết truy vấn PostgreSQL cho hệ thống thanh toán.",
+                "requirements", "Biết Java, có kiến thức PostgreSQL và Git.");
+        JsonNode tags = call("POST", "/companies/me/jobs/tag-suggestions", vng, post, 200, false).at("/data");
+        assertThat(tags.at("/available").asBoolean()).isTrue();
+        List<String> names = new java.util.ArrayList<>();
+        tags.at("/skills").forEach(item -> names.add(item.at("/name").asText()));
+        assertThat(names).contains("Java");
+        assertThat(tags.at("/categories")).isNotEmpty();
+        assertThat(call("POST", "/companies/me/jobs/tag-suggestions", vng, Map.of("title", "Tin", "description", "ngắn"), 200, false)
+                .at("/data/status").asText()).isEqualTo("TOO_SHORT");
+        call("POST", "/companies/me/jobs/tag-suggestions", student, post, 403, false);
+
+        JsonNode search = call("POST", "/students/me/job-search", student, Map.of("query", "lập trình React giao diện"), 200, false).at("/data");
+        assertThat(search.at("/available").asBoolean()).isTrue();
+        long open = db.sql("SELECT count(*) FROM job_posts j JOIN companies c ON c.id=j.company_id WHERE j.status='RECRUITING' AND j.deadline>=current_date AND c.partner_status='ACTIVE'")
+                .query(Long.class).single();
+        assertThat(search.at("/items")).hasSize((int) open);
+        assertThat(search.at("/items/0/score").asDouble()).isGreaterThanOrEqualTo(search.at("/items/1/score").asDouble());
+        assertThat(db.sql("SELECT count(*) FROM text_embeddings WHERE kind='JOB_DOCUMENT'").query(Long.class).single()).isGreaterThanOrEqualTo(open);
+
+        int callsBefore = fakeEmbeddings.calls;
+        call("POST", "/students/me/job-search", student, Map.of("query", "lập trình React giao diện"), 200, false);
+        assertThat(fakeEmbeddings.calls).as("query and job vectors are reused").isEqualTo(callsBefore);
+        call("POST", "/students/me/job-search", vng, Map.of("query", "React"), 403, false);
+        call("POST", "/students/me/job-search", student, Map.of("query", " "), 400, false);
+
+        call("PUT", "/uit/ai/features/SEMANTIC_SEARCH", admin, Map.of("enabled", false), 200, false);
+        assertThat(call("POST", "/students/me/job-search", student, Map.of("query", "dữ liệu Python"), 200, false).at("/data/status").asText()).isEqualTo("DISABLED");
+        call("PUT", "/uit/ai/features/SEMANTIC_SEARCH", admin, Map.of("enabled", true), 200, false);
+
+        fakeEmbeddings.failure = new vn.edu.uit.careerhub.ai.AiClientException("HTTP_503", "overloaded");
+        assertThat(call("POST", "/students/me/job-search", student, Map.of("query", "kiểm thử tự động"), 200, false).at("/data/status").asText()).isEqualTo("FAILED");
+        fakeEmbeddings.failure = null;
+        assertThat(db.sql("SELECT count(*) FROM ai_call_logs WHERE feature='SEMANTIC_SEARCH' AND status='SUCCESS'").query(Long.class).single()).isGreaterThanOrEqualTo(2);
+        assertThat(db.sql("SELECT count(*) FROM ai_call_logs WHERE feature='SKILL_SUGGEST' AND status='SUCCESS'").query(Long.class).single()).isGreaterThanOrEqualTo(1);
+    }
+
     /** AI3: preferences drive the ranking, applied jobs disappear, and the explanation is cached. */
     @Test
     void jobRecommendationsFollowTheStudentsPreferences() throws Exception {
@@ -504,7 +554,7 @@ class RealDatabaseIntegrationTest {
         call("PUT", "/uit/ai/features/JOB_RANKER", admin, Map.of("enabled", false), 200, false);
         assertThat(call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/ranking").asText()).isEqualTo("RULE");
         JsonNode dashboard = call("PUT", "/uit/ai/features/JOB_RANKER", admin, Map.of("enabled", true), 200, false).at("/data");
-        assertThat(dashboard.at("/features")).hasSize(5);
+        assertThat(dashboard.at("/features")).hasSize(7);
         JsonNode rankerRow = null;
         for (JsonNode row : dashboard.at("/features")) if (row.at("/feature").asText().equals("JOB_RANKER")) rankerRow = row;
         assertThat(rankerRow.at("/enabled").asBoolean()).isTrue();

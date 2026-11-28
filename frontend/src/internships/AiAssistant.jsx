@@ -32,6 +32,8 @@ const featureLabel = {
   JOB_MATCH: "Giải thích việc phù hợp (AI3)",
   JOB_RANKER: "Xếp hạng việc làm (học máy)",
   INTERNSHIP_RISK: "Cảnh báo sớm thực tập (học máy)",
+  SKILL_SUGGEST: "Gợi ý kỹ năng khi viết tin",
+  SEMANTIC_SEARCH: "Tìm việc theo nghĩa",
 };
 
 const roleBase = {

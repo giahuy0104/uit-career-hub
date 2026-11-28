@@ -79,7 +79,7 @@ public class AiPlatformService {
 
     @Transactional
     public void updateFeature(AuthPrincipal principal, AiFeature feature, AiFeatureSettingRequest input, RequestMetadata request) {
-        Integer limit = feature.kind() == AiFeature.Kind.LLM ? input.dailyLimitPerUser() : null;
+        Integer limit = feature.kind() == AiFeature.Kind.MODEL ? null : input.dailyLimitPerUser();
         repository.updateFeature(feature, input.enabled(), limit, principal.userId(), request);
     }
 
@@ -98,6 +98,7 @@ public class AiPlatformService {
                             || principal.role() == UserRole.COMPANY && p.companyId().equals(principal.companyId())).isPresent();
             case JOB_RANKER -> principal.role() == UserRole.STUDENT && jobs.findById(subject).isPresent();
             case INTERNSHIP_RISK -> principal.role() == UserRole.UIT_ADMIN && repository.placement(subject).isPresent();
+            case SKILL_SUGGEST, SEMANTIC_SEARCH -> false;   // judged by use (accepted tags, clicks), not by votes
         };
         if (!allowed) throw new AppException(ErrorType.NOT_FOUND, "AI_FEEDBACK_SUBJECT_NOT_FOUND", "Không tìm thấy gợi ý cần đánh giá.");
         repository.saveFeedback(principal.userId(), principal.role(), feature, subject, input.modelVersion(), input.helpful());

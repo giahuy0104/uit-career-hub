@@ -106,6 +106,20 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
   const [loadError, setLoadError] = useState("");
   const [reloadVersion, setReloadVersion] = useState(0);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [semantic, setSemantic] = useState(null);
+  const [semanticBusy, setSemanticBusy] = useState(false);
+  const runSemanticSearch = async () => {
+    if (!query.trim() || semanticBusy) return;
+    setSemanticBusy(true);
+    try {
+      const response = await authorizedRequest("/students/me/job-search", { method: "POST", body: JSON.stringify({ query: query.trim() }) });
+      setSemantic({ query: query.trim(), ...response.data });
+    } catch (error) {
+      setSemantic({ query: query.trim(), available: false, message: error.message });
+    } finally {
+      setSemanticBusy(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -128,7 +142,14 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
   }, [authorizedRequest, initialCompanyId, reloadVersion]);
 
   const appliedJobIds = useMemo(() => new Set(applications.map((application) => application.job.id)), [applications]);
-  const filtered = useMemo(() => filterStudentJobs(items, query, internOnly), [items, query, internOnly]);
+  const semanticActive = Boolean(semantic?.available && semantic.query === query.trim());
+  // By meaning: every open job, in the order of the hybrid score, instead of the keyword filter.
+  const filtered = useMemo(() => {
+    if (!semanticActive) return filterStudentJobs(items, query, internOnly);
+    const byId = new Map(items.map((job) => [job.id, job]));
+    return semantic.items.map((hit) => byId.get(hit.jobId)).filter(Boolean)
+      .filter((job) => !internOnly || job.opportunityType === "INTERNSHIP");
+  }, [items, query, internOnly, semantic, semanticActive]);
   const selected = resolveVisibleSelection(filtered, selectedId);
   const filtersActive = Boolean(query.trim() || internOnly);
   const clearFilters = () => {
@@ -153,8 +174,12 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
             onSelect={(jobId) => { clearFilters(); setSelectedId(jobId); setMobileDetailOpen(true); }} /></Suspense>}
           <div className="search-row">
             <label className="search-field"><MagnifyingGlass size={22} /><input aria-label="Tìm việc làm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm vị trí, công ty hoặc kỹ năng" /></label>
+            <button className="secondary-button" disabled={!query.trim() || semanticBusy} onClick={() => void runSemanticSearch()} title="Tìm cả những tin cùng ý nghĩa dù không chứa đúng từ bạn gõ">{semanticBusy ? <CircleNotch className="spin" size={20} /> : <MagnifyingGlass size={20} />}Tìm theo nghĩa</button>
             <button className={`secondary-button ${filtersOpen ? "selected" : ""}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}><FunnelSimple size={20} />Bộ lọc</button>
           </div>
+          {semantic && semantic.query === query.trim() && <div className="filter-strip" role="status">{semantic.available
+            ? <span><MagnifyingGlass size={18} />Xếp theo nghĩa của “{semantic.query}”, tin hợp nhất ở trên cùng.</span>
+            : <span><Warning size={18} />{semantic.message} Đang tìm theo từ khóa.</span>}<button className="text-button" onClick={() => setSemantic(null)}>Tìm thường</button></div>}
           {initialCompanyId && <div className="filter-strip company-source-filter"><span><Buildings size={18} />Doanh nghiệp: <strong>{initialCompanyName || "Đối tác đã chọn"}</strong></span><button className="text-button" onClick={() => navigate("jobs")}>Xem tất cả doanh nghiệp</button></div>}
           {filtersOpen && <div className="filter-strip"><span><SlidersHorizontal size={18} />Lọc nhanh</span><button className={internOnly ? "chip selected" : "chip"} aria-pressed={internOnly} onClick={() => setInternOnly(!internOnly)}>Chỉ thực tập</button><button className="text-button" disabled={!filtersActive} onClick={clearFilters}>Xóa lọc</button></div>}
           <section className="job-group" aria-label="Danh sách việc làm">

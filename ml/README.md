@@ -104,6 +104,56 @@ Cả hai cộng lại đúng bằng log-odds (có test). Giao diện chỉ hiệ
 - Cảnh báo sớm chỉ để ưu tiên theo dõi, không tự thay đổi hồ sơ hay chặn ai.
 - Chưa có mô-đun tự nhận diện kỹ năng từ văn bản (cần dataset có giấy phép).
 
+## Hiểu văn bản tin tuyển dụng (Đợt B)
+
+| Chức năng | Ai dùng | Cách làm |
+|---|---|---|
+| Gợi ý kỹ năng, nhóm ngành khi viết tin | Doanh nghiệp | Embedding Gemini (`gemini-embedding-2`, 768 chiều) + Logistic Regression chấm từng cặp (tin, nhãn) |
+| Tìm việc theo nghĩa | Sinh viên | Embedding câu tìm kiếm so với embedding tin đang tuyển; tỉ lệ pha với điểm từ khóa chọn trên validation |
+
+**Dữ liệu:** `ml/datasets/jobs_synthetic_vi.jsonl`, 253 tin tiếng Việt do Gemini sinh (`ml/generate_jobs.py`), 30 kỹ năng,
+8 nhóm ngành. 53% số kỹ năng đúng được nhắc **gián tiếp** (không ghi đúng tên), để so cách hiểu nghĩa với cách khớp
+từ khóa. Mỗi tin kèm một câu sinh viên có thể gõ để tìm. Chia 152 / 51 / 50 tin (train / validation / test).
+
+**Đặc trưng của cặp (tin, nhãn) — 6:** độ giống ngữ nghĩa của cả tin và của tiêu đề với tên nhãn, có nhắc đúng tên,
+tỉ lệ từ của nhãn xuất hiện, độ giống so với trung bình **bộ 30 nhãn tham chiếu** và tỉ lệ nhãn tham chiếu kém giống hơn.
+Bộ tham chiếu được lưu cùng mô hình, nên hai đặc trưng cuối có cùng ý nghĩa dù danh mục kỹ năng của UIT có 5 hay 50 mục,
+và kỹ năng UIT thêm sau vẫn được gợi ý mà không phải huấn luyện lại.
+
+### Kết quả (tập test)
+
+| Gợi ý kỹ năng | Precision | Recall | F1 | Bắt được kỹ năng nhắc gián tiếp |
+|---|---|---|---|---|
+| Khớp từ khóa (cách hiện tại) | 1,000 | 0,469 | 0,638 | 0% |
+| Chỉ độ giống embedding | 0,567 | 0,559 | 0,563 | 28% |
+| **Logistic Regression (đang dùng)** | 0,722 | 0,671 | **0,696** | **38%** |
+
+Thử thêm: không có hai đặc trưng tham chiếu F1 0,658 (gián tiếp 9%); LightGBM với cùng đặc trưng ngang Logistic
+Regression (0,71), nên giữ mô hình đơn giản hơn.
+
+| Đoán nhóm ngành (1 nhãn/tin) | Độ chính xác |
+|---|---|
+| Khớp từ khóa | 0,34 |
+| **Độ giống embedding (validation chọn, đang dùng)** | **0,78** |
+| Logistic Regression | 0,72 |
+
+| Tìm theo nghĩa (29 câu, mỗi câu tìm đúng 1 tin trong 29) | Recall@1 | Recall@5 | MRR |
+|---|---|---|---|
+| Từ khóa (tỉ lệ từ của câu có trong tin) | 0,310 | 0,724 | 0,525 |
+| **Embedding (validation chọn tỉ lệ pha = 1,0, đang dùng)** | **0,448** | **1,000** | **0,671** |
+
+Đánh giá tìm kiếm mới chạy trên 29/50 tin test có câu tìm kiếm đã embedding: gói miễn phí giới hạn **1.000 lượt
+embedding mỗi ngày** và đã dùng hết khi chuẩn bị dữ liệu. Chạy lại `python ml/train_text.py --env-file .env` hôm sau để
+có đủ 50 tin; script tiếp tục từ bộ nhớ đệm `ml/data/text-embeddings.json`.
+
+### Giới hạn
+- Dữ liệu do AI sinh, đa dạng hơn mẫu câu nhưng chưa phải tin thật.
+- Câu tìm kiếm và nội dung tin được gửi tới Gemini; gói miễn phí cho Google dùng nội dung để cải thiện sản phẩm.
+  Không gửi thông tin sinh viên.
+- Gói miễn phí: 1.000 lượt embedding mỗi ngày cho cả project. Hệ thống lưu vector của tin (chỉ tính lại khi nội dung
+  đổi) và nhớ câu tìm kiếm đã gặp, nhưng web public nhiều người dùng sẽ cần gói trả phí hoặc đặt hạn mức riêng.
+- Gemini lỗi, tắt hoặc hết lượt thì giao diện quay về tìm theo từ khóa và chọn kỹ năng thủ công.
+
 ## Huấn luyện lại bằng dữ liệu thật
 
 Backend xuất dữ liệu đã dùng trong hệ thống ra CSV, tính đặc trưng bằng **chính mã Java** mà mô hình đang chạy

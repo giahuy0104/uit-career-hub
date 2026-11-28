@@ -1,0 +1,76 @@
+{
+  "jobs": 253,
+  "skills": 30,
+  "categories": 8,
+  "split": {
+    "train": 152,
+    "valid": 51,
+    "test": 50
+  },
+  "skill_tagging": {
+    "keyword_exact": {
+      "all": {
+        "precision": 1.0,
+        "recall": 0.46853146853146854,
+        "f1": 0.6380952380952382
+      },
+      "implied_only_recall": 0.0
+    },
+    "embedding_cosine": {
+      "all": {
+        "precision": 0.5673758865248227,
+        "recall": 0.5594405594405595,
+        "f1": 0.5633802816901409
+      },
+      "implied_only_recall": 0.27631578947368424
+    },
+    "logistic_regression": {
+      "all": {
+        "precision": 0.7218045112781954,
+        "recall": 0.6713286713286714,
+        "f1": 0.6956521739130435
+      },
+      "implied_only_recall": 0.3815789473684211
+    },
+    "thresholds": {
+      "logistic_regression": 0.741,
+      "embedding_cosine": 0.782
+    },
+    "implied_share_of_true_skills": 0.5314685314685315,
+    "coefficients": {
+      "cos_full": 3.26,
+      "cos_title": 0.703,
+      "exact_mention": 3.526,
+      "token_share": 0.107,
+      "cos_vs_reference": 2.718,
+      "share_below": 5.818
+    }
+  },
+  "category_accuracy": {
+    "keyword_exact": 0.34,
+    "embedding_cosine": 0.78,
+    "logistic_regression": 0.72,
+    "chosen_on_validation": "embedding_cosine"
+  },
+  "search": {
+    "keyword_only": {
+      "recall@1": 0.3103448275862069,
+      "recall@5": 0.7241379310344828,
+      "mrr": 0.524561262492297
+    },
+    "embedding_only": {
+      "recall@1": 0.4482758620689655,
+      "recall@5": 1.0,
+      "mrr": 0.6706896551724137
+    },
+    "hybrid": {
+      "recall@1": 0.4482758620689655,
+      "recall@5": 1.0,
+      "mrr": 0.6706896551724137
+    },
+    "hybrid_alpha": 1.0,
+    "candidates": 29,
+    "valid_queries": 33,
+    "complete": false
+  }
+}
