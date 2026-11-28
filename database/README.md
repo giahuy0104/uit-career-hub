@@ -53,6 +53,10 @@ Migration `0023` thêm kỹ năng (`student_skills`), nhóm ngành và loại c�
 
 Migration `0024` thêm `job_interaction_events` (hiển thị, xem, bấm gợi ý) để huấn luyện lại mô hình xếp hạng bằng hành vi thật. Chi tiết học máy: `ml/README.md`.
 
+Migration `0025` thêm cài đặt riêng từng chức năng AI (`ai_feature_settings`), hạn mức riêng (`ai_feature_daily_usage`) và đánh giá hữu ích (`ai_feedback`). Công tắc chung trong `ai_settings` vẫn là công tắc tổng.
+
+Migration `0026` thêm `text_embeddings` (vector embedding của tin, kỹ năng, nhóm ngành; tính lại khi nội dung đổi) và hai chức năng AI `SKILL_SUGGEST`, `SEMANTIC_SEARCH`.
+
 ## Lệnh
 
 ```powershell

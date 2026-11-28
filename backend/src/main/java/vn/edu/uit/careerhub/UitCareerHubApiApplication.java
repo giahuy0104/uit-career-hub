@@ -49,9 +49,26 @@ public class UitCareerHubApiApplication {
 					tasks.resetDemo();
 				}
 				case "db:e2e:reset" -> { tasks.migrate(); tasks.resetDemo(); }
+				case "db:ml:export" -> exportTrainingData(context);
 				default -> throw new IllegalArgumentException("Lệnh database không được hỗ trợ: " + databaseCommand);
 			}
 		}
+	}
+
+	/** Writes ranker.csv and risk.csv for ml/train_*.py --data into ML_EXPORT_DIR (default ../ml/data). */
+	private static void exportTrainingData(ConfigurableApplicationContext context) {
+		vn.edu.uit.careerhub.service.MlTrainingDataService data = context.getBean(vn.edu.uit.careerhub.service.MlTrainingDataService.class);
+		String directory = setting("ML_EXPORT_DIR");
+		java.nio.file.Path target = java.nio.file.Path.of(directory == null || directory.isBlank() ? "../ml/data" : directory);
+		java.util.List<double[]> ranker = data.rankerRows();
+		java.util.List<double[]> risk = data.riskRows();
+		java.util.List<String> rankerHeader = new java.util.ArrayList<>(vn.edu.uit.careerhub.ml.JobRankingFeatures.NAMES);
+		rankerHeader.addAll(java.util.List.of("label", "group"));
+		java.util.List<String> riskHeader = new java.util.ArrayList<>(vn.edu.uit.careerhub.ml.InternshipRiskFeatures.NAMES);
+		riskHeader.add("label");
+		vn.edu.uit.careerhub.ml.CsvExport.write(target.resolve("ranker.csv"), rankerHeader, ranker);
+		vn.edu.uit.careerhub.ml.CsvExport.write(target.resolve("risk.csv"), riskHeader, risk);
+		System.out.println("Đã xuất " + ranker.size() + " dòng xếp hạng và " + risk.size() + " dòng cảnh báo sớm vào " + target.toAbsolutePath());
 	}
 
 	private static String setting(String name) {

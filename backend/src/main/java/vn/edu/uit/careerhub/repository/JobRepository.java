@@ -102,6 +102,43 @@ public class JobRepository {
         return result;
     }
 
+    /** First recommendation impression of each (student, job) and whether the student applied within 14 days. */
+    public List<Impression> impressions() {
+        return database.sql("""
+            SELECT e.student_profile_id,e.job_post_id,min(e.created_at) seen_at,
+              EXISTS(SELECT 1 FROM applications a WHERE a.student_profile_id=e.student_profile_id AND a.job_post_id=e.job_post_id
+                AND a.submitted_at BETWEEN min(e.created_at) AND min(e.created_at)+interval '14 days') applied
+            FROM job_interaction_events e WHERE e.event_type='IMPRESSION' AND e.source='RECOMMENDATIONS'
+            GROUP BY e.student_profile_id,e.job_post_id ORDER BY e.student_profile_id,seen_at
+            """).query((row,n)->new Impression(row.getObject("student_profile_id",UUID.class),row.getObject("job_post_id",UUID.class),
+                row.getObject("seen_at",java.time.OffsetDateTime.class),row.getBoolean("applied"))).list();
+    }
+
+    public record Impression(UUID studentProfileId,UUID jobId,java.time.OffsetDateTime seenAt,boolean applied) {}
+
+    /** Applications to the company in the 30 days before a moment. */
+    public long companyApplicationsBefore(UUID companyId,java.time.OffsetDateTime moment) {
+        return database.sql("""
+            SELECT count(*) FROM applications a JOIN job_posts j ON j.id=a.job_post_id
+            WHERE j.company_id=:companyId AND a.submitted_at BETWEEN CAST(:moment AS timestamptz)-interval '30 days' AND CAST(:moment AS timestamptz)
+            """).param("companyId",companyId).param("moment",moment).query(Long.class).single();
+    }
+
+    /** Category ids of every job the student applied to before a moment (history feature at that time). */
+    public List<Set<String>> applicationCategoriesBefore(UUID studentProfileId,java.time.OffsetDateTime moment) {
+        Map<UUID,Set<String>> byApplication=new java.util.LinkedHashMap<>();
+        database.sql("""
+            SELECT a.id,jpc.category_id FROM applications a LEFT JOIN job_post_categories jpc ON jpc.job_post_id=a.job_post_id
+            WHERE a.student_profile_id=:id AND a.submitted_at<CAST(:moment AS timestamptz)
+            """).param("id",studentProfileId).param("moment",moment).query((row,n)->{
+                Set<String> categories=byApplication.computeIfAbsent(row.getObject("id",UUID.class),k->new LinkedHashSet<>());
+                UUID category=row.getObject("category_id",UUID.class);
+                if(category!=null) categories.add(category.toString());
+                return true;
+            }).list();
+        return new ArrayList<>(byApplication.values());
+    }
+
     /** Category ids of every job the student applied to (history feature). */
     public List<Set<String>> applicationCategories(UUID studentProfileId) {
         Map<UUID,Set<String>> byApplication=new java.util.LinkedHashMap<>();

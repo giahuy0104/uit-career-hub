@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { AiResultFrame, useAiRequest } from "../internships/AiAssistant.jsx";
 import { describeFactor, jobFactorCopy, modelLabel } from "../shared/ml-copy.js";
 import { logJobEvent } from "./job-events.js";
+import { AiFeedback } from "../shared/AiFeedback.jsx";
 import "./job-match.css";
 
 const criterionLabels = {
@@ -77,6 +78,7 @@ export function JobRecommendations({ selectedId, onSelect, onEditSkills }) {
                     {byModel && factors.length > 0 && <span className="job-match-why">{factors.map((factor) => describeFactor(jobFactorCopy, factor)).join(" · ")}</span>}
                   </span>
                 </button>
+                {byModel && <div className="job-match-feedback"><AiFeedback feature="JOB_RANKER" subjectId={job.id} modelVersion={data.model?.version} question="Gợi ý này hợp với bạn?" /></div>}
                 <details><summary>Cách tính điểm</summary>{byModel && <p className="job-match-model">Mô hình dự đoán mức phù hợp <strong>{score}/100</strong>. Công thức cũ cho <strong>{ruleScore}/100</strong>, gồm:</p>}<ul>{criteria.map((item) => <li key={item.key}>{criterionLabels[item.key] || item.key}<span>{points(item.earned)} / {item.weight}</span></li>)}</ul></details>
               </li>)}</ol>
               <div className="ai-assist">

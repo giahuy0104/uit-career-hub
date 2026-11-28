@@ -1,0 +1,6 @@
+.ai-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #566579; font-size: 12.5px; }
+.ai-feedback span { margin-right: 2px; }
+.ai-feedback button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: #475467; font-size: 16px; cursor: pointer; }
+.ai-feedback button:hover { border-color: var(--blue); color: var(--blue); }
+.ai-feedback button:focus-visible { outline: 3px solid rgba(9, 104, 232, .35); outline-offset: 2px; }
+.ai-feedback button.on { border-color: var(--blue); background: var(--blue-50); color: #075cd0; }

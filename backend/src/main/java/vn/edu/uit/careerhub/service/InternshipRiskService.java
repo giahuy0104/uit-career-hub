@@ -14,9 +14,11 @@ import org.springframework.stereotype.Service;
 
 import vn.edu.uit.careerhub.entity.RiskPlacement;
 import vn.edu.uit.careerhub.entity.RiskWeeklyLog;
+import vn.edu.uit.careerhub.enums.AiFeature;
 import vn.edu.uit.careerhub.ml.InternshipRiskFeatures;
 import vn.edu.uit.careerhub.ml.MlModel;
 import vn.edu.uit.careerhub.ml.MlModels;
+import vn.edu.uit.careerhub.repository.AiRepository;
 import vn.edu.uit.careerhub.repository.InternshipRiskRepository;
 
 /**
@@ -29,15 +31,17 @@ public class InternshipRiskService {
 
     private final InternshipRiskRepository repository;
     private final MlModels models;
+    private final AiRepository aiSettings;
 
-    public InternshipRiskService(InternshipRiskRepository repository, MlModels models) {
+    public InternshipRiskService(InternshipRiskRepository repository, MlModels models, AiRepository aiSettings) {
         this.repository = repository;
         this.models = models;
+        this.aiSettings = aiSettings;
     }
 
     public Map<String, Object> assess() {
         Map<String, Object> result = new LinkedHashMap<>();
-        MlModel model = models.internshipRisk().orElse(null);
+        MlModel model = models.internshipRisk().filter(m -> aiSettings.featureEnabled(AiFeature.INTERNSHIP_RISK)).orElse(null);
         result.put("available", model != null);
         result.put("model", model == null ? null : model.describe());
         if (model == null) {

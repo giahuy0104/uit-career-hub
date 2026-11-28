@@ -131,7 +131,13 @@ public class AiAssistantService {
     }
 
     public Map<String, Object> settings() {
+        return settings(List.of());
+    }
+
+    /** Settings plus the per-feature rows the platform service adds. */
+    public Map<String, Object> settings(List<Map<String, Object>> features) {
         Map<String, Object> result = new LinkedHashMap<>(repository.settings());
+        result.put("features", features);
         result.put("configured", properties.configured());
         result.put("model", client.model());
         result.put("dailyLimitPerUser", properties.dailyLimitPerUser());
@@ -157,13 +163,17 @@ public class AiAssistantService {
             log(principal, feature, targetId, AiCallStatus.DISABLED, model, null, null, null);
             return unavailable(feature, AiCallStatus.DISABLED.name(), "Nhà trường đang tắt trợ lý AI nên chưa có gợi ý.");
         }
+        if (!repository.featureEnabled(feature)) {
+            log(principal, feature, targetId, AiCallStatus.DISABLED, model, null, null, null);
+            return unavailable(feature, AiCallStatus.DISABLED.name(), "Nhà trường đang tắt chức năng AI này nên chưa có gợi ý.");
+        }
 
         String hash = sha256(model + "\n" + prompt.system() + "\n" + prompt.user());
         AiCachedSuggestion cached = repository.cached(feature, targetId, hash).orElse(null);
         if (cached != null) {
             log(principal, feature, targetId, AiCallStatus.CACHED, cached.model(), null, null, null);
             return new AiSuggestion(true, feature.name(), AiCallStatus.CACHED.name(), null, cached.result(),
-                    cached.model(), cached.createdAt().toString());
+                    cached.model(), cached.createdAt().toString(), cached.id());
         }
 
         int limit = properties.dailyLimitPerUser();
@@ -173,6 +183,13 @@ public class AiAssistantService {
             log(principal, feature, targetId, AiCallStatus.RATE_LIMITED, model, null, null, null);
             return unavailable(feature, AiCallStatus.RATE_LIMITED.name(),
                     "Bạn đã dùng hết " + limit + " lượt AI hôm nay. Vui lòng thử lại vào ngày mai.");
+        }
+        Integer featureLimit = repository.featureLimit(feature).orElse(null);
+        if (featureLimit != null && !repository.reserveFeatureCall(principal.userId(), feature, featureLimit)) {
+            if (limit > 0) repository.releaseProviderCall(principal.userId());
+            log(principal, feature, targetId, AiCallStatus.RATE_LIMITED, model, null, null, null);
+            return unavailable(feature, AiCallStatus.RATE_LIMITED.name(),
+                    "Bạn đã dùng hết " + featureLimit + " lượt của chức năng này hôm nay. Vui lòng thử lại vào ngày mai.");
         }
 
         long started = System.nanoTime();
@@ -185,6 +202,7 @@ public class AiAssistantService {
             log(principal, feature, targetId, AiCallStatus.FAILED, model, elapsedMs(started), null, error.code());
             if (error.providerOverloaded()) {
                 if (limit > 0) repository.releaseProviderCall(principal.userId());
+                if (featureLimit != null) repository.releaseFeatureCall(principal.userId(), feature);
                 return unavailable(feature, AiCallStatus.FAILED.name(),
                         "AI đang quá tải nên chưa có gợi ý. Lượt này không bị tính, vui lòng thử lại sau ít phút.");
             }
@@ -198,9 +216,10 @@ public class AiAssistantService {
                     "AI trả về kết quả không đúng định dạng nên chưa có gợi ý. Vui lòng thử lại.");
         }
         int latency = elapsedMs(started);
-        OffsetDateTime createdAt = repository.saveSuggestion(feature, targetId, hash, model, result);
+        AiCachedSuggestion saved = repository.saveSuggestion(feature, targetId, hash, model, result);
         log(principal, feature, targetId, AiCallStatus.SUCCESS, model, latency, completion, null);
-        return new AiSuggestion(true, feature.name(), AiCallStatus.SUCCESS.name(), null, result, model, createdAt.toString());
+        return new AiSuggestion(true, feature.name(), AiCallStatus.SUCCESS.name(), null, result, model,
+                saved.createdAt().toString(), saved.id());
     }
 
     private void log(AuthPrincipal principal, AiFeature feature, UUID targetId, AiCallStatus status, String model,
@@ -211,7 +230,7 @@ public class AiAssistantService {
     }
 
     private static AiSuggestion unavailable(AiFeature feature, String status, String message) {
-        return new AiSuggestion(false, feature.name(), status, message, null, null, null);
+        return new AiSuggestion(false, feature.name(), status, message, null, null, null, null);
     }
 
     private static List<String> personalValues(AiPlacementContext placement) {

@@ -37,6 +37,7 @@
 .job-match-list details span { font-weight: 600; font-variant-numeric: tabular-nums; }
 .job-match-why { margin-top: 6px; color: #4b4569; font-size: 12.5px; line-height: 1.5; }
 .job-match-model { margin: 0; padding: 0 16px 8px; color: #475467; font-size: 13px; line-height: 1.5; }
+.job-match-feedback { padding: 0 16px 10px; }
 .job-match .ai-assist { margin-top: 0; }
 .job-match-explain { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
 .job-match-explain .text-button { padding: 0; font-weight: 700; text-align: left; }

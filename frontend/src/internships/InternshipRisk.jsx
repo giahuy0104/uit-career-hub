@@ -1,6 +1,7 @@
 import { ChartLineUp, Info } from "@phosphor-icons/react";
 
 import { Status } from "../shared/WorkspaceShell.jsx";
+import { AiFeedback } from "../shared/AiFeedback.jsx";
 import { describeFactor, modelLabel, riskFactorCopy } from "../shared/ml-copy.js";
 
 export const riskCopy = {
@@ -34,6 +35,7 @@ export function RiskCard({ assessment, model }) {
       <p className="risk-probability"><strong>{Math.round(assessment.probability * 100)}%</strong> khả năng kỳ thực tập kết thúc không tốt, dựa trên {assessment.submittedWeeks}/{assessment.dueWeeks} tuần nhật ký.</p>
       {assessment.factors.length > 0 && <ul className="risk-factors">{assessment.factors.map((factor) => <li key={factor.feature}>{describeFactor(riskFactorCopy, factor)}</li>)}</ul>}
     </> : <p className="risk-probability">Cần ít nhất 2 tuần nhật ký đã nộp để đánh giá (hiện có {assessment.submittedWeeks}).</p>}
+    {scored && <AiFeedback feature="INTERNSHIP_RISK" subjectId={assessment.placementId} modelVersion={model?.version} question="Đánh giá này có đúng với thực tế không?" />}
     <p className="risk-note"><Info />Chỉ để ưu tiên theo dõi, không thay cho đánh giá của UIT và doanh nghiệp.</p>
   </section>;
 }
