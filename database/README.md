@@ -51,6 +51,8 @@ phải quét toàn bộ hộp thư của người dùng. Bản nháp của migra
 Migration `0023` thêm kỹ năng (`student_skills`), nhóm ngành và loại cơ hội sinh viên quan tâm, cùng chức năng AI
 `JOB_MATCH`. Điểm phù hợp do hệ thống tính, AI chỉ giải thích.
 
+Migration `0024` thêm `job_interaction_events` (hiển thị, xem, bấm gợi ý) để huấn luyện lại mô hình xếp hạng bằng hành vi thật. Chi tiết học máy: `ml/README.md`.
+
 ## Lệnh
 
 ```powershell

@@ -318,6 +318,17 @@ class RealDatabaseIntegrationTest {
         logVersion = db.sql("SELECT version FROM internship_weekly_logs WHERE id=:id").param("id", UUID.fromString(logId)).query(Integer.class).single();
         call("POST", "/company/internships/" + placement + "/weekly-logs/" + logId + "/confirm", vng, Map.of("expectedVersion", logVersion), 200, true);
         aiLogSummaryAgainstRealSql(placement, student, vng, admin);
+
+        // Early warning: one submitted week is not enough to score, and only UIT can see it.
+        JsonNode risk = call("GET", "/uit/internship-supervision/risk", admin, null, 200, false).at("/data");
+        assertThat(risk.at("/available").asBoolean()).isTrue();
+        JsonNode riskItem = null;
+        for (JsonNode item : risk.at("/items")) if (item.at("/placementId").asText().equals(placement)) riskItem = item;
+        assertThat(riskItem).isNotNull();
+        assertThat(riskItem.at("/submittedWeeks").asInt()).isEqualTo(1);
+        assertThat(riskItem.at("/level").asText()).isEqualTo("INSUFFICIENT_DATA");
+        call("GET", "/uit/internship-supervision/risk", student, null, 403, false);
+        call("GET", "/uit/internship-supervision/risk", vng, null, 403, false);
         call("GET", "/uit/internship-supervision/summary", admin, null, 200, false);
         call("GET", "/uit/internship-supervision/overdue", admin, null, 200, false);
 
@@ -437,8 +448,26 @@ class RealDatabaseIntegrationTest {
         call("PUT", "/students/me/job-preferences", student, Map.of("skillIds", List.of()), 400, false);
         assertThat(call("GET", "/students/me/job-preferences", student, null, 200, false).at("/data")).as("a rejected save changes nothing").isEqualTo(saved);
 
-        JsonNode items = call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/items");
-        assertThat(items.at("/0/score").asInt()).isEqualTo(100);
+        JsonNode recommendations = call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data");
+        assertThat(recommendations.at("/ranking").asText()).as("ranked by the bundled model").isEqualTo("MODEL");
+        assertThat(recommendations.at("/model/version").asText()).isNotBlank();
+        JsonNode items = recommendations.at("/items");
+        JsonNode goodItem = null;
+        for (JsonNode item : items) if (item.at("/job/id").asText().equals(good)) goodItem = item;
+        assertThat(goodItem).isNotNull();
+        assertThat(goodItem.at("/ruleScore").asInt()).isEqualTo(100);
+        assertThat(goodItem.at("/score").asInt()).isBetween(0, 100);
+        assertThat(goodItem.at("/factors").isArray()).isTrue();
+
+        // Behaviour is logged for retraining; only the student's own events, only real open jobs.
+        call("POST", "/students/me/job-events", student, Map.of("jobId", good, "type", "IMPRESSION", "source", "RECOMMENDATIONS", "position", 0,
+                "modelVersion", recommendations.at("/model/version").asText()), 204, false);
+        call("POST", "/students/me/job-events", student, Map.of("jobId", good, "type", "RECOMMENDATION_CLICK", "source", "RECOMMENDATIONS", "position", 0), 204, false);
+        call("POST", "/students/me/job-events", student, Map.of("jobId", UUID.randomUUID(), "type", "VIEW", "source", "JOB_LIST"), 404, false);
+        call("POST", "/students/me/job-events", student, Map.of("jobId", good, "type", "BUY", "source", "JOB_LIST"), 400, false);
+        call("POST", "/students/me/job-events", vng, Map.of("jobId", good, "type", "VIEW", "source", "JOB_LIST"), 403, false);
+        assertThat(db.sql("SELECT count(*) FROM job_interaction_events WHERE job_post_id=:id").param("id", UUID.fromString(good))
+                .query(Long.class).single()).isEqualTo(2);
         List<String> ids = new java.util.ArrayList<>();
         items.forEach(item -> ids.add(item.at("/job/id").asText()));
         assertThat(ids).contains(good).doesNotContain(untagged);

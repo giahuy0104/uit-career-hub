@@ -4,6 +4,7 @@ import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import vn.edu.uit.careerhub.dto.request.JobEventRequest;
 import vn.edu.uit.careerhub.dto.request.JobPreferencesRequest;
 import vn.edu.uit.careerhub.dto.response.AiSuggestion;
 import vn.edu.uit.careerhub.dto.response.ApiEnvelope;
@@ -53,6 +55,14 @@ public class JobRecommendationController {
     ApiEnvelope<Map<String, Object>> recommendations(@AuthenticationPrincipal AuthPrincipal principal) {
         AuthContext.requireRole(principal, UserRole.STUDENT);
         return ApiEnvelope.of(service.recommendations(principal));
+    }
+
+    /** Impressions, views and clicks, kept to retrain the ranking model on real behaviour. */
+    @PostMapping("/students/me/job-events")
+    ResponseEntity<Void> event(@AuthenticationPrincipal AuthPrincipal principal, @Valid @RequestBody JobEventRequest input) {
+        AuthContext.requireRole(principal, UserRole.STUDENT);
+        service.recordEvent(principal, input);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/students/me/job-recommendations/ai-explanation")

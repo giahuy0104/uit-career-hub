@@ -34,6 +34,7 @@ import { useAuth } from "./auth/AuthContext.jsx";
 import { CompanyActivationScreen } from "./auth/CompanyActivationScreen.jsx";
 import { LoginScreen, SessionLoadingScreen } from "./auth/LoginScreen.jsx";
 import { InternshipEvaluationPanel } from "./placements/InternshipEvaluationPanel.jsx";
+import { logJobEvent } from "./student/job-events.js";
 import { WorkspaceShell } from "./shared/WorkspaceShell.jsx";
 import {
   filterStudentApplications,
@@ -159,7 +160,7 @@ function LiveJobsScreen({ navigate, user, onLogout, initialCompanyId = null, ini
           <section className="job-group" aria-label="Danh sách việc làm">
             <div className="job-table-header"><span>Cơ hội</span><span>Loại hình</span><span>Địa điểm</span><span>Hạn nộp</span><span>Xác thực</span></div>
             {loadingJobs ? <div className="portal-loading" role="status"><CircleNotch className="spin" size={22} />Đang tải tin tuyển dụng...</div> : loadError ? <div className="portal-error" role="alert"><Warning size={21} /><span>{loadError}</span><button className="secondary-button small" onClick={() => setReloadVersion((value) => value + 1)}>Thử lại</button></div> : filtered.length ? filtered.map((job) => (
-              <button key={job.id} className={`job-row ${selected?.id === job.id ? "selected" : ""}`} aria-pressed={selected?.id === job.id} onClick={() => { setSelectedId(job.id); setMobileDetailOpen(true); }}>
+              <button key={job.id} className={`job-row ${selected?.id === job.id ? "selected" : ""}`} aria-pressed={selected?.id === job.id} onClick={() => { setSelectedId(job.id); setMobileDetailOpen(true); logJobEvent(authorizedRequest, { jobId: job.id, type: "VIEW", source: "JOB_LIST" }); }}>
                 <span className="job-title-cell"><LiveCompanyMark company={job.company} /><span><strong>{job.title}</strong><small>{job.company.name}</small></span></span>
                 <span><span className={`type-pill ${job.opportunityType === "INTERNSHIP" ? "intern" : "fulltime"}`}>{opportunityLabels[job.opportunityType]}</span></span>
                 <span className="muted-cell"><MapPin size={17} /><span>{job.location}<small>{workModeLabels[job.workMode]}</small></span></span>
