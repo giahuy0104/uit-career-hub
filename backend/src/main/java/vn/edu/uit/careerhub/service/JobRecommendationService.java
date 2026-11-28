@@ -24,11 +24,13 @@ import vn.edu.uit.careerhub.entity.AiJobMatchEntry;
 import vn.edu.uit.careerhub.entity.JobMatch;
 import vn.edu.uit.careerhub.entity.JobPreferences;
 import vn.edu.uit.careerhub.entity.NamedRef;
+import vn.edu.uit.careerhub.enums.AiFeature;
 import vn.edu.uit.careerhub.exception.AppException;
 import vn.edu.uit.careerhub.exception.ErrorType;
 import vn.edu.uit.careerhub.ml.JobRankingFeatures;
 import vn.edu.uit.careerhub.ml.MlModel;
 import vn.edu.uit.careerhub.ml.MlModels;
+import vn.edu.uit.careerhub.repository.AiRepository;
 import vn.edu.uit.careerhub.repository.AuditRepository;
 import vn.edu.uit.careerhub.repository.JobPreferenceRepository;
 import vn.edu.uit.careerhub.repository.JobRepository;
@@ -51,15 +53,17 @@ public class JobRecommendationService {
     private final AuditRepository audit;
     private final AiAssistantService ai;
     private final MlModels models;
+    private final AiRepository aiSettings;
 
     public JobRecommendationService(JobPreferenceRepository preferences, JobRepository jobs, StudentProfileRepository profiles,
-            AuditRepository audit, AiAssistantService ai, MlModels models) {
+            AuditRepository audit, AiAssistantService ai, MlModels models, AiRepository aiSettings) {
         this.preferences = preferences;
         this.jobs = jobs;
         this.profiles = profiles;
         this.audit = audit;
         this.ai = ai;
         this.models = models;
+        this.aiSettings = aiSettings;
     }
 
     public Map<String, Object> taxonomyOptions() {
@@ -86,7 +90,7 @@ public class JobRecommendationService {
         JobPreferences student = preferences.find(principal.studentProfileId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("needsSkills", student.skills().isEmpty());
-        MlModel model = models.jobRanker().orElse(null);
+        MlModel model = ranker();
         result.put("ranking", model == null ? "RULE" : "MODEL");
         result.put("model", model == null ? null : model.describe());
         result.put("items", rank(principal.studentProfileId(), student).stream().map(item -> {
@@ -125,7 +129,7 @@ public class JobRecommendationService {
                 .map(job -> new Ranked(job, JobMatchScorer.score(student, JobMatchScorer.skills(job),
                         JobMatchScorer.categoryIds(job), job.get("opportunityType").toString()), null, List.of()))
                 .filter(item -> JobMatchScorer.worthRecommending(item.match())).toList();
-        MlModel model = models.jobRanker().orElse(null);
+        MlModel model = ranker();
         if (model == null || candidates.isEmpty()) {
             return candidates.stream().sorted(Comparator.comparingInt((Ranked item) -> -item.match().score())
                     .thenComparing(item -> text(item, "deadline")).thenComparing(item -> text(item, "id")))
@@ -146,6 +150,11 @@ public class JobRecommendationService {
         }).sorted(Comparator.comparingDouble((Ranked item) -> -item.probability())
                 .thenComparing(item -> text(item, "deadline")).thenComparing(item -> text(item, "id")))
                 .limit(MAX_RECOMMENDATIONS).toList();
+    }
+
+    /** The learned ranker, unless UIT switched it off (then the formula ranks). */
+    private MlModel ranker() {
+        return models.jobRanker().filter(model -> aiSettings.featureEnabled(AiFeature.JOB_RANKER)).orElse(null);
     }
 
     static double[] features(Ranked item, Set<String> skills, Set<String> categories, Set<String> types,

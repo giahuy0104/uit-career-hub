@@ -73,6 +73,7 @@ class AiAssistantServiceTest {
         service = service("key");
         // Slots are free unless a test says otherwise.
         lenient().when(repository.reserveProviderCall(any(), anyInt())).thenReturn(true);
+        lenient().when(repository.featureEnabled(any())).thenReturn(true);
     }
 
     private AiAssistantService service(String apiKey) {
@@ -80,12 +81,43 @@ class AiAssistantServiceTest {
                 new JsonSupport(new ObjectMapper()));
     }
 
+    /** saveSuggestion echoes what it stored, with a fresh id, as the database does. */
+    private static org.mockito.stubbing.Answer<AiCachedSuggestion> saved() {
+        return invocation -> new AiCachedSuggestion(UUID.randomUUID(), invocation.getArgument(3), invocation.getArgument(4), OffsetDateTime.now());
+    }
+
+    @Test void aFeatureSwitchedOffAloneGivesNoSuggestion() {
+        when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
+        when(repository.enabled()).thenReturn(true);
+        when(repository.featureEnabled(AiFeature.PLAN_REVIEW)).thenReturn(false);
+
+        AiSuggestion suggestion = service.reviewPlan(student, placementId, draft);
+
+        assertThat(suggestion.status()).isEqualTo("DISABLED");
+        assertThat(suggestion.message()).contains("chức năng");
+        assertThat(client.calls).isZero();
+    }
+
+    @Test void aFeatureLimitStopsCallsAndGivesTheGlobalSlotBack() {
+        when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
+        when(repository.enabled()).thenReturn(true);
+        when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
+        when(repository.featureLimit(AiFeature.PLAN_REVIEW)).thenReturn(Optional.of(2));
+        when(repository.reserveFeatureCall(student.userId(), AiFeature.PLAN_REVIEW, 2)).thenReturn(false);
+
+        AiSuggestion suggestion = service.reviewPlan(student, placementId, draft);
+
+        assertThat(suggestion.status()).isEqualTo("RATE_LIMITED");
+        verify(repository).releaseProviderCall(student.userId());
+        assertThat(client.calls).isZero();
+    }
+
     @Test void planReviewSendsMaskedTextAndStoresTheResult() {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(eq(AiFeature.PLAN_REVIEW), eq(placementId), anyString())).thenReturn(Optional.empty());
         when(repository.saveSuggestion(eq(AiFeature.PLAN_REVIEW), eq(placementId), anyString(), eq("gemini-test"), any()))
-                .thenReturn(OffsetDateTime.now());
+                .thenAnswer(saved());
         client.answer = "{\"overall\":\"Khá rõ\",\"strengths\":[],\"issues\":[]}";
 
         AiSuggestion result = service.reviewPlan(student, placementId, draft);
@@ -143,7 +175,7 @@ class AiAssistantServiceTest {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(eq(AiFeature.PLAN_REVIEW), eq(placementId), anyString()))
-                .thenReturn(Optional.of(new AiCachedSuggestion("gemini-test", Map.of("overall", "cũ"), OffsetDateTime.now())));
+                .thenReturn(Optional.of(new AiCachedSuggestion(UUID.randomUUID(), "gemini-test", Map.of("overall", "cũ"), OffsetDateTime.now())));
 
         AiSuggestion result = service.reviewPlan(student, placementId, draft);
 
@@ -156,7 +188,7 @@ class AiAssistantServiceTest {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         when(repository.reserveProviderCall(student.userId(), 3)).thenAnswer(invocation -> {
             assertThat(client.calls).as("slot must be taken before Gemini is called").isZero();
             return true;
@@ -217,7 +249,7 @@ class AiAssistantServiceTest {
                 new AiWeeklyLogEntry(2, WeeklyLogStatus.SUBMITTED, "Viết API", "Xong 2 endpoint", "Chưa có quyền DB", "Test")));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = """
                 {"overview":"Tiến độ đều","keyPoints":["API"],
                  "flags":[{"weekNumber":2,"type":"NEEDS_SUPPORT","detail":"Thiếu quyền DB"},{"weekNumber":7,"type":"REPEATED","detail":"x"}]}
@@ -253,7 +285,7 @@ class AiAssistantServiceTest {
     @Test void planReviewIsAllowedWithoutAPlanOrWhenRevisionIsRequested() {
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overall\":\"Ổn\"}";
 
         for (InternshipPlanStatus status : new InternshipPlanStatus[] {null,
@@ -268,7 +300,7 @@ class AiAssistantServiceTest {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overall\":\"Ổn\"}";
 
         service.reviewPlan(student, placementId, new AiPlanReviewRequest(
@@ -285,7 +317,7 @@ class AiAssistantServiceTest {
                 "Trần Bình", "binh@acme.vn")));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overall\":\"Ổn\"}";
 
         service.reviewPlan(student, placementId, new AiPlanReviewRequest(
@@ -302,7 +334,7 @@ class AiAssistantServiceTest {
                 "Họp với anh Tuấn và chị Hoàng Thu Trang", "Xong", "Cần anh Khánh cấp quyền", "Test")));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overview\":\"Ổn\"}";
 
         service.summarizeWeeklyLogs(company, placementId);
@@ -314,7 +346,7 @@ class AiAssistantServiceTest {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overall\":\"Ổn\"}";
 
         service.reviewPlan(student, placementId, draft);
@@ -333,7 +365,7 @@ class AiAssistantServiceTest {
         when(repository.placement(placementId)).thenReturn(Optional.of(placement(InternshipPlanStatus.DRAFT)));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overall\":\"Ổn\"}";
 
         assertThat(service.reviewPlan(student, placementId, draft).status()).isEqualTo("SUCCESS");
@@ -361,7 +393,7 @@ class AiAssistantServiceTest {
                 new AiWeeklyLogEntry(1, WeeklyLogStatus.SUBMITTED, "Làm API", "Xong", null, "Test")));
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = "{\"overview\":\"Ổn\"}";
 
         AiSuggestion result = service.summarizeWeeklyLogs(admin, placementId);
@@ -380,7 +412,7 @@ class AiAssistantServiceTest {
         when(repository.lastSubmittedLogs(placementId)).thenReturn(logs);
         when(repository.enabled()).thenReturn(true);
         when(repository.cached(any(), any(), anyString())).thenReturn(Optional.empty());
-        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenReturn(OffsetDateTime.now());
+        when(repository.saveSuggestion(any(), any(), anyString(), any(), any())).thenAnswer(saved());
         client.answer = """
                 {"overview":"Ổn","flags":[{"weekNumber":1,"type":"TOO_SHORT","detail":"đã bị cắt"},
                                           {"weekNumber":25,"type":"TOO_SHORT","detail":"tuần cuối"}]}
