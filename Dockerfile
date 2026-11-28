@@ -6,12 +6,12 @@ COPY backend/.mvn backend/.mvn
 COPY backend/mvnw backend/pom.xml backend/
 RUN chmod +x backend/mvnw \
     && cd backend \
-    && ./mvnw -B -DskipTests dependency:go-offline
+    && ./mvnw -B -s .mvn/settings.xml -DskipTests dependency:go-offline
 
 COPY backend/src backend/src
 COPY database database
 RUN cd backend \
-    && ./mvnw -B -DskipTests clean package
+    && ./mvnw -B -s .mvn/settings.xml -DskipTests clean package
 
 FROM eclipse-temurin:21-jre-alpine
 
