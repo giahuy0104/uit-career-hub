@@ -18,6 +18,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 import vn.edu.uit.careerhub.exception.AppException;
 import vn.edu.uit.careerhub.filter.TraceIdFilter;
@@ -62,6 +63,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<Map<String, Object>> unexpected(Exception error, HttpServletRequest request) {
+        if (DisconnectedClientHelper.isClientDisconnectedException(error)) {
+            log.debug("client_disconnected traceId={} method={} path={}",
+                    traceId(request), request.getMethod(), request.getRequestURI());
+            return null;
+        }
         log.error("request_error traceId={} method={} path={}", traceId(request), request.getMethod(), request.getRequestURI(), error);
         return response(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
                 "Hệ thống đang gặp sự cố. Vui lòng thử lại sau.", List.of(), request);

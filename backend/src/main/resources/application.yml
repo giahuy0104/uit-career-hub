@@ -45,6 +45,10 @@ app:
     from: ${EMAIL_FROM:}
     batch-size: ${EMAIL_BATCH_SIZE:10}
     max-attempts: ${EMAIL_MAX_ATTEMPTS:5}
+  notifications:
+    realtime-poll-ms: ${NOTIFICATION_REALTIME_POLL_MS:1500}
+    heartbeat-ms: ${NOTIFICATION_HEARTBEAT_MS:15000}
+    stream-timeout-ms: ${NOTIFICATION_STREAM_TIMEOUT_MS:300000}
   storage:
     enabled: ${OBJECT_STORAGE_ENABLED:false}
     account-id: ${R2_ACCOUNT_ID:}

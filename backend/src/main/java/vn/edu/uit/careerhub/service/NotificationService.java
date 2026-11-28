@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 import vn.edu.uit.careerhub.dto.NotificationPageResult;
+import vn.edu.uit.careerhub.dto.NotificationSnapshot;
 import vn.edu.uit.careerhub.exception.AppException;
 import vn.edu.uit.careerhub.exception.ErrorType;
 import vn.edu.uit.careerhub.repository.NotificationRepository;
@@ -19,6 +20,7 @@ public class NotificationService {
         return repository.list(userId, page, pageSize, unreadOnly);
     }
     public long unreadCount(UUID userId) { return repository.unreadCount(userId); }
+    public NotificationSnapshot snapshot(UUID userId) { return repository.snapshot(userId); }
     public void markRead(UUID userId, UUID notificationId) {
         if (!repository.markRead(userId, notificationId)) {
             throw new AppException(ErrorType.NOT_FOUND, "NOTIFICATION_NOT_FOUND", "Không tìm thấy thông báo.");

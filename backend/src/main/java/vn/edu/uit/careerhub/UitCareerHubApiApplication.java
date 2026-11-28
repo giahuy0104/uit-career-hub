@@ -5,12 +5,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import vn.edu.uit.careerhub.config.DotenvBootstrap;
 import vn.edu.uit.careerhub.database.DatabaseTasks;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@EnableScheduling
 public class UitCareerHubApiApplication {
 
 	public static void main(String[] args) {
