@@ -79,3 +79,21 @@
   .student-plan-support > .portal-panel { padding:14px; }
   .student-plan-support > .portal-panel > header { margin:-14px -14px 16px; padding:0 14px; }
 }
+
+.internship-list-status { display: grid; justify-items: end; gap: 4px; }
+.risk-card { display: grid; gap: 12px; margin-bottom: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.risk-card.high { border-color: #f1b8b8; background: #fffafa; }
+.risk-card.medium { border-color: #f0d3a5; }
+.risk-card > header { display: flex; align-items: center; gap: 12px; }
+.risk-card > header > div { flex: 1; }
+.risk-card h3 { margin: 0; font-size: 15px; }
+.risk-card header small { color: #566579; font-size: 12px; }
+.risk-card-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: #efeafd; color: #5a3fc0; font-size: 20px; }
+.risk-meter { height: 10px; overflow: hidden; border-radius: 5px; background: #eef2f6; }
+.risk-meter span { display: block; height: 100%; border-radius: 5px; background: #a85b06; }
+.risk-card.high .risk-meter span { background: #c33b3b; }
+.risk-card.low .risk-meter span { background: #16764c; }
+.risk-probability { margin: 0; color: #344256; font-size: 13.5px; line-height: 1.55; }
+.risk-factors { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: #344256; font-size: 13.5px; line-height: 1.5; }
+.risk-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: #566579; font-size: 12.5px; line-height: 1.5; }
+.risk-note svg { flex: none; margin-top: 2px; }

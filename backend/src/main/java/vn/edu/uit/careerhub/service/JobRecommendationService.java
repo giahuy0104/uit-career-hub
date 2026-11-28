@@ -1,22 +1,34 @@
 package vn.edu.uit.careerhub.service;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import vn.edu.uit.careerhub.dto.RequestMetadata;
+import vn.edu.uit.careerhub.dto.request.JobEventRequest;
 import vn.edu.uit.careerhub.dto.request.JobPreferencesRequest;
 import vn.edu.uit.careerhub.dto.response.AiSuggestion;
 import vn.edu.uit.careerhub.entity.AiJobMatchEntry;
 import vn.edu.uit.careerhub.entity.JobMatch;
 import vn.edu.uit.careerhub.entity.JobPreferences;
+import vn.edu.uit.careerhub.entity.NamedRef;
 import vn.edu.uit.careerhub.exception.AppException;
 import vn.edu.uit.careerhub.exception.ErrorType;
+import vn.edu.uit.careerhub.ml.JobRankingFeatures;
+import vn.edu.uit.careerhub.ml.MlModel;
+import vn.edu.uit.careerhub.ml.MlModels;
 import vn.edu.uit.careerhub.repository.AuditRepository;
 import vn.edu.uit.careerhub.repository.JobPreferenceRepository;
 import vn.edu.uit.careerhub.repository.JobRepository;
@@ -28,20 +40,26 @@ import vn.edu.uit.careerhub.security.AuthPrincipal;
 public class JobRecommendationService {
     static final int MAX_RECOMMENDATIONS = 10;
     static final int MAX_EXPLAINED = 5;
+    static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
+    /** Features a student can act on or recognise; the rest still count but are not shown as reasons. */
+    static final Set<String> SHOWN_FACTORS = Set.of("req_skill_ratio", "opt_skill_ratio", "skill_jaccard", "category_match",
+            "type_match", "days_since_published", "days_to_deadline", "company_popularity", "history_category_share");
 
     private final JobPreferenceRepository preferences;
     private final JobRepository jobs;
     private final StudentProfileRepository profiles;
     private final AuditRepository audit;
     private final AiAssistantService ai;
+    private final MlModels models;
 
     public JobRecommendationService(JobPreferenceRepository preferences, JobRepository jobs, StudentProfileRepository profiles,
-            AuditRepository audit, AiAssistantService ai) {
+            AuditRepository audit, AiAssistantService ai, MlModels models) {
         this.preferences = preferences;
         this.jobs = jobs;
         this.profiles = profiles;
         this.audit = audit;
         this.ai = ai;
+        this.models = models;
     }
 
     public Map<String, Object> taxonomyOptions() {
@@ -68,10 +86,15 @@ public class JobRecommendationService {
         JobPreferences student = preferences.find(principal.studentProfileId());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("needsSkills", student.skills().isEmpty());
+        MlModel model = models.jobRanker().orElse(null);
+        result.put("ranking", model == null ? "RULE" : "MODEL");
+        result.put("model", model == null ? null : model.describe());
         result.put("items", rank(principal.studentProfileId(), student).stream().map(item -> {
             Map<String, Object> view = new LinkedHashMap<>();
             view.put("job", item.job());
-            view.put("score", item.match().score());
+            view.put("score", item.probability() == null ? item.match().score() : (int) Math.round(100 * item.probability()));
+            view.put("ruleScore", item.match().score());
+            view.put("factors", item.factors());
             view.put("criteria", item.match().criteria());
             view.put("matchedSkills", item.match().matchedSkills());
             view.put("missingSkills", item.match().missingSkills());
@@ -89,18 +112,63 @@ public class JobRecommendationService {
         return ai.explainJobMatches(principal, student, entries);
     }
 
+    public void recordEvent(AuthPrincipal principal, JobEventRequest input) {
+        if (jobs.recordEvent(principal.studentProfileId(), input.jobId(), input.type().name(), input.source().name(),
+                input.position(), input.modelVersion()) == 0) {
+            throw new AppException(ErrorType.NOT_FOUND, "JOB_NOT_FOUND", "Không tìm thấy tin tuyển dụng.");
+        }
+    }
+
     private List<Ranked> rank(UUID studentProfileId, JobPreferences student) {
         if (student.skills().isEmpty()) return List.of();
-        return jobs.recruitingNotAppliedBy(studentProfileId).stream()
+        List<Ranked> candidates = jobs.recruitingNotAppliedBy(studentProfileId).stream()
                 .map(job -> new Ranked(job, JobMatchScorer.score(student, JobMatchScorer.skills(job),
-                        JobMatchScorer.categoryIds(job), job.get("opportunityType").toString())))
-                .filter(item -> JobMatchScorer.worthRecommending(item.match()))
-                .sorted(Comparator.comparingInt((Ranked item) -> -item.match().score())
-                        .thenComparing(item -> text(item, "deadline")).thenComparing(item -> text(item, "id")))
+                        JobMatchScorer.categoryIds(job), job.get("opportunityType").toString()), null, List.of()))
+                .filter(item -> JobMatchScorer.worthRecommending(item.match())).toList();
+        MlModel model = models.jobRanker().orElse(null);
+        if (model == null || candidates.isEmpty()) {
+            return candidates.stream().sorted(Comparator.comparingInt((Ranked item) -> -item.match().score())
+                    .thenComparing(item -> text(item, "deadline")).thenComparing(item -> text(item, "id")))
+                    .limit(MAX_RECOMMENDATIONS).toList();
+        }
+        LocalDate today = LocalDate.now(VIETNAM);
+        List<Set<String>> history = jobs.applicationCategories(studentProfileId);
+        Map<UUID, Long> popularity = jobs.companyApplications30d();
+        Set<String> skills = ids(student.skills());
+        Set<String> categories = ids(student.categories());
+        Set<String> types = student.opportunityTypes().stream().map(Enum::name).collect(Collectors.toSet());
+        return candidates.stream().map(item -> {
+            double[] features = features(item, skills, categories, types, history, popularity, today);
+            List<Map<String, Object>> factors = model.topFactors(features, features.length).stream()
+                    .filter(factor -> SHOWN_FACTORS.contains(factor.feature())).limit(3)
+                    .map(factor -> Map.<String, Object>of("feature", factor.feature(), "value", factor.value())).toList();
+            return new Ranked(item.job(), item.match(), model.probability(features), factors);
+        }).sorted(Comparator.comparingDouble((Ranked item) -> -item.probability())
+                .thenComparing(item -> text(item, "deadline")).thenComparing(item -> text(item, "id")))
                 .limit(MAX_RECOMMENDATIONS).toList();
+    }
+
+    static double[] features(Ranked item, Set<String> skills, Set<String> categories, Set<String> types,
+            List<Set<String>> history, Map<UUID, Long> popularity, LocalDate today) {
+        Map<String, Object> job = item.job();
+        List<JobRankingFeatures.JobSkill> jobSkills = JobMatchScorer.skills(job).stream()
+                .map(skill -> new JobRankingFeatures.JobSkill(skill.id().toString(), skill.required())).toList();
+        Set<String> jobCategories = JobMatchScorer.categoryIds(job).stream().map(UUID::toString).collect(Collectors.toSet());
+        Object published = job.get("reviewedAt") != null ? job.get("reviewedAt") : job.get("createdAt");
+        LocalDate publishedOn = published == null ? today : OffsetDateTime.parse(published.toString()).atZoneSameInstant(VIETNAM).toLocalDate();
+        UUID company = UUID.fromString(((Map<?, ?>) job.get("company")).get("id").toString());
+        return JobRankingFeatures.compute(skills, categories, types, jobSkills, jobCategories, job.get("opportunityType").toString(),
+                ChronoUnit.DAYS.between(publishedOn, today), ChronoUnit.DAYS.between(today, LocalDate.parse(job.get("deadline").toString())),
+                history, popularity.getOrDefault(company, 0L), item.match().score() / 100.0);
+    }
+
+    private static Set<String> ids(List<NamedRef> refs) {
+        Set<String> result = new HashSet<>();
+        refs.forEach(ref -> result.add(ref.id().toString()));
+        return result;
     }
 
     private static String text(Ranked item, String key) { return item.job().get(key).toString(); }
 
-    private record Ranked(Map<String, Object> job, JobMatch match) {}
+    record Ranked(Map<String, Object> job, JobMatch match, Double probability, List<Map<String, Object>> factors) {}
 }

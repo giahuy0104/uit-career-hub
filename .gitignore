@@ -18,3 +18,5 @@ Thumbs.db
 *.rar
 .idea/
 .vscode/
+ml/.venv/
+__pycache__/

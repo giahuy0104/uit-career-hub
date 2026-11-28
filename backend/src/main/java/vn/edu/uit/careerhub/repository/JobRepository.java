@@ -92,6 +92,39 @@ public class JobRepository {
             """).param("studentId",studentProfileId).query(String.class).list().stream().map(json::object).toList();
     }
 
+    /** Applications to each company's jobs in the last 30 days (popularity feature). */
+    public Map<UUID,Long> companyApplications30d() {
+        Map<UUID,Long> result=new java.util.HashMap<>();
+        database.sql("""
+            SELECT j.company_id,count(*) n FROM applications a JOIN job_posts j ON j.id=a.job_post_id
+            WHERE a.submitted_at>=now()-interval '30 days' GROUP BY j.company_id
+            """).query((row,n)->result.put(row.getObject("company_id",UUID.class),row.getLong("n"))).list();
+        return result;
+    }
+
+    /** Category ids of every job the student applied to (history feature). */
+    public List<Set<String>> applicationCategories(UUID studentProfileId) {
+        Map<UUID,Set<String>> byApplication=new java.util.LinkedHashMap<>();
+        database.sql("""
+            SELECT a.id,jpc.category_id FROM applications a LEFT JOIN job_post_categories jpc ON jpc.job_post_id=a.job_post_id
+            WHERE a.student_profile_id=:id
+            """).param("id",studentProfileId).query((row,n)->{
+                Set<String> categories=byApplication.computeIfAbsent(row.getObject("id",UUID.class),k->new LinkedHashSet<>());
+                UUID category=row.getObject("category_id",UUID.class);
+                if(category!=null) categories.add(category.toString());
+                return true;
+            }).list();
+        return new ArrayList<>(byApplication.values());
+    }
+
+    public int recordEvent(UUID studentProfileId,UUID jobId,String type,String source,Integer position,String modelVersion) {
+        return database.sql("""
+            INSERT INTO job_interaction_events(student_profile_id,job_post_id,event_type,source,position,model_version)
+            SELECT :studentId,j.id,:type,:source,:position,:modelVersion FROM job_posts j WHERE j.id=:jobId AND j.status='RECRUITING'
+            """).param("studentId",studentProfileId).param("jobId",jobId).param("type",type).param("source",source)
+                .param("position",position,java.sql.Types.INTEGER).param("modelVersion",modelVersion,java.sql.Types.VARCHAR).update();
+    }
+
     public String companyStatus(UUID companyId) {
         return database.sql("SELECT partner_status FROM companies WHERE id=:id FOR SHARE").param("id",companyId).query(String.class).optional().orElse(null);
     }

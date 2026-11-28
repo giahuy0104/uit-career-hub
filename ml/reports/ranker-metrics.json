@@ -1,0 +1,123 @@
+{
+  "source": "simulated",
+  "rows": 24000,
+  "students": 1600,
+  "positive_rate": 0.22775,
+  "trees": 152,
+  "results": {
+    "random": {
+      "ndcg@5": 0.30271822847494156,
+      "ndcg@10": 0.45604164859250035,
+      "precision@5": 0.2344370860927152,
+      "students": 302
+    },
+    "rule_formula": {
+      "ndcg@5": 0.613649004668998,
+      "ndcg@10": 0.7151020764313888,
+      "precision@5": 0.45894039735099335,
+      "students": 302
+    },
+    "logistic_regression": {
+      "ndcg@5": 0.6783301616913183,
+      "ndcg@10": 0.7656973762428999,
+      "precision@5": 0.4947019867549668,
+      "students": 302
+    },
+    "lightgbm": {
+      "ndcg@5": 0.6751396471460615,
+      "ndcg@10": 0.7621712109768949,
+      "precision@5": 0.4966887417218543,
+      "students": 302
+    }
+  },
+  "validation": {
+    "logistic_regression": {
+      "ndcg@5": 0.6898391641637462,
+      "ndcg@10": 0.7806183681886619,
+      "precision@5": 0.48227848101265824,
+      "students": 158
+    },
+    "lightgbm": {
+      "ndcg@5": 0.6844916014313539,
+      "ndcg@10": 0.7735483939222768,
+      "precision@5": 0.4835443037974684,
+      "students": 158
+    }
+  },
+  "deployed": "logistic_regression",
+  "significance_ndcg@5": {
+    "lightgbm_vs_rule": {
+      "mean": 0.06149064247706342,
+      "ci95": [
+        0.03668441924735479,
+        0.08605686089275795
+      ]
+    },
+    "logistic_vs_rule": {
+      "mean": 0.06468115702232038,
+      "ci95": [
+        0.04089583603144089,
+        0.08846595741866062
+      ]
+    },
+    "lightgbm_vs_logistic": {
+      "mean": -0.0031905145452569583,
+      "ci95": [
+        -0.017348812025886107,
+        0.010701980762854738
+      ]
+    }
+  },
+  "ablation_lightgbm": {
+    "without_history": {
+      "ndcg@5": 0.6591721148159823,
+      "ndcg@10": 0.7465199829550307,
+      "precision@5": 0.4874172185430464,
+      "students": 302
+    },
+    "without_popularity": {
+      "ndcg@5": 0.6623847854959308,
+      "ndcg@10": 0.757684360420652,
+      "precision@5": 0.48543046357615893,
+      "students": 302
+    },
+    "without_freshness": {
+      "ndcg@5": 0.6699306082086435,
+      "ndcg@10": 0.7590148053977113,
+      "precision@5": 0.4894039735099338,
+      "students": 302
+    }
+  },
+  "feature_importance_gain": {
+    "req_skill_ratio": 913.4,
+    "opt_skill_ratio": 908.9,
+    "skill_jaccard": 1270.5,
+    "job_skill_count": 410.3,
+    "category_match": 2400.8,
+    "has_category_pref": 120.2,
+    "type_match": 476.4,
+    "has_type_pref": 231.4,
+    "days_since_published": 4302.5,
+    "days_to_deadline": 1440.9,
+    "company_popularity": 4810.2,
+    "history_category_share": 7405.7,
+    "student_skill_count": 399.8,
+    "rule_score": 28798.1
+  },
+  "logistic_coefficients": {
+    "req_skill_ratio": 0.689,
+    "opt_skill_ratio": 0.317,
+    "skill_jaccard": 0.111,
+    "job_skill_count": -0.029,
+    "category_match": 0.473,
+    "has_category_pref": -0.083,
+    "type_match": 0.248,
+    "has_type_pref": -0.017,
+    "days_since_published": -0.379,
+    "days_to_deadline": 0.003,
+    "company_popularity": 0.447,
+    "history_category_share": 0.493,
+    "student_skill_count": 0.02,
+    "rule_score": 0.124
+  }
+}

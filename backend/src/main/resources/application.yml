@@ -54,6 +54,8 @@ app:
     upload-url-ttl-seconds: ${OBJECT_UPLOAD_URL_TTL_SECONDS:600}
     download-url-ttl-seconds: ${OBJECT_DOWNLOAD_URL_TTL_SECONDS:300}
   cron-secret: ${CRON_SECRET:}
+  ml:
+    enabled: ${ML_ENABLED:true}
   ai:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-3.5-flash-lite}

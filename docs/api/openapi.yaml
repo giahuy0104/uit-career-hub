@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.8.0
+  version: 1.9.0
   description: Contract cho happy flow tuyển dụng, kế hoạch và nhật ký thực tập hằng tuần của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -281,6 +281,33 @@ paths:
                             optionalSkills: { type: array, items: { type: string } }
         '403':
           $ref: '#/components/responses/Forbidden'
+  /students/me/job-events:
+    post:
+      tags: [Students]
+      operationId: recordMyJobEvent
+      description: Ghi hiển thị, xem, bấm gợi ý để huấn luyện lại mô hình xếp hạng. Chỉ tin đang tuyển.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jobId, type, source]
+              properties:
+                jobId: { type: string, format: uuid }
+                type: { type: string, enum: [IMPRESSION, VIEW, RECOMMENDATION_CLICK] }
+                source: { type: string, enum: [RECOMMENDATIONS, JOB_LIST] }
+                position: { type: integer, minimum: 0, maximum: 100 }
+                modelVersion: { type: string, maxLength: 80 }
+      responses:
+        '204':
+          description: Đã ghi
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Tin không tồn tại hoặc không còn tuyển
   /students/me/job-recommendations/ai-explanation:
     post:
       tags: [Students]
@@ -2146,6 +2173,40 @@ paths:
               schema: { $ref: '#/components/schemas/InternshipPlanListEnvelope' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /uit/internship-supervision/risk:
+    get:
+      tags: [Internships]
+      operationId: getInternshipRisk
+      description: Cảnh báo sớm theo mô hình học máy cho các kỳ thực tập đang diễn ra. Cần ít nhất 2 tuần nhật ký đã nộp.
+      responses:
+        '200':
+          description: Đánh giá nguy cơ
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [available, items]
+                    properties:
+                      available: { type: boolean }
+                      model: { type: [object, 'null'] }
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            placementId: { type: string, format: uuid }
+                            level: { type: string, enum: [HIGH, MEDIUM, LOW, INSUFFICIENT_DATA] }
+                            probability: { type: number, description: '-1 khi chưa đủ dữ liệu' }
+                            dueWeeks: { type: integer }
+                            submittedWeeks: { type: integer }
+                            features: { type: object }
+                            factors: { type: array, items: { type: object, properties: { feature: { type: string }, value: { type: number } } } }
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /uit/internship-supervision/{placementId}:
     get:
       tags: [Placements]

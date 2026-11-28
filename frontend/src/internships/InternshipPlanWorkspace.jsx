@@ -20,6 +20,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { EmptyHint, MetricCard, Panel, Status, userInitials } from "../shared/WorkspaceShell.jsx";
 import { WeeklyLogPanel } from "./WeeklyLogPanel.jsx";
 import { AiPlanReview } from "./AiAssistant.jsx";
+import { RiskBadge, RiskCard } from "./InternshipRisk.jsx";
 import "./internship-plan.css";
 
 const statusCopy = {
@@ -159,6 +160,7 @@ export function InternshipPlanWorkspace({ role, targetPlacementId }) {
   const [message, setMessage] = useState("");
   const [reviewMode, setReviewMode] = useState("");
   const [form, setForm] = useState(emptyForm);
+  const [risk, setRisk] = useState(null);
 
   const endpoint = roleEndpoints[role];
   const selected = items.find((item) => item.placement.id === selectedId) || items[0] || null;
@@ -184,6 +186,12 @@ export function InternshipPlanWorkspace({ role, targetPlacementId }) {
   };
 
   useEffect(() => { void load(); }, [endpoint]);
+  // UIT only: early-warning scores from the risk model; the page works the same without them.
+  useEffect(() => {
+    if (role !== "admin") return;
+    authorizedRequest("/uit/internship-supervision/risk").then((response) => setRisk(response.data)).catch(() => setRisk(null));
+  }, [role]);
+  const riskOf = (placementId) => risk?.items?.find((item) => item.placementId === placementId);
   useEffect(() => { if (targetPlacementId) setSelectedId(targetPlacementId); }, [targetPlacementId]);
   useEffect(() => { setForm(selected ? planToForm(selected) : emptyForm); setError(""); }, [selected?.placement.id, selected?.plan?.version]);
 
@@ -307,9 +315,9 @@ export function InternshipPlanWorkspace({ role, targetPlacementId }) {
     {!items.length ? <Panel title="Kế hoạch thực tập"><EmptyHint icon={ClipboardText} title="Chưa có kỳ thực tập" text="Kế hoạch được mở sau khi UIT xác nhận sinh viên đã nhận việc." /></Panel> : <div className="internship-workspace">
       <Panel title={role === "student" ? "Kỳ thực tập của tôi" : "Danh sách theo dõi"} action={<Status tone="info">{filteredItems.length} hồ sơ</Status>} className="internship-list-panel">
         <label className="internship-search"><MagnifyingGlass /><input aria-label="Tìm kỳ thực tập" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm sinh viên, vị trí, doanh nghiệp..." /></label>
-        <div className="internship-list">{filteredItems.map((item) => { const status = statusCopy[statusOf(item)]; return <button type="button" key={item.placement.id} className={selected?.placement.id === item.placement.id ? "selected" : ""} onClick={() => setSelectedId(item.placement.id)}><span className="candidate-initials">{userInitials(role === "student" ? item.placement.job.company.name : item.placement.student.fullName)}</span><span><strong>{role === "student" ? item.placement.job.title : item.placement.student.fullName}</strong><small>{role === "student" ? item.placement.job.company.name : `${item.placement.student.studentCode} · ${item.placement.job.title}`}</small></span><Status tone={status[1]}>{status[0]}</Status><ArrowRight /></button>; })}</div>
+        <div className="internship-list">{filteredItems.map((item) => { const status = statusCopy[statusOf(item)]; return <button type="button" key={item.placement.id} className={selected?.placement.id === item.placement.id ? "selected" : ""} onClick={() => setSelectedId(item.placement.id)}><span className="candidate-initials">{userInitials(role === "student" ? item.placement.job.company.name : item.placement.student.fullName)}</span><span><strong>{role === "student" ? item.placement.job.title : item.placement.student.fullName}</strong><small>{role === "student" ? item.placement.job.company.name : `${item.placement.student.studentCode} · ${item.placement.job.title}`}</small></span><span className="internship-list-status"><Status tone={status[1]}>{status[0]}</Status>{role === "admin" && <RiskBadge assessment={riskOf(item.placement.id)} />}</span><ArrowRight /></button>; })}</div>
       </Panel>
-      {selected && <div className="internship-detail-column"><Panel title="Nội dung kế hoạch" action={<Status tone={statusCopy[statusOf(selected)][1]}>{statusCopy[statusOf(selected)][0]}</Status>} className="internship-detail-panel">
+      {selected && <div className="internship-detail-column">{role === "admin" && <RiskCard assessment={riskOf(selected.placement.id)} model={risk?.model} />}<Panel title="Nội dung kế hoạch" action={<Status tone={statusCopy[statusOf(selected)][1]}>{statusCopy[statusOf(selected)][0]}</Status>} className="internship-detail-panel">
         <div className="internship-heading"><span className="large-avatar small">{userInitials(selected.placement.student.fullName)}</span><div><h2>{selected.placement.student.fullName}</h2><p>{selected.placement.student.studentCode} · {selected.placement.job.title}</p><small>{selected.placement.job.company.name}</small></div>{selected.plan && <span className="version-label">Phiên bản {selected.plan.version} · Lần nộp {selected.plan.currentSubmissionNo}</span>}</div>
         {selected.plan?.latestNote && ["COMPANY_REVISION_REQUIRED", "UIT_REVISION_REQUIRED"].includes(selected.plan.status) && <div className="internship-revision-note"><Warning /><div><strong>Nội dung cần chỉnh sửa</strong><p>{selected.plan.latestNote}</p></div></div>}
         <PlanFields item={selected} form={form} setForm={setForm} editable={role === "student" && selected.availableActions.includes("SAVE")} />

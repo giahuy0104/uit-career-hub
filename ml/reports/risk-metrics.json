@@ -1,0 +1,44 @@
+{
+  "source": "simulated",
+  "rows": 2400,
+  "positive_rate": 0.24791666666666667,
+  "results": {
+    "baseline_missing_logs": {
+      "auc": 0.7485778461388217,
+      "pr_auc": 0.5088591987763884,
+      "recall@top20%": 0.4954954954954955
+    },
+    "logistic_regression": {
+      "auc": 0.8341756390536879,
+      "pr_auc": 0.6004343755881969,
+      "recall@top20%": 0.5315315315315315
+    },
+    "lightgbm": {
+      "auc": 0.8213335286506018,
+      "pr_auc": 0.5826931968985801,
+      "recall@top20%": 0.5405405405405406
+    }
+  },
+  "validation_auc": {
+    "logistic_regression": 0.8711180124223603,
+    "lightgbm": 0.882424301242236
+  },
+  "deployed": "lightgbm",
+  "thresholds": {
+    "high": 0.563884011981755,
+    "medium": 0.27853476756208945
+  },
+  "high_risk_precision": 0.6417910447761194,
+  "high_risk_recall": 0.38738738738738737,
+  "logistic_coefficients": {
+    "submit_ratio": -0.333,
+    "late_ratio": 0.212,
+    "revision_ratio": 0.314,
+    "avg_words": -1.079,
+    "words_trend": -0.108,
+    "max_repeat": -0.003,
+    "difficulty_ratio": 0.355,
+    "days_since_last": 0.005,
+    "plan_revisions": 0.129
+  }
+}
