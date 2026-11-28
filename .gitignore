@@ -20,3 +20,4 @@ Thumbs.db
 .vscode/
 ml/.venv/
 __pycache__/
+ml/data/

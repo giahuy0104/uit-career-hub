@@ -90,6 +90,7 @@ class RealDatabaseIntegrationTest {
     @Autowired DatabaseTasks tasks;
     @Autowired PasswordEncoder encoder;
     @Autowired AiRepository aiRepository;
+    @Autowired vn.edu.uit.careerhub.service.MlTrainingDataService trainingData;
     @MockitoBean ObjectStorage storage;
     /** Stands in for Gemini: the AI SQL and endpoints run for real, no request leaves the machine. */
     @MockitoBean AiClient aiClient;
@@ -329,6 +330,8 @@ class RealDatabaseIntegrationTest {
         assertThat(riskItem.at("/level").asText()).isEqualTo("INSUFFICIENT_DATA");
         call("GET", "/uit/internship-supervision/risk", student, null, 403, false);
         call("GET", "/uit/internship-supervision/risk", vng, null, 403, false);
+        call("POST", "/ai/feedback", admin, Map.of("feature", "INTERNSHIP_RISK", "subjectId", placement, "helpful", true), 204, false);
+        call("POST", "/ai/feedback", student, Map.of("feature", "INTERNSHIP_RISK", "subjectId", placement, "helpful", true), 404, false);
         call("GET", "/uit/internship-supervision/summary", admin, null, 200, false);
         call("GET", "/uit/internship-supervision/overdue", admin, null, 200, false);
 
@@ -383,6 +386,22 @@ class RealDatabaseIntegrationTest {
         assertThat(db.sql("SELECT count(*) FROM audit_logs WHERE action IN ('AI_ENABLED','AI_DISABLED') AND created_at > now() - interval '1 minute'")
                 .query(Long.class).single()).isGreaterThanOrEqualTo(2);
         call("GET", "/uit/ai/settings", student, null, 403, false);
+
+        // A rated suggestion must be the rater's own.
+        String suggestionId = cached.at("/suggestionId").asText();
+        assertThat(suggestionId).isNotBlank();
+        call("POST", "/ai/feedback", student, Map.of("feature", "PLAN_REVIEW", "subjectId", suggestionId, "helpful", true), 204, false);
+        call("POST", "/ai/feedback", vng, Map.of("feature", "PLAN_REVIEW", "subjectId", suggestionId, "helpful", true), 404, false);
+        call("POST", "/ai/feedback", student, Map.of("feature", "JOB_MATCH", "subjectId", suggestionId, "helpful", true), 404, false);
+
+        // One feature off leaves the others on; a per-feature limit caps calls to Gemini.
+        call("PUT", "/uit/ai/features/PLAN_REVIEW", admin, Map.of("enabled", false), 200, false);
+        assertThat(call("POST", path, student, Map.of("objectives", "Mục tiêu khác hẳn"), 200, false).at("/data/status").asText()).isEqualTo("DISABLED");
+        call("PUT", "/uit/ai/features/PLAN_REVIEW", admin, Map.of("enabled", true, "dailyLimitPerUser", 1), 200, false);
+        assertThat(call("POST", path, student, Map.of("objectives", "Mục tiêu số một"), 200, false).at("/data/status").asText()).isEqualTo("SUCCESS");
+        assertThat(call("POST", path, student, Map.of("objectives", "Mục tiêu số hai"), 200, false).at("/data/status").asText()).isEqualTo("RATE_LIMITED");
+        call("PUT", "/uit/ai/features/PLAN_REVIEW", admin, Map.of("enabled", true), 200, false);
+        db.sql("DELETE FROM ai_feature_daily_usage").update();
     }
 
     /** AI2 on the submitted log, for the host company and UIT; other companies cannot see it. */
@@ -402,7 +421,7 @@ class RealDatabaseIntegrationTest {
         assertThat(db.sql("""
                 SELECT count(*) FROM ai_call_logs
                 WHERE target_id=:id AND status='SUCCESS' AND prompt_tokens=50 AND output_tokens=10 AND latency_ms IS NOT NULL
-                """).param("id", placementId).query(Long.class).single()).isEqualTo(2);
+                """).param("id", placementId).query(Long.class).single()).as("AI1 twice (incl. the feature-limit check) and AI2 once").isEqualTo(3);
 
         // While a log is back for revision the student edits the live row; AI2 must still read the
         // content of the latest submission, not the unsubmitted edits.
@@ -468,6 +487,34 @@ class RealDatabaseIntegrationTest {
         call("POST", "/students/me/job-events", vng, Map.of("jobId", good, "type", "VIEW", "source", "JOB_LIST"), 403, false);
         assertThat(db.sql("SELECT count(*) FROM job_interaction_events WHERE job_post_id=:id").param("id", UUID.fromString(good))
                 .query(Long.class).single()).isEqualTo(2);
+
+        // Impressions become training rows with the live feature code: features..., label, group.
+        List<double[]> rows = trainingData.rankerRows();
+        assertThat(rows).isNotEmpty();
+        assertThat(rows.get(0)).hasSize(vn.edu.uit.careerhub.ml.JobRankingFeatures.NAMES.size() + 2);
+
+        // Helpful / not helpful on a recommended job; UIT cannot rate a student's recommendation.
+        call("POST", "/ai/feedback", student, Map.of("feature", "JOB_RANKER", "subjectId", good, "helpful", true), 204, false);
+        call("POST", "/ai/feedback", student, Map.of("feature", "JOB_RANKER", "subjectId", good, "helpful", false), 204, false);
+        call("POST", "/ai/feedback", admin, Map.of("feature", "JOB_RANKER", "subjectId", good, "helpful", true), 404, false);
+        assertThat(db.sql("SELECT count(*) FROM ai_feedback WHERE subject_id=:id AND NOT helpful").param("id", UUID.fromString(good))
+                .query(Long.class).single()).as("a second vote replaces the first").isEqualTo(1);
+
+        // UIT can switch the learned ranking off: the formula ranks instead, and back on.
+        call("PUT", "/uit/ai/features/JOB_RANKER", admin, Map.of("enabled", false), 200, false);
+        assertThat(call("GET", "/students/me/job-recommendations", student, null, 200, false).at("/data/ranking").asText()).isEqualTo("RULE");
+        JsonNode dashboard = call("PUT", "/uit/ai/features/JOB_RANKER", admin, Map.of("enabled", true), 200, false).at("/data");
+        assertThat(dashboard.at("/features")).hasSize(5);
+        JsonNode rankerRow = null;
+        for (JsonNode row : dashboard.at("/features")) if (row.at("/feature").asText().equals("JOB_RANKER")) rankerRow = row;
+        assertThat(rankerRow.at("/enabled").asBoolean()).isTrue();
+        assertThat(rankerRow.at("/model/version").asText()).isNotBlank();
+        assertThat(rankerRow.at("/feedback/notHelpful").asLong()).isGreaterThanOrEqualTo(1);
+        assertThat(rankerRow.at("/online/impressions").asLong()).isGreaterThanOrEqualTo(1);
+        call("PUT", "/uit/ai/features/JOB_RANKER", student, Map.of("enabled", false), 403, false);
+        call("PUT", "/uit/ai/features/NOT_A_FEATURE", admin, Map.of("enabled", false), 400, false);
+        assertThat(db.sql("SELECT count(*) FROM audit_logs WHERE action='AI_FEATURE_UPDATED' AND created_at>now()-interval '1 minute'")
+                .query(Long.class).single()).isGreaterThanOrEqualTo(2);
         List<String> ids = new java.util.ArrayList<>();
         items.forEach(item -> ids.add(item.at("/job/id").asText()));
         assertThat(ids).contains(good).doesNotContain(untagged);

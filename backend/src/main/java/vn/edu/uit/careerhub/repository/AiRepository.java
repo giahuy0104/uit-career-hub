@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
 
 import vn.edu.uit.careerhub.dto.RequestMetadata;
 import vn.edu.uit.careerhub.entity.AiCachedSuggestion;
+import vn.edu.uit.careerhub.entity.AiFeatureSetting;
+import vn.edu.uit.careerhub.entity.AiStoredSuggestion;
 import vn.edu.uit.careerhub.entity.AiPlacementContext;
 import vn.edu.uit.careerhub.entity.AiWeeklyLogEntry;
 import vn.edu.uit.careerhub.enums.AiCallStatus;
@@ -153,24 +155,135 @@ public class AiRepository {
 
     public Optional<AiCachedSuggestion> cached(AiFeature feature, UUID targetId, String contentHash) {
         return database.sql("""
-          SELECT model,result::text result,created_at FROM ai_suggestions
+          SELECT id,model,result::text result,created_at FROM ai_suggestions
           WHERE feature=:feature AND target_id=:targetId AND content_hash=:hash
           """).param("feature", feature.name()).param("targetId", targetId).param("hash", contentHash)
-                .query((row, number) -> new AiCachedSuggestion(row.getString("model"), json.object(row.getString("result")),
+                .query((row, number) -> new AiCachedSuggestion(row.getObject("id", UUID.class), row.getString("model"), json.object(row.getString("result")),
                         row.getObject("created_at", OffsetDateTime.class)))
                 .optional();
     }
 
-    public OffsetDateTime saveSuggestion(AiFeature feature, UUID targetId, String contentHash, String model,
+    public AiCachedSuggestion saveSuggestion(AiFeature feature, UUID targetId, String contentHash, String model,
             Map<String, Object> result) {
         return database.sql("""
           INSERT INTO ai_suggestions(feature,target_id,content_hash,model,result)
           VALUES(:feature,:targetId,:hash,:model,CAST(:result AS jsonb))
           ON CONFLICT(feature,target_id,content_hash)
             DO UPDATE SET model=EXCLUDED.model,result=EXCLUDED.result,created_at=now()
-          RETURNING created_at
+          RETURNING id,created_at
           """).param("feature", feature.name()).param("targetId", targetId).param("hash", contentHash)
-                .param("model", model).param("result", json.stringify(result)).query(OffsetDateTime.class).single();
+                .param("model", model).param("result", json.stringify(result))
+                .query((row, n) -> new AiCachedSuggestion(row.getObject("id", UUID.class), model, result,
+                        row.getObject("created_at", OffsetDateTime.class))).single();
+    }
+
+    // ---- per-feature settings, quota and feedback ----------------------------------------------
+
+    public List<AiFeatureSetting> featureSettings() {
+        return database.sql("""
+          SELECT s.feature,s.enabled,s.daily_limit_per_user,s.updated_at,COALESCE(st.full_name,u.email) updated_by
+          FROM ai_feature_settings s LEFT JOIN users u ON u.id=s.updated_by_user_id LEFT JOIN uit_staff st ON st.user_id=u.id
+          """).query((row, n) -> new AiFeatureSetting(AiFeature.valueOf(row.getString("feature")), row.getBoolean("enabled"),
+                row.getObject("daily_limit_per_user", Integer.class), row.getObject("updated_at", OffsetDateTime.class),
+                row.getString("updated_by"))).list();
+    }
+
+    /** The master switch and the feature's own switch must both be on. */
+    public boolean featureEnabled(AiFeature feature) {
+        return database.sql("""
+          SELECT COALESCE((SELECT enabled FROM ai_settings WHERE id=1),false)
+             AND COALESCE((SELECT enabled FROM ai_feature_settings WHERE feature=:feature),true)
+          """).param("feature", feature.name()).query(Boolean.class).single();
+    }
+
+    public Optional<Integer> featureLimit(AiFeature feature) {
+        return database.sql("SELECT daily_limit_per_user FROM ai_feature_settings WHERE feature=:feature")
+                .param("feature", feature.name()).query((row, n) -> row.getObject("daily_limit_per_user", Integer.class))
+                .optional().map(java.util.Optional::ofNullable).flatMap(value -> value);
+    }
+
+    public void updateFeature(AiFeature feature, boolean enabled, Integer limit, UUID actorId, RequestMetadata request) {
+        database.sql("""
+          INSERT INTO ai_feature_settings(feature,enabled,daily_limit_per_user,updated_by_user_id,updated_at)
+          VALUES(:feature,:enabled,:limit,:actorId,now())
+          ON CONFLICT(feature) DO UPDATE SET enabled=EXCLUDED.enabled,daily_limit_per_user=EXCLUDED.daily_limit_per_user,
+            updated_by_user_id=EXCLUDED.updated_by_user_id,updated_at=now()
+          """).param("feature", feature.name()).param("enabled", enabled).param("limit", limit, java.sql.Types.INTEGER)
+                .param("actorId", actorId).update();
+        database.sql("""
+          INSERT INTO audit_logs(actor_user_id,action,target_type,target_id,metadata,ip_address,user_agent)
+          VALUES(:actorId,'AI_FEATURE_UPDATED','AI_SETTINGS',NULL,
+            jsonb_build_object('feature',CAST(:feature AS text),'enabled',CAST(:enabled AS boolean),'dailyLimitPerUser',CAST(:limit AS integer)),
+            CAST(:ip AS inet),:agent)
+          """).param("actorId", actorId).param("feature", feature.name()).param("enabled", enabled)
+                .param("limit", limit, java.sql.Types.INTEGER).param("ip", request.ipAddress()).param("agent", request.userAgent()).update();
+    }
+
+    /** Same atomic upsert as reserveProviderCall, counted per feature. */
+    public boolean reserveFeatureCall(UUID userId, AiFeature feature, int dailyLimit) {
+        return database.sql("""
+          INSERT INTO ai_feature_daily_usage(user_id,feature,usage_date,provider_calls)
+          VALUES(:userId,:feature,(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date,1)
+          ON CONFLICT(user_id,feature,usage_date) DO UPDATE SET provider_calls=ai_feature_daily_usage.provider_calls+1
+            WHERE ai_feature_daily_usage.provider_calls < :limit
+          RETURNING provider_calls
+          """).param("userId", userId).param("feature", feature.name()).param("limit", dailyLimit)
+                .query(Integer.class).optional().isPresent();
+    }
+
+    public void releaseFeatureCall(UUID userId, AiFeature feature) {
+        String today = "(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date";
+        int updated = database.sql("UPDATE ai_feature_daily_usage SET provider_calls=provider_calls-1 WHERE user_id=:userId AND feature=:feature AND usage_date=" + today + " AND provider_calls>1")
+                .param("userId", userId).param("feature", feature.name()).update();
+        if (updated == 0) {
+            database.sql("DELETE FROM ai_feature_daily_usage WHERE user_id=:userId AND feature=:feature AND usage_date=" + today + " AND provider_calls=1")
+                    .param("userId", userId).param("feature", feature.name()).update();
+        }
+    }
+
+    public Optional<AiStoredSuggestion> storedSuggestion(UUID id) {
+        return database.sql("SELECT id,feature,target_id FROM ai_suggestions WHERE id=:id").param("id", id)
+                .query((row, n) -> new AiStoredSuggestion(row.getObject("id", UUID.class), row.getString("feature"),
+                        row.getObject("target_id", UUID.class))).optional();
+    }
+
+    public void saveFeedback(UUID userId, UserRole role, AiFeature feature, UUID subjectId, String modelVersion, boolean helpful) {
+        database.sql("""
+          INSERT INTO ai_feedback(user_id,user_role,feature,subject_id,model_version,helpful)
+          VALUES(:userId,:role,:feature,:subjectId,:modelVersion,:helpful)
+          ON CONFLICT(user_id,feature,subject_id) DO UPDATE SET helpful=EXCLUDED.helpful,model_version=EXCLUDED.model_version,updated_at=now()
+          """).param("userId", userId).param("role", role.name()).param("feature", feature.name()).param("subjectId", subjectId)
+                .param("modelVersion", modelVersion, java.sql.Types.VARCHAR).param("helpful", helpful).update();
+    }
+
+    public Map<String, long[]> feedbackCounts(int days) {
+        Map<String, long[]> result = new LinkedHashMap<>();
+        database.sql("""
+          SELECT feature,count(*) FILTER(WHERE helpful) yes,count(*) FILTER(WHERE NOT helpful) no FROM ai_feedback
+          WHERE updated_at>=now()-make_interval(days=>:days) GROUP BY feature
+          """).param("days", days).query((row, n) -> result.put(row.getString("feature"), new long[] {row.getLong("yes"), row.getLong("no")})).list();
+        return result;
+    }
+
+    /** Online signal of the ranking model: impressions, clicks, and applications within 14 days of a first impression. */
+    public Map<String, Object> rankerOnlineStats(int days) {
+        return database.sql("""
+          WITH first_seen AS (
+            SELECT student_profile_id,job_post_id,min(created_at) seen_at FROM job_interaction_events
+            WHERE event_type='IMPRESSION' AND source='RECOMMENDATIONS' AND created_at>=now()-make_interval(days=>:days)
+            GROUP BY 1,2)
+          SELECT (SELECT count(*) FROM first_seen) impressions,
+            (SELECT count(DISTINCT (student_profile_id,job_post_id)) FROM job_interaction_events
+              WHERE event_type='RECOMMENDATION_CLICK' AND created_at>=now()-make_interval(days=>:days)) clicks,
+            (SELECT count(*) FROM first_seen f WHERE EXISTS(SELECT 1 FROM applications a WHERE a.student_profile_id=f.student_profile_id
+              AND a.job_post_id=f.job_post_id AND a.submitted_at BETWEEN f.seen_at AND f.seen_at+interval '14 days')) applications
+          """).param("days", days).query((row, n) -> {
+              Map<String, Object> stats = new LinkedHashMap<>();
+              stats.put("impressions", row.getLong("impressions"));
+              stats.put("clicks", row.getLong("clicks"));
+              stats.put("applications", row.getLong("applications"));
+              return stats;
+          }).single();
     }
 
     /** Usage over the last {@code days} days, one row per feature, for the UIT settings screen. */

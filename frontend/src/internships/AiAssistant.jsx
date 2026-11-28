@@ -3,6 +3,8 @@ import { Check, CheckCircle, CircleNotch, Info, Lightning, Sparkle, Warning, X }
 
 import { useAuth } from "../auth/AuthContext.jsx";
 import { Panel, Status } from "../shared/WorkspaceShell.jsx";
+import { AiFeedback } from "../shared/AiFeedback.jsx";
+import { AiFeatureTable } from "./AiFeatureTable.jsx";
 import "./ai-assistant.css";
 
 const planFieldLabel = {
@@ -28,6 +30,8 @@ const featureLabel = {
   PLAN_REVIEW: "Góp ý kế hoạch (AI1)",
   WEEKLY_LOG_SUMMARY: "Tóm tắt nhật ký (AI2)",
   JOB_MATCH: "Giải thích việc phù hợp (AI3)",
+  JOB_RANKER: "Xếp hạng việc làm (học máy)",
+  INTERNSHIP_RISK: "Cảnh báo sớm thực tập (học máy)",
 };
 
 const roleBase = {
@@ -88,6 +92,7 @@ export function AiResultFrame({ suggestion, stale, staleText, error, onDismiss, 
       <button type="button" className="ai-dismiss" aria-label="Bỏ qua gợi ý" onClick={onDismiss}><X /></button>
     </header>
     {children}
+    {!stale && <AiFeedback feature={suggestion.feature} subjectId={suggestion.suggestionId} />}
     <p className="ai-disclaimer">Nội dung do AI tạo chỉ để tham khảo, có thể chưa chính xác và không được lưu vào hồ sơ. Mọi quyết định do người dùng đưa ra.</p>
   </section>;
 }
@@ -245,6 +250,11 @@ export function AiSettingsPanel() {
               : "Thống kê sẽ hiện ở đây sau lượt dùng đầu tiên."}</p></div>
           : data.usage.map((row) => <AiUsageRow key={row.feature} row={row} />)}
       </section>
+
+      {data.features?.length > 0 && <section className="ai-settings-card" aria-label="Từng chức năng AI">
+        <header><h2>Từng chức năng</h2><span>Bật/tắt, hạn mức, chất lượng</span></header>
+        <AiFeatureTable features={data.features} masterOn={data.enabled} onChange={setData} />
+      </section>}
     </div>
 
     <aside className="ai-settings-side" aria-label="Cấu hình và quyền riêng tư">

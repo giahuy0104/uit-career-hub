@@ -104,6 +104,35 @@ Cả hai cộng lại đúng bằng log-odds (có test). Giao diện chỉ hiệ
 - Cảnh báo sớm chỉ để ưu tiên theo dõi, không tự thay đổi hồ sơ hay chặn ai.
 - Chưa có mô-đun tự nhận diện kỹ năng từ văn bản (cần dataset có giấy phép).
 
+## Huấn luyện lại bằng dữ liệu thật
+
+Backend xuất dữ liệu đã dùng trong hệ thống ra CSV, tính đặc trưng bằng **chính mã Java** mà mô hình đang chạy
+(không lệch giữa lúc huấn luyện và lúc dùng):
+
+```powershell
+cd backend
+$env:ML_EXPORT_DIR = "..\ml\data"
+java -jar target\career-hub-api-0.0.1-SNAPSHOT.jar db:ml:export
+cd ..
+ml\.venv\Scripts\python ml\train_ranker.py --data ml\data\ranker.csv
+anker.csv
+ml\.venv\Scripts\python ml\train_risk.py --data ml\data\risk.csv
+isk.csv
+```
+
+- `ranker.csv`: mỗi cặp (sinh viên, tin) từng được hiển thị trong "Phù hợp với bạn"; nhãn 1 nếu sinh viên ứng tuyển
+  trong 14 ngày sau lần hiển thị đầu. Lịch sử ứng tuyển, độ nổi tiếng, độ mới tính tại thời điểm hiển thị; kỹ năng và
+  mong muốn của sinh viên là giá trị hiện tại (hệ thống không lưu lịch sử các trường này).
+- `risk.csv`: các kỳ thực tập đã hoàn thành có phiếu đánh giá của doanh nghiệp; nhãn 1 nếu điểm tổng ≤ 2 hoặc doanh
+  nghiệp không khuyến nghị.
+- `ml/data/` không được commit (dữ liệu thật). Mô hình mới chỉ thay file JSON trong `backend/src/main/resources/ml/`.
+
+## Theo dõi chất lượng sau khi triển khai
+
+Trang UIT › Trợ lý AI › Từng chức năng hiển thị cho mỗi chức năng: công tắc riêng, hạn mức riêng (chức năng Gemini),
+số lượt gọi, tỉ lệ người dùng đánh giá hữu ích (nút 👍/👎 ở mọi kết quả AI), số liệu kiểm tra offline của mô hình
+và với xếp hạng việc làm là tỉ lệ bấm và tỉ lệ ứng tuyển thực tế sau khi được gợi ý.
+
 ## Demo trên máy local
 
 `ml/demo/risk-demo.sql` thêm 4 sinh viên thực tập với nhật ký tốt / trung bình / đáng lo / mới bắt đầu.

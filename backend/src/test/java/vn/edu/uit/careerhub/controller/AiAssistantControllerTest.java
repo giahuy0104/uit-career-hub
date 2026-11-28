@@ -15,11 +15,13 @@ import vn.edu.uit.careerhub.enums.UserRole;
 import vn.edu.uit.careerhub.exception.AppException;
 import vn.edu.uit.careerhub.security.AuthPrincipal;
 import vn.edu.uit.careerhub.service.AiAssistantService;
+import vn.edu.uit.careerhub.service.AiPlatformService;
 
 /** Each AI endpoint is reachable only by the role whose screen shows the button. */
 class AiAssistantControllerTest {
     private final AiAssistantService service = mock(AiAssistantService.class);
-    private final AiAssistantController controller = new AiAssistantController(service);
+    private final AiPlatformService platform = mock(AiPlatformService.class);
+    private final AiAssistantController controller = new AiAssistantController(service, platform);
     private final UUID placementId = UUID.randomUUID();
 
     private final AuthPrincipal student = new AuthPrincipal(UUID.randomUUID(), "s@gm.uit.edu.vn", UserRole.STUDENT, UUID.randomUUID(), UUID.randomUUID(), null);
@@ -37,7 +39,9 @@ class AiAssistantControllerTest {
         assertForbidden(() -> controller.uitLogSummary(student, placementId));
         assertForbidden(() -> controller.settings(company));
         assertForbidden(() -> controller.updateSettings(student, new AiSettingsRequest(false), mock(HttpServletRequest.class)));
-        verifyNoInteractions(service);
+        assertForbidden(() -> controller.updateFeature(company, vn.edu.uit.careerhub.enums.AiFeature.JOB_RANKER,
+                new vn.edu.uit.careerhub.dto.request.AiFeatureSettingRequest(false, null), mock(HttpServletRequest.class)));
+        verifyNoInteractions(service, platform);
     }
 
     @Test void anonymousCallsAreRejected() {

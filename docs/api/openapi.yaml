@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: UIT Career Hub API
-  version: 1.9.0
+  version: 1.10.0
   description: Contract cho happy flow tuyển dụng, kế hoạch và nhật ký thực tập hằng tuần của một trường UIT.
 servers:
   - url: http://localhost:3000/api/v1
@@ -279,6 +279,54 @@ paths:
                             matchedSkills: { type: array, items: { type: string } }
                             missingSkills: { type: array, items: { type: string } }
                             optionalSkills: { type: array, items: { type: string } }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /ai/feedback:
+    post:
+      tags: [Students]
+      operationId: rateAiOutput
+      description: "Đánh giá hữu ích / không hữu ích một kết quả AI mà người gọi đã được xem. subjectId là suggestionId (chức năng Gemini), id tin (JOB_RANKER, sinh viên) hoặc id kỳ thực tập (INTERNSHIP_RISK, UIT). Đánh giá lại thì ghi đè."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [feature, subjectId, helpful]
+              properties:
+                feature: { type: string, enum: [PLAN_REVIEW, WEEKLY_LOG_SUMMARY, JOB_MATCH, JOB_RANKER, INTERNSHIP_RISK] }
+                subjectId: { type: string, format: uuid }
+                helpful: { type: boolean }
+                modelVersion: { type: string, maxLength: 80 }
+      responses:
+        '204':
+          description: Đã ghi
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Không có kết quả AI này trong phạm vi người gọi
+  /uit/ai/features/{feature}:
+    put:
+      tags: [Internships]
+      operationId: updateAiFeature
+      description: Bật/tắt từng chức năng AI và hạn mức riêng mỗi người/ngày (chỉ chức năng Gemini). Trả về trang thống kê.
+      parameters:
+        - { name: feature, in: path, required: true, schema: { type: string, enum: [PLAN_REVIEW, WEEKLY_LOG_SUMMARY, JOB_MATCH, JOB_RANKER, INTERNSHIP_RISK] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+                dailyLimitPerUser: { type: [integer, 'null'], minimum: 1, maximum: 1000 }
+      responses:
+        '200':
+          description: Cấu hình và thống kê từng chức năng (data.features)
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
   /students/me/job-events:
